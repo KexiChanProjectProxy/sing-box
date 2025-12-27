@@ -1,0 +1,79 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "google",
+        "address": "tls://8.8.8.8"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 1080,
+      "sniff": true
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-out",
+      "server": "example.com",
+      "server_port": 443,
+      "password": "your-secure-password-here",
+
+      "_comment_session_pool": "Session Pool Management Configuration",
+      "idle_session_check_interval": "30s",
+      "idle_session_timeout": "5m",
+      "min_idle_session": 2,
+      "ensure_idle_session": 5,
+
+      "_comment_heartbeat": "Heartbeat Configuration for NAT Keepalive",
+      "heartbeat": "30s",
+
+      "_comment_explanation": [
+        "idle_session_check_interval: Check pool every 30s",
+        "idle_session_timeout: Close sessions idle > 5 minutes",
+        "min_idle_session: Always keep first 2 sessions (passive protection)",
+        "ensure_idle_session: Maintain exactly 5 idle sessions (active creation)",
+        "heartbeat: Send keepalive every 30s to prevent NAT timeout"
+      ],
+
+      "_comment_tls": "TLS Configuration (Required)",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com",
+        "insecure": false,
+        "alpn": ["h2", "http/1.1"]
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "geoip": "cn",
+        "outbound": "direct"
+      },
+      {
+        "geosite": "cn",
+        "outbound": "direct"
+      }
+    ],
+    "final": "anytls-out",
+    "auto_detect_interface": true
+  }
+}

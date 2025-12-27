@@ -141,7 +141,7 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 	} else {
 		dialer.Timeout = C.TCPConnectTimeout
 	}
-	// Configure TCP keepalive
+	// Configure TCP keepalive - enabled by default, uses system defaults when not specified
 	if !options.DisableTCPKeepAlive {
 		var (
 			keepAliveIdle     time.Duration
@@ -164,13 +164,9 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 				keepAliveInterval = defaultOptions.TCPKeepAliveInterval
 			}
 		}
-		// Fall back to hardcoded defaults if not configured
-		if keepAliveIdle == 0 {
-			keepAliveIdle = C.TCPKeepAliveInitial
-		}
-		if keepAliveInterval == 0 {
-			keepAliveInterval = C.TCPKeepAliveInterval
-		}
+		// If both are 0, use system defaults (no hardcoded fallback)
+		// Go 1.23+: zero values in KeepAliveConfig use system defaults
+		// Older Go: negative KeepAlive value uses system defaults
 		setKeepAliveConfig(&dialer, keepAliveIdle, keepAliveInterval)
 	}
 	var udpFragment bool

@@ -9,7 +9,6 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/redir"
-	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -37,15 +36,14 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 	if l.listenOptions.ReuseAddr {
 		listenConfig.Control = control.Append(listenConfig.Control, control.ReuseAddr())
 	}
+	// TCP keep-alive enabled by default (disable with tcp_keep_alive: -1)
+	// Uses system defaults when not specified
 	if l.listenOptions.TCPKeepAlive >= 0 {
 		keepIdle := time.Duration(l.listenOptions.TCPKeepAlive)
-		if keepIdle == 0 {
-			keepIdle = C.TCPKeepAliveInitial
-		}
 		keepInterval := time.Duration(l.listenOptions.TCPKeepAliveInterval)
-		if keepInterval == 0 {
-			keepInterval = C.TCPKeepAliveInterval
-		}
+		// If both are 0, use system defaults (no hardcoded fallback)
+		// Go 1.23+: zero values in KeepAliveConfig use system defaults
+		// Older Go: negative KeepAlive value uses system defaults
 		setKeepAliveConfig(&listenConfig, keepIdle, keepInterval)
 	}
 	if l.listenOptions.TCPMultiPath {

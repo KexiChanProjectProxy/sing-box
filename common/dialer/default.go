@@ -171,8 +171,7 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		if keepAliveInterval == 0 {
 			keepAliveInterval = C.TCPKeepAliveInterval
 		}
-		dialer.KeepAlive = keepAliveIdle
-		dialer.Control = control.Append(dialer.Control, control.SetKeepAlivePeriod(keepAliveIdle, keepAliveInterval))
+		setKeepAliveConfig(&dialer, keepAliveIdle, keepAliveInterval)
 	}
 	var udpFragment bool
 	if options.UDPFragment != nil {

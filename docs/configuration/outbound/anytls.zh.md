@@ -19,6 +19,7 @@ icon: material/new-box
   "min_idle_session": 2,
   "min_idle_session_for_age": 1,
   "ensure_idle_session": 5,
+  "ensure_idle_session_create_rate": 3,
   "heartbeat": "30s",
   "max_connection_lifetime": "1h",
   "connection_lifetime_jitter": "10m",
@@ -143,6 +144,105 @@ AnyTLS 密码。
 - **高流量场景**：预热连接以减少首次请求延迟
 - **NAT 保活**：通过 NAT 设备维持持久连接
 - **可靠性**：始终有可用的会话
+
+#### ensure_idle_session_create_rate
+
+当 `ensure_idle_session` 激活时，限制每个清理周期创建的最大会话数。默认值：`0`（无限制 - 一次创建所有缺失的会话）
+
+**解决的问题**：防止连接池需要大量会话时出现连接风暴。
+
+**无速率限制时**（默认）：
+- 连接池有 0 个会话，目标是 10 个
+- 同时创建所有 10 个会话
+- 可能使目标服务器过载、触发速率限制、资源激增
+
+**有速率限制时**：
+- 连接池有 0 个会话，目标是 10 个，速率限制为 3
+- 周期 1：创建 3 个会话（缺口：10-0=10，限制为 3）
+- 周期 2：创建 3 个会话（缺口：10-3=7，限制为 3）
+- 周期 3：创建 3 个会话（缺口：10-6=4，限制为 3）
+- 周期 4：创建 1 个会话（缺口：10-9=1，创建 1）
+- 在 4 个周期内逐渐达到目标
+
+**推荐值**：
+```json
+{
+  "ensure_idle_session": 10,
+  "ensure_idle_session_create_rate": 3,  // 每周期最多创建 3 个
+  "idle_session_check_interval": "30s"   // 每 30 秒
+}
+```
+结果：每 30 秒创建 3 个会话，直到达到 10 个（最多需要 2 分钟）
+
+**使用场景**：
+
+小速率限制 (1-3)：
+- 敏感的目标服务器
+- 服务器端严格的速率限制
+- 资源受限的环境
+- 需要渐进式启动
+
+中等速率限制 (3-5)：
+- 平衡的方法
+- 大多数生产环境
+- 在快速恢复的同时防止峰值
+
+大速率限制 (5-10)：
+- 需要快速恢复
+- 稳定的目标服务器
+- 高容量环境
+
+无限制 (0 - 默认)：
+- 测试环境
+- 可信的本地网络
+- 小池大小（ensure_idle_session < 5）
+
+**配置示例**：
+
+渐进恢复（敏感服务器）：
+```json
+{
+  "ensure_idle_session": 20,
+  "ensure_idle_session_create_rate": 2,
+  "idle_session_check_interval": "30s"
+}
+```
+每 30 秒创建 2 个会话（填充空池需要 5 分钟）
+
+平衡恢复：
+```json
+{
+  "ensure_idle_session": 10,
+  "ensure_idle_session_create_rate": 3,
+  "idle_session_check_interval": "30s"
+}
+```
+每 30 秒创建 3 个会话（填充空池需要 2 分钟）
+
+快速恢复：
+```json
+{
+  "ensure_idle_session": 10,
+  "ensure_idle_session_create_rate": 5,
+  "idle_session_check_interval": "30s"
+}
+```
+每 30 秒创建 5 个会话（填充空池需要 1 分钟）
+
+**调试日志**：
+```
+[EnsureIdleSession] Current idle sessions: 0, target: 10, deficit=10, rate-limited to creating 3 sessions (will create 7 more in next cycle)
+[EnsureIdleSession] Successfully created and pooled session #1 (seq=42)
+[EnsureIdleSession] Successfully created and pooled session #2 (seq=43)
+[EnsureIdleSession] Successfully created and pooled session #3 (seq=44)
+```
+
+**优势**：
+- **防止连接风暴**：无大量同时连接
+- **对服务器友好**：渐进式启动尊重目标限制
+- **资源分布**：随时间分散 CPU/内存/网络负载
+- **速率限制弹性**：不会触发服务器端速率限制
+- **可预测的行为**：受控的创建速率
 
 #### heartbeat
 
@@ -318,13 +418,14 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#outbound)。
 
 ## 会话池管理指南
 
-AnyTLS 提供六个互补功能来管理连接会话：
+AnyTLS 提供七个互补功能来管理连接会话：
 
 | 功能 | 类型 | 用途 |
 |---------|------|---------|
 | `min_idle_session` | **空闲超时保护** | 防止会话因空闲超时而关闭 |
 | `min_idle_session_for_age` | **基于年龄保护** | 防止会话因年龄而关闭 |
 | `ensure_idle_session` | **主动创建** | 通过创建会话维持最小池大小 |
+| `ensure_idle_session_create_rate` | **创建速率限制** | 防止连接池恢复时的连接风暴 |
 | `heartbeat` | **保活** | 通过 NAT 保持会话活跃并防止超时 |
 | `max_connection_lifetime` | **基于年龄清理** | 限制连接生存时间并轮换旧连接 |
 | `connection_lifetime_jitter` | **轮换平滑化** | 随机化生存时间以防止惊群 |

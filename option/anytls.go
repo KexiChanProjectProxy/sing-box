@@ -18,13 +18,14 @@ type AnyTLSOutboundOptions struct {
 	DialerOptions
 	ServerOptions
 	OutboundTLSOptionsContainer
-	Password                   string             `json:"password,omitempty"`
-	IdleSessionCheckInterval   badoption.Duration `json:"idle_session_check_interval,omitempty"`
-	IdleSessionTimeout         badoption.Duration `json:"idle_session_timeout,omitempty"`
-	MinIdleSession             int                `json:"min_idle_session,omitempty"`
-	MinIdleSessionForAge       int                `json:"min_idle_session_for_age,omitempty"`
-	EnsureIdleSession          int                `json:"ensure_idle_session,omitempty"`
-	Heartbeat                  badoption.Duration `json:"heartbeat,omitempty"`
-	MaxConnectionLifetime      badoption.Duration `json:"max_connection_lifetime,omitempty"`
-	ConnectionLifetimeJitter   badoption.Duration `json:"connection_lifetime_jitter,omitempty"`
+	Password                     string             `json:"password,omitempty"`
+	IdleSessionCheckInterval     badoption.Duration `json:"idle_session_check_interval,omitempty"`
+	IdleSessionTimeout           badoption.Duration `json:"idle_session_timeout,omitempty"`
+	MinIdleSession               int                `json:"min_idle_session,omitempty"`
+	MinIdleSessionForAge         int                `json:"min_idle_session_for_age,omitempty"`
+	EnsureIdleSession            int                `json:"ensure_idle_session,omitempty"`
+	EnsureIdleSessionCreateRate  int                `json:"ensure_idle_session_create_rate,omitempty"`
+	Heartbeat                    badoption.Duration `json:"heartbeat,omitempty"`
+	MaxConnectionLifetime        badoption.Duration `json:"max_connection_lifetime,omitempty"`
+	ConnectionLifetimeJitter     badoption.Duration `json:"connection_lifetime_jitter,omitempty"`
 }

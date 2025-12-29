@@ -19,6 +19,7 @@ icon: material/new-box
   "min_idle_session": 2,
   "min_idle_session_for_age": 1,
   "ensure_idle_session": 5,
+  "ensure_idle_session_create_rate": 3,
   "heartbeat": "30s",
   "max_connection_lifetime": "1h",
   "connection_lifetime_jitter": "10m",
@@ -143,6 +144,105 @@ With this configuration:
 - **High-traffic scenarios**: Pre-warm connections to reduce first-request latency
 - **NAT keepalive**: Maintain persistent connections through NAT devices
 - **Reliability**: Always have ready-to-use sessions available
+
+#### ensure_idle_session_create_rate
+
+Limits the maximum number of sessions created per cleanup cycle when `ensure_idle_session` is active. Default value: `0` (unlimited - create all deficit sessions at once)
+
+**Problem solved**: Prevents connection storms when pool needs many sessions.
+
+**Without rate limiting** (default):
+- Pool has 0 sessions, target is 10
+- Creates all 10 sessions simultaneously
+- Can overload destination server, trigger rate limits, spike resources
+
+**With rate limiting**:
+- Pool has 0 sessions, target is 10, rate limit is 3
+- Cycle 1: Creates 3 sessions (deficit: 10-0=10, limited to 3)
+- Cycle 2: Creates 3 sessions (deficit: 10-3=7, limited to 3)
+- Cycle 3: Creates 3 sessions (deficit: 10-6=4, limited to 3)
+- Cycle 4: Creates 1 session (deficit: 10-9=1, creates 1)
+- Gradually reaches target over 4 cycles
+
+**Recommended values**:
+```json
+{
+  "ensure_idle_session": 10,
+  "ensure_idle_session_create_rate": 3,  // Create max 3 per cycle
+  "idle_session_check_interval": "30s"   // Every 30s
+}
+```
+Result: Creates 3 sessions every 30s until reaching 10 (takes 2 minutes max)
+
+**Use cases**:
+
+Small rate limit (1-3):
+- Sensitive destination servers
+- Strict rate limiting on server side
+- Resource-constrained environments
+- Gradual ramp-up needed
+
+Medium rate limit (3-5):
+- Balanced approach
+- Most production environments
+- Prevents spikes while recovering quickly
+
+Large rate limit (5-10):
+- Fast recovery needed
+- Stable destination servers
+- High-capacity environments
+
+Unlimited (0 - default):
+- Testing environments
+- Trusted local networks
+- Small pool sizes (ensure_idle_session < 5)
+
+**Example configurations**:
+
+Gradual recovery (sensitive server):
+```json
+{
+  "ensure_idle_session": 20,
+  "ensure_idle_session_create_rate": 2,
+  "idle_session_check_interval": "30s"
+}
+```
+Creates 2 sessions every 30s (takes 5 minutes to fill empty pool)
+
+Balanced recovery:
+```json
+{
+  "ensure_idle_session": 10,
+  "ensure_idle_session_create_rate": 3,
+  "idle_session_check_interval": "30s"
+}
+```
+Creates 3 sessions every 30s (takes 2 minutes to fill empty pool)
+
+Fast recovery:
+```json
+{
+  "ensure_idle_session": 10,
+  "ensure_idle_session_create_rate": 5,
+  "idle_session_check_interval": "30s"
+}
+```
+Creates 5 sessions every 30s (takes 1 minute to fill empty pool)
+
+**Debug logging**:
+```
+[EnsureIdleSession] Current idle sessions: 0, target: 10, deficit=10, rate-limited to creating 3 sessions (will create 7 more in next cycle)
+[EnsureIdleSession] Successfully created and pooled session #1 (seq=42)
+[EnsureIdleSession] Successfully created and pooled session #2 (seq=43)
+[EnsureIdleSession] Successfully created and pooled session #3 (seq=44)
+```
+
+**Benefits**:
+- **Prevents connection storms**: No mass simultaneous connections
+- **Server-friendly**: Gradual ramp-up respects destination limits
+- **Resource distribution**: Spreads CPU/memory/network load over time
+- **Rate limit resilience**: Won't trigger server-side rate limiting
+- **Predictable behavior**: Controlled creation rate
 
 #### heartbeat
 
@@ -318,13 +418,14 @@ See [Dial Fields](/configuration/shared/dial/) for details.
 
 ## Session Pool Management Guide
 
-AnyTLS provides six complementary features for managing connection sessions:
+AnyTLS provides seven complementary features for managing connection sessions:
 
 | Feature | Type | Purpose |
 |---------|------|---------|
 | `min_idle_session` | **Idle Timeout Protection** | Prevents sessions from idle timeout closure |
 | `min_idle_session_for_age` | **Age-based Protection** | Prevents sessions from age-based closure |
 | `ensure_idle_session` | **Active Creation** | Maintains minimum pool size by creating sessions |
+| `ensure_idle_session_create_rate` | **Creation Rate Limiting** | Prevents connection storms during pool recovery |
 | `heartbeat` | **Keepalive** | Keeps sessions alive through NAT and prevents timeouts |
 | `max_connection_lifetime` | **Age-based Cleanup** | Limits connection lifetime and rotates old connections |
 | `connection_lifetime_jitter` | **Rotation Smoothing** | Randomizes lifetime to prevent thundering herd |

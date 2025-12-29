@@ -20,6 +20,7 @@ icon: material/new-box
   "ensure_idle_session": 5,
   "heartbeat": "30s",
   "max_connection_lifetime": "1h",
+  "connection_lifetime_jitter": "10m",
   "tls": {},
 
   ... // 拨号字段
@@ -176,12 +177,77 @@ AnyTLS 密码。
 - 保护至少 2 个会话免于基于超时的清理
 - 结果是每小时自动轮换连接
 
+**重要说明**：
+- 基于年龄的清理会遵守 `min_idle_session` - 不会关闭会话如果这会使数量低于最小值
+- 与 `ensure_idle_session` 无缝协作实现自动轮换
+- 清理时优先关闭较旧的连接
+
 **调试日志**：
 设置 `"log": {"level": "debug"}` 查看年龄清理活动：
 ```
-[AgeCleanup] Found 3 idle sessions exceeding max lifetime (1h0m0s), closing oldest first
-[AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, created=2024-01-01 10:00:00)
+[AgeCleanup] Found 5 expired sessions, closing 3 oldest (keeping 2 to maintain min_idle_session=2)
+[AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, maxLife=55m0s, created=2024-01-01 10:00:00)
 ```
+
+#### connection_lifetime_jitter
+
+连接生存时间的随机化范围。设置后，每个连接获得 `max_connection_lifetime ± jitter` 的随机生存时间。默认值：禁用 (0s)
+
+**工作原理**：
+- 防止"惊群问题"，即所有连接同时过期
+- 每个会话在创建时获得唯一的随机化生存时间
+- 生存时间 = `max_connection_lifetime` + random(-jitter, +jitter)
+- 随时间分散连接关闭
+- 减少大量重连造成的负载峰值
+
+**推荐值**：
+```json
+{
+  "max_connection_lifetime": "1h",
+  "connection_lifetime_jitter": "10m"   // 连接在 50-70 分钟之间过期
+}
+```
+
+```json
+{
+  "max_connection_lifetime": "30m",
+  "connection_lifetime_jitter": "5m"    // 连接在 25-35 分钟之间过期
+}
+```
+
+**最佳实践**：
+- 将抖动设置为 max_connection_lifetime 的 10-30%
+- 较大的抖动 = 更分散的过期时间
+- 较小的抖动 = 更可预测的过期窗口
+- 与 `ensure_idle_session` 一起使用以平滑维持池大小
+
+**优势**：
+- **避免惊群**：连接不会同时全部过期
+- **平滑轮换**：随时间逐步替换连接
+- **负载分布**：重连负载分散在时间窗口内
+- **更好的稳定性**：没有新连接的突然峰值
+
+**完整配置示例**：
+```json
+{
+  "max_connection_lifetime": "1h",
+  "connection_lifetime_jitter": "15m",
+  "ensure_idle_session": 10,
+  "min_idle_session": 5
+}
+```
+此配置：
+- 连接在 45-75 分钟之间过期（1小时 ± 15分钟）
+- 通过轮换维持 10 个空闲会话
+- 即使过期也始终保留至少 5 个会话
+- 将重连分散在 30 分钟窗口内
+
+**调试日志**：
+```
+[AgeCleanup] Closing session #1 (seq=42, age=67m12s, maxLife=62m30s, created=...)
+[AgeCleanup] Closing session #2 (seq=38, age=71m45s, maxLife=68m15s, created=...)
+```
+注意每个会话由于抖动而有不同的 `maxLife` 值。
 
 #### tls
 
@@ -197,14 +263,15 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#outbound)。
 
 ## 会话池管理指南
 
-AnyTLS 提供四个互补功能来管理连接会话：
+AnyTLS 提供五个互补功能来管理连接会话：
 
 | 功能 | 类型 | 用途 |
 |---------|------|---------|
-| `min_idle_session` | **被动保护** | 防止现有会话因超时而关闭 |
+| `min_idle_session` | **被动保护** | 防止现有会话因超时/年龄而关闭 |
 | `ensure_idle_session` | **主动创建** | 通过创建会话维持最小池大小 |
 | `heartbeat` | **保活** | 通过 NAT 保持会话活跃并防止超时 |
 | `max_connection_lifetime` | **基于年龄清理** | 限制连接生存时间并轮换旧连接 |
+| `connection_lifetime_jitter` | **轮换平滑化** | 随机化生存时间以防止惊群 |
 
 ### 配置策略
 

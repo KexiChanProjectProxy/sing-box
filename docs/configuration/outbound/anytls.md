@@ -20,6 +20,7 @@ icon: material/new-box
   "ensure_idle_session": 5,
   "heartbeat": "30s",
   "max_connection_lifetime": "1h",
+  "connection_lifetime_jitter": "10m",
   "tls": {},
 
   ... // Dial Fields
@@ -176,12 +177,77 @@ This configuration:
 - Protects at least 2 sessions from timeout-based cleanup
 - Results in automatic connection rotation every hour
 
+**Important notes**:
+- Age-based cleanup respects `min_idle_session` - will not close sessions if it would drop below the minimum
+- Works seamlessly with `ensure_idle_session` for automatic rotation
+- Oldest connections are closed first during cleanup
+
 **Debug logging**:
 Set `"log": {"level": "debug"}` to see age cleanup activity:
 ```
-[AgeCleanup] Found 3 idle sessions exceeding max lifetime (1h0m0s), closing oldest first
-[AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, created=2024-01-01 10:00:00)
+[AgeCleanup] Found 5 expired sessions, closing 3 oldest (keeping 2 to maintain min_idle_session=2)
+[AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, maxLife=55m0s, created=2024-01-01 10:00:00)
 ```
+
+#### connection_lifetime_jitter
+
+Randomization range for connection lifetime. When set, each connection gets a random lifetime of `max_connection_lifetime ± jitter`. Default value: disabled (0s)
+
+**How it works**:
+- Prevents "thundering herd" problem where all connections expire simultaneously
+- Each session gets a unique randomized lifetime on creation
+- Lifetime = `max_connection_lifetime` + random(-jitter, +jitter)
+- Distributes connection closures over time
+- Reduces load spikes from mass reconnection
+
+**Recommended values**:
+```json
+{
+  "max_connection_lifetime": "1h",
+  "connection_lifetime_jitter": "10m"   // Connections expire between 50m-70m
+}
+```
+
+```json
+{
+  "max_connection_lifetime": "30m",
+  "connection_lifetime_jitter": "5m"    // Connections expire between 25m-35m
+}
+```
+
+**Best practices**:
+- Set jitter to 10-30% of max_connection_lifetime
+- Larger jitter = more spread out expiration times
+- Smaller jitter = more predictable expiration windows
+- Use with `ensure_idle_session` to maintain pool size smoothly
+
+**Benefits**:
+- **Avoid thundering herd**: Connections don't all expire at once
+- **Smooth rotation**: Gradual connection replacement over time
+- **Load distribution**: Reconnection load spread across time window
+- **Better stability**: No sudden spikes in new connections
+
+**Example with full configuration**:
+```json
+{
+  "max_connection_lifetime": "1h",
+  "connection_lifetime_jitter": "15m",
+  "ensure_idle_session": 10,
+  "min_idle_session": 5
+}
+```
+This configuration:
+- Connections expire between 45-75 minutes (1h ± 15m)
+- Maintains 10 idle sessions through rotation
+- Always keeps at least 5 sessions even if expired
+- Spreads reconnections across 30-minute window
+
+**Debug logging**:
+```
+[AgeCleanup] Closing session #1 (seq=42, age=67m12s, maxLife=62m30s, created=...)
+[AgeCleanup] Closing session #2 (seq=38, age=71m45s, maxLife=68m15s, created=...)
+```
+Notice each session has a different `maxLife` value due to jitter.
 
 #### tls
 
@@ -197,14 +263,15 @@ See [Dial Fields](/configuration/shared/dial/) for details.
 
 ## Session Pool Management Guide
 
-AnyTLS provides four complementary features for managing connection sessions:
+AnyTLS provides five complementary features for managing connection sessions:
 
 | Feature | Type | Purpose |
 |---------|------|---------|
-| `min_idle_session` | **Passive Protection** | Prevents existing sessions from timeout closure |
+| `min_idle_session` | **Passive Protection** | Prevents existing sessions from timeout/age closure |
 | `ensure_idle_session` | **Active Creation** | Maintains minimum pool size by creating sessions |
 | `heartbeat` | **Keepalive** | Keeps sessions alive through NAT and prevents timeouts |
 | `max_connection_lifetime` | **Age-based Cleanup** | Limits connection lifetime and rotates old connections |
+| `connection_lifetime_jitter` | **Rotation Smoothing** | Randomizes lifetime to prevent thundering herd |
 
 ### Configuration Strategies
 

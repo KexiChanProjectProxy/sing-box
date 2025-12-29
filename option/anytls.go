@@ -22,6 +22,7 @@ type AnyTLSOutboundOptions struct {
 	IdleSessionCheckInterval   badoption.Duration `json:"idle_session_check_interval,omitempty"`
 	IdleSessionTimeout         badoption.Duration `json:"idle_session_timeout,omitempty"`
 	MinIdleSession             int                `json:"min_idle_session,omitempty"`
+	MinIdleSessionForAge       int                `json:"min_idle_session_for_age,omitempty"`
 	EnsureIdleSession          int                `json:"ensure_idle_session,omitempty"`
 	Heartbeat                  badoption.Duration `json:"heartbeat,omitempty"`
 	MaxConnectionLifetime      badoption.Duration `json:"max_connection_lifetime,omitempty"`

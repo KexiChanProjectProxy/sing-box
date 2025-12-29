@@ -17,6 +17,7 @@ icon: material/new-box
   "idle_session_check_interval": "30s",
   "idle_session_timeout": "5m",
   "min_idle_session": 2,
+  "min_idle_session_for_age": 1,
   "ensure_idle_session": 5,
   "heartbeat": "30s",
   "max_connection_lifetime": "1h",
@@ -57,9 +58,62 @@ AnyTLS 密码。
 
 #### min_idle_session
 
-在检查中，至少前 `n` 个空闲会话保持打开状态。默认值：`n`=0
+在空闲超时检查中，至少前 `n` 个空闲会话保持打开状态。默认值：`n`=0
 
-**注意**：这是一个**被动保护**机制 - 它只防止现有会话因超时而被关闭。
+**注意**：这是一个**被动保护**机制 - 它只防止现有会话因**空闲超时**而被关闭。
+
+**用途**：保护会话免于 `idle_session_timeout` 清理。
+
+#### min_idle_session_for_age
+
+在基于年龄的清理中，至少保持 `n` 个空闲会话打开，无论其年龄如何。默认值：`n`=0
+
+**注意**：这是基于年龄清理的**独立保护** - 独立于 `min_idle_session`。
+
+**用途**：保护会话免于 `max_connection_lifetime` 清理。
+
+**与 min_idle_session 的区别**：
+- `min_idle_session`：保护免于空闲超时（5分钟不活动）
+- `min_idle_session_for_age`：保护免于年龄过期（1小时连接生存时间）
+
+**为何分开**：
+- 不同场景需要不同的保护级别
+- 您可能想要激进的年龄轮换（低最小值）但宽容的空闲保护（高最小值）
+- 或相反：长期保持连接（高年龄最小值）但快速关闭不活动的连接（低空闲最小值）
+
+**示例场景**：
+
+场景 1：**激进轮换，宽容空闲保护**
+```json
+{
+  "min_idle_session": 5,           // 保留 5 个会话免于空闲超时
+  "min_idle_session_for_age": 1,   // 但允许激进的年龄轮换（只保留 1 个）
+  "max_connection_lifetime": "30m",
+  "idle_session_timeout": "10m"
+}
+```
+使用场景：您希望为了安全快速轮换连接，但不希望仅因暂时空闲就关闭会话。
+
+场景 2：**保守轮换，激进空闲清理**
+```json
+{
+  "min_idle_session": 1,           // 激进地关闭空闲会话
+  "min_idle_session_for_age": 5,   // 但长期保持连接活跃
+  "max_connection_lifetime": "2h",
+  "idle_session_timeout": "2m"
+}
+```
+使用场景：您希望维持长期连接，但快速释放真正空闲会话的资源。
+
+场景 3：**平衡**
+```json
+{
+  "min_idle_session": 3,
+  "min_idle_session_for_age": 2,   // 年龄上稍微更激进
+  "max_connection_lifetime": "1h",
+  "idle_session_timeout": "5m"
+}
+```
 
 #### ensure_idle_session
 
@@ -178,14 +232,15 @@ AnyTLS 密码。
 - 结果是每小时自动轮换连接
 
 **重要说明**：
-- 基于年龄的清理会遵守 `min_idle_session` - 不会关闭会话如果这会使数量低于最小值
+- 基于年龄的清理会遵守 `min_idle_session_for_age` - 不会关闭会话如果这会使数量低于此最小值
 - 与 `ensure_idle_session` 无缝协作实现自动轮换
 - 清理时优先关闭较旧的连接
+- 独立于 `min_idle_session`（后者保护免于空闲超时）
 
 **调试日志**：
 设置 `"log": {"level": "debug"}` 查看年龄清理活动：
 ```
-[AgeCleanup] Found 5 expired sessions, closing 3 oldest (keeping 2 to maintain min_idle_session=2)
+[AgeCleanup] Found 5 expired sessions, closing 3 oldest (keeping 2 to maintain min_idle_session_for_age=2)
 [AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, maxLife=55m0s, created=2024-01-01 10:00:00)
 ```
 
@@ -263,11 +318,12 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#outbound)。
 
 ## 会话池管理指南
 
-AnyTLS 提供五个互补功能来管理连接会话：
+AnyTLS 提供六个互补功能来管理连接会话：
 
 | 功能 | 类型 | 用途 |
 |---------|------|---------|
-| `min_idle_session` | **被动保护** | 防止现有会话因超时/年龄而关闭 |
+| `min_idle_session` | **空闲超时保护** | 防止会话因空闲超时而关闭 |
+| `min_idle_session_for_age` | **基于年龄保护** | 防止会话因年龄而关闭 |
 | `ensure_idle_session` | **主动创建** | 通过创建会话维持最小池大小 |
 | `heartbeat` | **保活** | 通过 NAT 保持会话活跃并防止超时 |
 | `max_connection_lifetime` | **基于年龄清理** | 限制连接生存时间并轮换旧连接 |

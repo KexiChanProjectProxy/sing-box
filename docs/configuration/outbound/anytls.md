@@ -17,6 +17,7 @@ icon: material/new-box
   "idle_session_check_interval": "30s",
   "idle_session_timeout": "5m",
   "min_idle_session": 2,
+  "min_idle_session_for_age": 1,
   "ensure_idle_session": 5,
   "heartbeat": "30s",
   "max_connection_lifetime": "1h",
@@ -57,9 +58,62 @@ In the check, close sessions that have been idle for longer than this. Default: 
 
 #### min_idle_session
 
-In the check, at least the first `n` idle sessions are kept open. Default value: `n`=0
+In the idle timeout check, at least the first `n` idle sessions are kept open. Default value: `n`=0
 
-**Note**: This is a **passive protection** mechanism - it only prevents existing sessions from being closed due to timeout.
+**Note**: This is a **passive protection** mechanism - it only prevents existing sessions from being closed due to **idle timeout**.
+
+**Purpose**: Protects sessions from `idle_session_timeout` cleanup.
+
+#### min_idle_session_for_age
+
+In the age-based cleanup, at least `n` idle sessions are kept open regardless of their age. Default value: `n`=0
+
+**Note**: This is a **separate protection** for age-based cleanup - independent from `min_idle_session`.
+
+**Purpose**: Protects sessions from `max_connection_lifetime` cleanup.
+
+**Difference from min_idle_session**:
+- `min_idle_session`: Protects from idle timeout (5m of inactivity)
+- `min_idle_session_for_age`: Protects from age expiration (1h connection lifetime)
+
+**Why separate**:
+- Different scenarios require different protection levels
+- You might want aggressive age rotation (low min) but generous idle protection (high min)
+- Or vice versa: keep connections alive long-term (high age min) but quickly close inactive ones (low idle min)
+
+**Example scenarios**:
+
+Scenario 1: **Aggressive rotation, generous idle protection**
+```json
+{
+  "min_idle_session": 5,           // Keep 5 sessions from idle timeout
+  "min_idle_session_for_age": 1,   // But allow aggressive age rotation (only keep 1)
+  "max_connection_lifetime": "30m",
+  "idle_session_timeout": "10m"
+}
+```
+Use case: You want to quickly rotate connections for security, but don't want to close sessions just because they're temporarily idle.
+
+Scenario 2: **Conservative rotation, aggressive idle cleanup**
+```json
+{
+  "min_idle_session": 1,           // Aggressively close idle sessions
+  "min_idle_session_for_age": 5,   // But keep connections alive long-term
+  "max_connection_lifetime": "2h",
+  "idle_session_timeout": "2m"
+}
+```
+Use case: You want to maintain long-lived connections but quickly free resources from truly idle sessions.
+
+Scenario 3: **Balanced**
+```json
+{
+  "min_idle_session": 3,
+  "min_idle_session_for_age": 2,   // Slightly more aggressive on age
+  "max_connection_lifetime": "1h",
+  "idle_session_timeout": "5m"
+}
+```
 
 #### ensure_idle_session
 
@@ -178,14 +232,15 @@ This configuration:
 - Results in automatic connection rotation every hour
 
 **Important notes**:
-- Age-based cleanup respects `min_idle_session` - will not close sessions if it would drop below the minimum
+- Age-based cleanup respects `min_idle_session_for_age` - will not close sessions if it would drop below this minimum
 - Works seamlessly with `ensure_idle_session` for automatic rotation
 - Oldest connections are closed first during cleanup
+- Independent from `min_idle_session` (which protects from idle timeout)
 
 **Debug logging**:
 Set `"log": {"level": "debug"}` to see age cleanup activity:
 ```
-[AgeCleanup] Found 5 expired sessions, closing 3 oldest (keeping 2 to maintain min_idle_session=2)
+[AgeCleanup] Found 5 expired sessions, closing 3 oldest (keeping 2 to maintain min_idle_session_for_age=2)
 [AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, maxLife=55m0s, created=2024-01-01 10:00:00)
 ```
 
@@ -263,11 +318,12 @@ See [Dial Fields](/configuration/shared/dial/) for details.
 
 ## Session Pool Management Guide
 
-AnyTLS provides five complementary features for managing connection sessions:
+AnyTLS provides six complementary features for managing connection sessions:
 
 | Feature | Type | Purpose |
 |---------|------|---------|
-| `min_idle_session` | **Passive Protection** | Prevents existing sessions from timeout/age closure |
+| `min_idle_session` | **Idle Timeout Protection** | Prevents sessions from idle timeout closure |
+| `min_idle_session_for_age` | **Age-based Protection** | Prevents sessions from age-based closure |
 | `ensure_idle_session` | **Active Creation** | Maintains minimum pool size by creating sessions |
 | `heartbeat` | **Keepalive** | Keeps sessions alive through NAT and prevents timeouts |
 | `max_connection_lifetime` | **Age-based Cleanup** | Limits connection lifetime and rotates old connections |

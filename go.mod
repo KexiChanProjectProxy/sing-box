@@ -134,4 +134,4 @@ require (
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
-replace github.com/anytls/sing-anytls => /tmp/sing-anytls
+replace github.com/anytls/sing-anytls => ./sing-anytls

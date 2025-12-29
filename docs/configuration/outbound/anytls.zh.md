@@ -19,6 +19,7 @@ icon: material/new-box
   "min_idle_session": 2,
   "ensure_idle_session": 5,
   "heartbeat": "30s",
+  "max_connection_lifetime": "1h",
   "tls": {},
 
   ... // 拨号字段
@@ -128,6 +129,60 @@ AnyTLS 密码。
 [Heartbeat] Received heartbeat response
 ```
 
+#### max_connection_lifetime
+
+空闲连接的最大生存时间。启用后，超过此时长的空闲会话将自动关闭，优先关闭较旧的连接。默认值：禁用 (0s)
+
+**工作原理**：
+- 追踪每个会话的创建时间
+- 定期检查空闲会话的年龄
+- 关闭超过配置生存时间的空闲会话
+- 优先使用较新的连接（FIFO - 先进先出）
+- 优先关闭较旧的连接
+
+**推荐值**：
+```json
+{
+  "max_connection_lifetime": "1h"   // 保守 - 每小时轮换连接
+  "max_connection_lifetime": "30m"  // 适中 - 每 30 分钟轮换
+  "max_connection_lifetime": "2h"   // 长期 - 适用于稳定环境
+}
+```
+
+**最佳实践**：
+- 根据网络环境和安全要求设置
+- 对于动态 IP 或安全关注的环境使用较低值（30分钟-1小时）
+- 对于稳定、可信的网络使用较高值（2-4小时）
+- 如不需要可禁用（`"max_connection_lifetime": "0"`）
+- 与 `ensure_idle_session` 结合使用以在轮换后维持池大小
+
+**使用场景**：
+- **连接轮换**：定期刷新连接以防止过期会话
+- **负载均衡**：随时间将连接分散到不同的服务器资源
+- **安全性**：限制连接生存时间以减少暴露窗口
+- **IP 轮换**：通过循环连接适应动态 IP 环境
+
+**与池维护结合的示例**：
+```json
+{
+  "max_connection_lifetime": "1h",
+  "ensure_idle_session": 5,
+  "min_idle_session": 2
+}
+```
+此配置：
+- 关闭超过 1 小时的空闲连接
+- 自动创建新会话以维持 5 个空闲会话
+- 保护至少 2 个会话免于基于超时的清理
+- 结果是每小时自动轮换连接
+
+**调试日志**：
+设置 `"log": {"level": "debug"}` 查看年龄清理活动：
+```
+[AgeCleanup] Found 3 idle sessions exceeding max lifetime (1h0m0s), closing oldest first
+[AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, created=2024-01-01 10:00:00)
+```
+
 #### tls
 
 ==必填==
@@ -142,13 +197,14 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#outbound)。
 
 ## 会话池管理指南
 
-AnyTLS 提供三个互补功能来管理连接会话：
+AnyTLS 提供四个互补功能来管理连接会话：
 
 | 功能 | 类型 | 用途 |
 |---------|------|---------|
 | `min_idle_session` | **被动保护** | 防止现有会话因超时而关闭 |
 | `ensure_idle_session` | **主动创建** | 通过创建会话维持最小池大小 |
 | `heartbeat` | **保活** | 通过 NAT 保持会话活跃并防止超时 |
+| `max_connection_lifetime` | **基于年龄清理** | 限制连接生存时间并轮换旧连接 |
 
 ### 配置策略
 

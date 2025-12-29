@@ -19,6 +19,7 @@ icon: material/new-box
   "min_idle_session": 2,
   "ensure_idle_session": 5,
   "heartbeat": "30s",
+  "max_connection_lifetime": "1h",
   "tls": {},
 
   ... // Dial Fields
@@ -128,6 +129,60 @@ Set `"log": {"level": "debug"}` to see heartbeat activity:
 [Heartbeat] Received heartbeat response
 ```
 
+#### max_connection_lifetime
+
+Maximum lifetime for idle connections. When enabled, idle sessions that exceed this age will be automatically closed, with older connections prioritized for closure. Default value: disabled (0s)
+
+**How it works**:
+- Tracks the creation time of each session
+- Periodically checks idle sessions for age
+- Closes idle sessions older than the configured lifetime
+- Prefers newer connections for use (FIFO - First In, First Out)
+- Prefers older connections for closure
+
+**Recommended values**:
+```json
+{
+  "max_connection_lifetime": "1h"   // Conservative - rotate connections hourly
+  "max_connection_lifetime": "30m"  // Moderate - rotate every 30 minutes
+  "max_connection_lifetime": "2h"   // Long-lived - for stable environments
+}
+```
+
+**Best practices**:
+- Set based on your network environment and security requirements
+- Lower values (30m-1h) for environments with dynamic IPs or security concerns
+- Higher values (2h-4h) for stable, trusted networks
+- Disable (`"max_connection_lifetime": "0"`) if not needed
+- Combine with `ensure_idle_session` to maintain pool size after rotation
+
+**Use cases**:
+- **Connection rotation**: Regularly refresh connections to prevent stale sessions
+- **Load balancing**: Distribute connections across different server resources over time
+- **Security**: Limit connection lifetime to reduce exposure window
+- **IP rotation**: Work with dynamic IP environments by cycling connections
+
+**Example with pool maintenance**:
+```json
+{
+  "max_connection_lifetime": "1h",
+  "ensure_idle_session": 5,
+  "min_idle_session": 2
+}
+```
+This configuration:
+- Closes idle connections older than 1 hour
+- Automatically creates new sessions to maintain 5 idle sessions
+- Protects at least 2 sessions from timeout-based cleanup
+- Results in automatic connection rotation every hour
+
+**Debug logging**:
+Set `"log": {"level": "debug"}` to see age cleanup activity:
+```
+[AgeCleanup] Found 3 idle sessions exceeding max lifetime (1h0m0s), closing oldest first
+[AgeCleanup] Closing session #1 (seq=42, age=1h5m30s, created=2024-01-01 10:00:00)
+```
+
 #### tls
 
 ==Required==
@@ -142,13 +197,14 @@ See [Dial Fields](/configuration/shared/dial/) for details.
 
 ## Session Pool Management Guide
 
-AnyTLS provides three complementary features for managing connection sessions:
+AnyTLS provides four complementary features for managing connection sessions:
 
 | Feature | Type | Purpose |
 |---------|------|---------|
 | `min_idle_session` | **Passive Protection** | Prevents existing sessions from timeout closure |
 | `ensure_idle_session` | **Active Creation** | Maintains minimum pool size by creating sessions |
 | `heartbeat` | **Keepalive** | Keeps sessions alive through NAT and prevents timeouts |
+| `max_connection_lifetime` | **Age-based Cleanup** | Limits connection lifetime and rotates old connections |
 
 ### Configuration Strategies
 

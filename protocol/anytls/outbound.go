@@ -72,6 +72,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		Password:                 options.Password,
 		IdleSessionCheckInterval: options.IdleSessionCheckInterval.Build(),
 		IdleSessionTimeout:       options.IdleSessionTimeout.Build(),
+		MaxConnectionLifetime:    options.MaxConnectionLifetime.Build(),
 		MinIdleSession:           options.MinIdleSession,
 		EnsureIdleSession:        options.EnsureIdleSession,
 		Heartbeat:                options.Heartbeat.Build(),

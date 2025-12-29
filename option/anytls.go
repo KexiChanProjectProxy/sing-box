@@ -24,4 +24,5 @@ type AnyTLSOutboundOptions struct {
 	MinIdleSession           int                `json:"min_idle_session,omitempty"`
 	EnsureIdleSession        int                `json:"ensure_idle_session,omitempty"`
 	Heartbeat                badoption.Duration `json:"heartbeat,omitempty"`
+	MaxConnectionLifetime    badoption.Duration `json:"max_connection_lifetime,omitempty"`
 }

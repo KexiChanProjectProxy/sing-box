@@ -342,8 +342,9 @@ func (lb *LoadBalance) Start(stage adapter.StartStage) error {
 }
 
 func (lb *LoadBalance) PostStart() error {
-	// Perform initial health check
-	go lb.performHealthCheck(lb.ctx)
+	// Perform initial synchronous health check to ensure candidateState is initialized
+	// before any connections are attempted
+	lb.performHealthCheck(lb.ctx)
 	return nil
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
+	"github.com/sagernet/sing-box/common/domain"
 	"github.com/sagernet/sing-box/common/interrupt"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
@@ -813,6 +814,24 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 			} else {
 				parts = append(parts, "-")
 			}
+		case "matched_ruleset":
+			// Use the ruleset tag that matched this connection (if any)
+			if metadata.MatchedRuleSet != "" {
+				parts = append(parts, metadata.MatchedRuleSet)
+			} else {
+				parts = append(parts, "-")
+			}
+		case "etld_plus_one":
+			// Extract eTLD+1 (effective TLD + 1) from the domain
+			// e.g., a.b.example.com -> example.com, a.b.example.co.uk -> example.co.uk
+			var rawDomain string
+			if metadata.Destination.IsFqdn() {
+				rawDomain = metadata.Destination.Fqdn
+			} else if metadata.Domain != "" {
+				rawDomain = metadata.Domain
+			}
+			etldPlusOne := domain.ExtractETLDPlusOne(rawDomain)
+			parts = append(parts, etldPlusOne)
 		default:
 			parts = append(parts, "-")
 		}

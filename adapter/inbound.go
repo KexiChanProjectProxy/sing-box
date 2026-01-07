@@ -100,6 +100,7 @@ type InboundContext struct {
 	DestinationPortMatch         bool
 	DidMatch                     bool
 	IgnoreDestinationIPCIDRMatch bool
+	MatchedRuleSet               string // Tag of the matched ruleset (for hash-based routing)
 }
 
 func (c *InboundContext) ResetRuleCache() {

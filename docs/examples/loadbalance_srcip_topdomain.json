@@ -1,0 +1,101 @@
+{
+  "log": {
+    "level": "info"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2080,
+      "sniff": true,
+      "sniff_override_destination": false
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy-a",
+      "server": "a.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "proxy-b",
+      "server": "b.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "proxy-c",
+      "server": "c.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "proxy-d",
+      "server": "d.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "loadbalance",
+      "tag": "lb-by-domain",
+      "primary_outbounds": [
+        "proxy-a",
+        "proxy-b",
+        "proxy-c",
+        "proxy-d"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "3m",
+      "timeout": "5s",
+      "top_n": {
+        "primary": 4
+      },
+      "strategy": "consistent_hash",
+      "hash": {
+        "key_parts": [
+          "src_ip",
+          "etld_plus_one"
+        ],
+        "virtual_nodes": 100,
+        "on_empty_key": "random",
+        "key_salt": ""
+      },
+      "comment": "Same source IP accessing same top-level domain will always use the same proxy. For example: a.example.com and b.example.com both map to example.com and will use the same outbound for a given source IP."
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "geoip": "private",
+        "outbound": "direct"
+      },
+      {
+        "geosite": "category-ads-all",
+        "outbound": "block"
+      }
+    ],
+    "final": "lb-by-domain"
+  }
+}

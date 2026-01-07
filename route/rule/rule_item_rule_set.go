@@ -45,6 +45,8 @@ func (r *RuleSetItem) Match(metadata *adapter.InboundContext) bool {
 	metadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
 	for _, ruleSet := range r.setList {
 		if ruleSet.Match(metadata) {
+			// Store the first matched ruleset tag for hash-based routing
+			metadata.MatchedRuleSet = ruleSet.Name()
 			return true
 		}
 	}

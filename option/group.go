@@ -37,6 +37,37 @@ type LoadBalanceTopNOptions struct {
 	Backup  int `json:"backup,omitempty"`
 }
 
+// LoadBalanceHashOptions configures consistent hash-based routing for LoadBalance outbound.
+//
+// Supported key_parts values:
+//   - "src_ip": Source IP address
+//   - "dst_ip": Destination IP address
+//   - "src_port": Source port number
+//   - "dst_port": Destination port number
+//   - "network": Network type (tcp/udp)
+//   - "domain": Full destination domain name
+//   - "inbound_tag": Tag of the inbound that accepted the connection
+//   - "matched_ruleset": Tag of the ruleset that matched this connection (if any)
+//                        Enables SRC_IP+RULESET hash mode
+//   - "etld_plus_one": eTLD+1 of the destination domain (e.g., example.com from a.b.example.com)
+//                      Uses Public Suffix List for accurate extraction
+//                      Enables SRC_IP+TOP_DOMAIN hash mode
+//
+// Example configurations:
+//   - ["src_ip", "matched_ruleset"] - Same source IP hitting same ruleset → same outbound
+//   - ["src_ip", "etld_plus_one"] - Same source IP accessing same top domain → same outbound
+//   - ["src_ip", "dst_ip", "dst_port"] - Traditional 5-tuple hashing
+//
+// Hash key construction:
+//   - Parts are joined with "|" separator
+//   - Missing values use "-" placeholder
+//   - Optional salt prefix for namespace isolation
+//
+// Domain normalization for etld_plus_one:
+//   - Lowercased
+//   - Trailing dots stripped
+//   - Port numbers stripped (example.com:443 → example.com)
+//   - IP addresses return "-" (not applicable)
 type LoadBalanceHashOptions struct {
 	KeyParts     []string `json:"key_parts,omitempty"`
 	VirtualNodes int      `json:"virtual_nodes,omitempty"`

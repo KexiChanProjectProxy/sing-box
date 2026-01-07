@@ -342,9 +342,9 @@ func (lb *LoadBalance) Start(stage adapter.StartStage) error {
 }
 
 func (lb *LoadBalance) PostStart() error {
-	// Perform initial synchronous health check to ensure candidateState is initialized
-	// before any connections are attempted
-	lb.performHealthCheck(lb.ctx)
+	// Perform initial health check asynchronously
+	// selectOutbound() will use all primary outbounds until health check completes
+	go lb.performHealthCheck(lb.ctx)
 	return nil
 }
 
@@ -865,14 +865,103 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 	return key
 }
 
+// selectOutboundBootstrap selects an outbound during bootstrap (before first health check)
+func (lb *LoadBalance) selectOutboundBootstrap(network string, metadata *adapter.InboundContext) (adapter.Outbound, error) {
+	// Collect all primary outbounds
+	candidates := make([]adapter.Outbound, 0, len(lb.primaryTags))
+	for _, tag := range lb.primaryTags {
+		detour, loaded := lb.outbound.Outbound(tag)
+		if loaded && common.Contains(detour.Network(), network) {
+			candidates = append(candidates, detour)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, E.New("no primary outbounds available for network ", network)
+	}
+
+	// Select based on strategy
+	var selected adapter.Outbound
+
+	switch lb.strategy {
+	case strategyRandom:
+		selected = candidates[rand.Intn(len(candidates))]
+		lb.logger.Debug(
+			"bootstrap random selection: selected=", selected.Tag(),
+			", pool_size=", len(candidates),
+		)
+
+	case strategyConsistentHash:
+		// Build temporary hash ring from all primary outbounds
+		tempRing := lb.buildHashRing(candidates)
+
+		// Build hash key
+		hashKey := lb.buildHashKey(metadata)
+
+		if hashKey == "" {
+			// Handle empty key based on configuration
+			if lb.hashOnEmptyKey == onEmptyKeyRandom {
+				selected = candidates[rand.Intn(len(candidates))]
+				lb.logger.Debug("bootstrap: empty hash key, using random selection")
+			} else {
+				// Hash empty string
+				keyHash := xxhash.Sum64String("")
+				nodeTag := lb.lookupHashRing(tempRing, keyHash)
+
+				// Find outbound with this tag
+				for _, candidate := range candidates {
+					if candidate.Tag() == nodeTag {
+						selected = candidate
+						break
+					}
+				}
+
+				if selected == nil {
+					selected = candidates[rand.Intn(len(candidates))]
+				}
+			}
+		} else {
+			// Hash the key and lookup
+			keyHash := xxhash.Sum64String(hashKey)
+			nodeTag := lb.lookupHashRing(tempRing, keyHash)
+
+			// Find outbound with this tag
+			for _, candidate := range candidates {
+				if candidate.Tag() == nodeTag {
+					selected = candidate
+					break
+				}
+			}
+
+			if selected == nil {
+				selected = candidates[rand.Intn(len(candidates))]
+			} else {
+				lb.logger.Debug(
+					"bootstrap consistent_hash selection: key=", hashKey,
+					", selected=", selected.Tag(),
+				)
+			}
+		}
+	}
+
+	if selected == nil {
+		return nil, E.New("bootstrap selection failed")
+	}
+
+	return selected, nil
+}
+
 // selectOutbound selects an outbound from the current candidate pool
 func (lb *LoadBalance) selectOutbound(network string, metadata *adapter.InboundContext) (adapter.Outbound, error) {
 	// Touch to maintain activity
 	lb.Touch()
 
 	snapshot := lb.candidateState.Load()
+
+	// Bootstrap mode: if not yet initialized, use all primary outbounds with equal weight
 	if snapshot == nil {
-		return nil, E.New("no candidates available (not initialized)")
+		lb.logger.Debug("using bootstrap mode: all primary outbounds with equal weight")
+		return lb.selectOutboundBootstrap(network, metadata)
 	}
 
 	cs := snapshot.(*candidateSnapshot)

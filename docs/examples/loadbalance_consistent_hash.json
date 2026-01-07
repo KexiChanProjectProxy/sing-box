@@ -1,0 +1,114 @@
+{
+  "log": {
+    "level": "info"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-hk-1",
+      "server": "hk1.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-hk-2",
+      "server": "hk2.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-hk-3",
+      "server": "hk3.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-sg-1",
+      "server": "sg1.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-sg-2",
+      "server": "sg2.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "loadbalance",
+      "tag": "lb-auto",
+      "primary_outbounds": [
+        "proxy-hk-1",
+        "proxy-hk-2",
+        "proxy-hk-3"
+      ],
+      "backup_outbounds": [
+        "proxy-sg-1",
+        "proxy-sg-2"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "3m",
+      "timeout": "5s",
+      "idle_timeout": "30m",
+      "top_n": {
+        "primary": 3,
+        "backup": 2
+      },
+      "strategy": "consistent_hash",
+      "hash": {
+        "key_parts": [
+          "src_ip",
+          "dst_ip",
+          "dst_port"
+        ],
+        "virtual_nodes": 100,
+        "on_empty_key": "random",
+        "key_salt": ""
+      },
+      "hysteresis": {
+        "primary_failures": 3,
+        "backup_hold_time": "30s"
+      },
+      "empty_pool_action": "error",
+      "interrupt_exist_connections": false
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "geoip": "private",
+        "outbound": "direct"
+      },
+      {
+        "geosite": "category-ads-all",
+        "outbound": "block"
+      }
+    ],
+    "final": "lb-auto"
+  }
+}

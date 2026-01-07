@@ -1,0 +1,74 @@
+{
+  "log": {
+    "level": "info"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy-us-1",
+      "server": "us1.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "proxy-us-2",
+      "server": "us2.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "loadbalance",
+      "tag": "lb-random",
+      "primary_outbounds": [
+        "proxy-us-1",
+        "proxy-us-2"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "5m",
+      "timeout": "5s",
+      "top_n": {
+        "primary": 2
+      },
+      "strategy": "random",
+      "hysteresis": {
+        "primary_failures": 2,
+        "backup_hold_time": "1m"
+      },
+      "empty_pool_action": "error"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "geoip": "private",
+        "outbound": "direct"
+      },
+      {
+        "geosite": "category-ads-all",
+        "outbound": "block"
+      }
+    ],
+    "final": "lb-random"
+  }
+}

@@ -1166,6 +1166,89 @@ func (lb *LoadBalance) All() []string {
 	return allTags
 }
 
+// URLTest performs on-demand health checks and returns latency results
+func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
+	result := make(map[string]uint16)
+
+	// Prevent concurrent health checks
+	if lb.checking.Swap(true) {
+		return result, nil
+	}
+	defer lb.checking.Store(false)
+
+	// Check if paused
+	if lb.pauseManager != nil && lb.pauseManager.IsPaused() {
+		return result, nil
+	}
+
+	allTags := append([]string{}, lb.primaryTags...)
+	allTags = append(allTags, lb.backupTags...)
+
+	// Collect outbounds to test
+	outbounds := make([]adapter.Outbound, 0, len(allTags))
+	for _, tag := range allTags {
+		detour, loaded := lb.outbound.Outbound(tag)
+		if !loaded {
+			lb.logger.Error("outbound not found: ", tag)
+			continue
+		}
+		outbounds = append(outbounds, detour)
+	}
+
+	if len(outbounds) == 0 {
+		return result, nil
+	}
+
+	// Perform health checks in batches
+	batchSize := 10
+	resultChan := make(chan nodeStat, len(outbounds))
+	var resultAccess sync.Mutex
+
+	for i := 0; i < len(outbounds); i += batchSize {
+		end := i + batchSize
+		if end > len(outbounds) {
+			end = len(outbounds)
+		}
+
+		var wg sync.WaitGroup
+		for _, detour := range outbounds[i:end] {
+			wg.Add(1)
+			go func(d adapter.Outbound) {
+				defer wg.Done()
+
+				// Create context with timeout
+				testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
+				defer cancel()
+
+				t, err := urltest.URLTest(testCtx, lb.link, d)
+				if err != nil {
+					lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
+					resultChan <- nodeStat{tag: d.Tag(), failure: true}
+					lb.history.DeleteURLTestHistory(RealTag(d))
+				} else {
+					lb.logger.Debug("health check succeeded for ", d.Tag(), ": ", t, "ms")
+					lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+						Time:  time.Now(),
+						Delay: t,
+					})
+					resultChan <- nodeStat{tag: d.Tag(), delay: t}
+
+					resultAccess.Lock()
+					result[d.Tag()] = t
+					resultAccess.Unlock()
+				}
+			}(detour)
+		}
+		wg.Wait()
+	}
+	close(resultChan)
+
+	// Update candidate pools after testing
+	lb.updateCandidates()
+
+	return result, nil
+}
+
 // logCandidates logs detailed candidate information
 func (lb *LoadBalance) logCandidates(tierName string, candidates []adapter.Outbound, stats []nodeStat) {
 	if len(candidates) == 0 {

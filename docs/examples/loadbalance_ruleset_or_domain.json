@@ -1,0 +1,146 @@
+{
+  "log": {
+    "level": "info"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2080,
+      "sniff": true,
+      "sniff_override_destination": false
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-1",
+      "server": "server1.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-2",
+      "server": "server2.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-3",
+      "server": "server3.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "proxy-4",
+      "server": "server4.example.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "password"
+    },
+    {
+      "type": "loadbalance",
+      "tag": "lb-smart",
+      "primary_outbounds": [
+        "proxy-1",
+        "proxy-2",
+        "proxy-3",
+        "proxy-4"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "3m",
+      "timeout": "5s",
+      "top_n": {
+        "primary": 4
+      },
+      "strategy": "consistent_hash",
+      "hash": {
+        "key_parts": [
+          "src_ip",
+          "matched_ruleset_or_etld"
+        ],
+        "virtual_nodes": 100,
+        "on_empty_key": "random"
+      },
+      "comment": "Smart hash mode with ruleset priority. If a request matches a ruleset (e.g., geosite-netflix), it uses src_ip + ruleset_tag for hashing. If no ruleset matches, it falls back to src_ip + eTLD+1 (top domain). Examples: (1) 192.168.1.100 accessing api.netflix.com with matched ruleset 'geosite-netflix' → hash key = '192.168.1.100|geosite-netflix'. (2) 192.168.1.100 accessing cdn.example.com without ruleset match → hash key = '192.168.1.100|example.com'. This ensures consistent routing for both rule-based categorization and direct domain access."
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "tag": "geosite-netflix",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-netflix.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "geosite-google",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-google.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "geosite-openai",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-openai.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "geosite-category-ads-all",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+        "download_detour": "direct"
+      }
+    ],
+    "rules": [
+      {
+        "geoip": "private",
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-category-ads-all"
+        ],
+        "outbound": "block"
+      },
+      {
+        "rule_set": [
+          "geosite-netflix"
+        ],
+        "outbound": "lb-smart"
+      },
+      {
+        "rule_set": [
+          "geosite-google"
+        ],
+        "outbound": "lb-smart"
+      },
+      {
+        "rule_set": [
+          "geosite-openai"
+        ],
+        "outbound": "lb-smart"
+      }
+    ],
+    "final": "lb-smart"
+  }
+}

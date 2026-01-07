@@ -358,3 +358,237 @@ func TestHashKeyCombinations(t *testing.T) {
 		})
 	}
 }
+
+// TestHashKeyRulesetOrETLD_RulesetPriority tests that matched_ruleset_or_etld prioritizes ruleset
+func TestHashKeyRulesetOrETLD_RulesetPriority(t *testing.T) {
+	lb := &LoadBalance{
+		hashKeyParts: []string{"src_ip", "matched_ruleset_or_etld"},
+	}
+
+	// Scenario 1: Request WITH ruleset match
+	metadata1 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("192.168.1.100:12345"),
+		MatchedRuleSet: "geosite-netflix",
+		Destination:    M.ParseSocksaddrHostPort("api.netflix.com", 443),
+	}
+
+	// Scenario 2: Same src_ip, same domain, but NO ruleset match
+	metadata2 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("192.168.1.100:12345"),
+		MatchedRuleSet: "", // No ruleset matched
+		Destination:    M.ParseSocksaddrHostPort("api.netflix.com", 443),
+	}
+
+	key1 := lb.buildHashKey(metadata1)
+	key2 := lb.buildHashKey(metadata2)
+
+	// Verify different behavior based on ruleset presence
+	assert.NotEmpty(t, key1)
+	assert.NotEmpty(t, key2)
+	assert.NotEqual(t, key1, key2, "Same src_ip with/without ruleset should produce different keys")
+
+	// Verify key format
+	expectedKey1 := "192.168.1.100|geosite-netflix"
+	assert.Equal(t, expectedKey1, key1, "With ruleset match should use ruleset tag")
+
+	expectedKey2 := "192.168.1.100|netflix.com"
+	assert.Equal(t, expectedKey2, key2, "Without ruleset match should use eTLD+1")
+
+	// Scenario 3: Different ruleset, same domain
+	metadata3 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("192.168.1.100:12345"),
+		MatchedRuleSet: "geosite-google",
+		Destination:    M.ParseSocksaddrHostPort("api.netflix.com", 443),
+	}
+
+	key3 := lb.buildHashKey(metadata3)
+	expectedKey3 := "192.168.1.100|geosite-google"
+	assert.Equal(t, expectedKey3, key3, "Different ruleset should produce different key")
+	assert.NotEqual(t, key1, key3, "Different rulesets should hash differently")
+}
+
+// TestHashKeyRulesetOrETLD_DomainFallback tests domain extraction when no ruleset matches
+func TestHashKeyRulesetOrETLD_DomainFallback(t *testing.T) {
+	lb := &LoadBalance{
+		hashKeyParts: []string{"matched_ruleset_or_etld"},
+	}
+
+	testCases := []struct {
+		name        string
+		metadata    *adapter.InboundContext
+		expectedKey string
+		description string
+	}{
+		{
+			name: "subdomain to eTLD+1",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "",
+				Destination:    M.ParseSocksaddrHostPort("a.b.example.com", 443),
+			},
+			expectedKey: "example.com",
+			description: "Should extract example.com from a.b.example.com",
+		},
+		{
+			name: "multi-part TLD",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "",
+				Destination:    M.ParseSocksaddrHostPort("a.b.example.co.uk", 443),
+			},
+			expectedKey: "example.co.uk",
+			description: "Should handle .co.uk correctly",
+		},
+		{
+			name: "domain with port",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "",
+				Domain:         "example.com:8080",
+			},
+			expectedKey: "example.com",
+			description: "Should strip port from domain",
+		},
+		{
+			name: "IPv4 address",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "",
+				Destination:    M.ParseSocksaddr("8.8.8.8:53"),
+			},
+			expectedKey: "-",
+			description: "IP addresses should return placeholder",
+		},
+		{
+			name: "IPv6 address",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "",
+				Destination:    M.ParseSocksaddr("[2001:db8::1]:53"),
+			},
+			expectedKey: "-",
+			description: "IPv6 addresses should return placeholder",
+		},
+		{
+			name: "no host",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "",
+			},
+			expectedKey: "-",
+			description: "Missing host should return placeholder",
+		},
+		{
+			name: "ruleset takes priority over domain",
+			metadata: &adapter.InboundContext{
+				MatchedRuleSet: "geosite-openai",
+				Destination:    M.ParseSocksaddrHostPort("api.openai.com", 443),
+			},
+			expectedKey: "geosite-openai",
+			description: "Ruleset should override domain extraction",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := lb.buildHashKey(tc.metadata)
+			assert.Equal(t, tc.expectedKey, key, tc.description)
+		})
+	}
+}
+
+// TestHashKeyRulesetOrETLD_StickyBehavior tests hash consistency
+func TestHashKeyRulesetOrETLD_StickyBehavior(t *testing.T) {
+	lb := &LoadBalance{
+		hashKeyParts: []string{"src_ip", "matched_ruleset_or_etld"},
+	}
+
+	// Test 1: Same src_ip + ruleset → consistent hash
+	metadata1 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("10.0.0.1:1234"),
+		MatchedRuleSet: "geosite-category-ads",
+		Destination:    M.ParseSocksaddrHostPort("ad.example.com", 443),
+	}
+
+	key1a := lb.buildHashKey(metadata1)
+	key1b := lb.buildHashKey(metadata1)
+	key1c := lb.buildHashKey(metadata1)
+
+	assert.Equal(t, key1a, key1b, "Same metadata should produce same key")
+	assert.Equal(t, key1b, key1c, "Hash should be deterministic")
+
+	hash1a := xxhash.Sum64String(key1a)
+	hash1b := xxhash.Sum64String(key1b)
+	assert.Equal(t, hash1a, hash1b, "Hash values should match")
+
+	// Test 2: Same src_ip + eTLD+1 → consistent hash
+	metadata2 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("10.0.0.1:5678"),
+		MatchedRuleSet: "", // No ruleset
+		Destination:    M.ParseSocksaddrHostPort("cdn1.example.com", 443),
+	}
+
+	metadata3 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("10.0.0.1:9999"), // Different port
+		MatchedRuleSet: "",                                // No ruleset
+		Destination:    M.ParseSocksaddrHostPort("cdn2.example.com", 80), // Different subdomain
+	}
+
+	key2 := lb.buildHashKey(metadata2)
+	key3 := lb.buildHashKey(metadata3)
+
+	assert.Equal(t, "10.0.0.1|example.com", key2)
+	assert.Equal(t, "10.0.0.1|example.com", key3)
+	assert.Equal(t, key2, key3, "Same src_ip + eTLD+1 should produce same key")
+
+	// Test 3: Different eTLD+1 → different hash
+	metadata4 := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("10.0.0.1:1234"),
+		MatchedRuleSet: "",
+		Destination:    M.ParseSocksaddrHostPort("sub.google.com", 443),
+	}
+
+	key4 := lb.buildHashKey(metadata4)
+	assert.NotEqual(t, key2, key4, "Different eTLD+1 should produce different key")
+	assert.Equal(t, "10.0.0.1|google.com", key4)
+}
+
+// TestHashKeyRulesetOrETLD_BackwardCompatibility verifies existing hash modes unchanged
+func TestHashKeyRulesetOrETLD_BackwardCompatibility(t *testing.T) {
+	metadata := &adapter.InboundContext{
+		Source:         M.ParseSocksaddr("192.168.1.100:12345"),
+		Destination:    M.ParseSocksaddr("8.8.8.8:53"),
+		MatchedRuleSet: "geosite-google",
+	}
+
+	// Test 1: Traditional hash mode still works
+	lb1 := &LoadBalance{
+		hashKeyParts: []string{"src_ip", "dst_ip", "dst_port"},
+		hashKeySalt:  "test-salt",
+	}
+	key1 := lb1.buildHashKey(metadata)
+	expectedKey1 := "test-salt192.168.1.100|8.8.8.8|53"
+	assert.Equal(t, expectedKey1, key1, "Traditional hash should be unchanged")
+
+	// Test 2: matched_ruleset still works independently
+	lb2 := &LoadBalance{
+		hashKeyParts: []string{"src_ip", "matched_ruleset"},
+	}
+	key2 := lb2.buildHashKey(metadata)
+	expectedKey2 := "192.168.1.100|geosite-google"
+	assert.Equal(t, expectedKey2, key2, "matched_ruleset should work as before")
+
+	// Test 3: etld_plus_one still works independently
+	metadataWithDomain := &adapter.InboundContext{
+		Source:      M.ParseSocksaddr("192.168.1.100:12345"),
+		Destination: M.ParseSocksaddrHostPort("www.example.com", 443),
+	}
+	lb3 := &LoadBalance{
+		hashKeyParts: []string{"src_ip", "etld_plus_one"},
+	}
+	key3 := lb3.buildHashKey(metadataWithDomain)
+	expectedKey3 := "192.168.1.100|example.com"
+	assert.Equal(t, expectedKey3, key3, "etld_plus_one should work as before")
+
+	// Test 4: New mode doesn't affect other modes when not used
+	lb4 := &LoadBalance{
+		hashKeyParts: []string{"src_ip", "dst_port"},
+	}
+	key4 := lb4.buildHashKey(metadata)
+	expectedKey4 := "192.168.1.100|53"
+	assert.Equal(t, expectedKey4, key4, "Other modes unaffected by new key part")
+}

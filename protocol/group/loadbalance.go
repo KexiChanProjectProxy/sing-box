@@ -832,6 +832,25 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 			}
 			etldPlusOne := domain.ExtractETLDPlusOne(rawDomain)
 			parts = append(parts, etldPlusOne)
+		case "matched_ruleset_or_etld":
+			// Priority: use matched ruleset if available, otherwise fall back to eTLD+1
+			// This enables unified hashing for both ruleset-matched and direct domain connections
+			// Use case: route by content category (ruleset) or domain grouping (eTLD+1)
+			if metadata.MatchedRuleSet != "" {
+				// Ruleset matched - use it for hashing (same behavior as matched_ruleset)
+				parts = append(parts, metadata.MatchedRuleSet)
+			} else {
+				// No ruleset match - fall back to domain-based hashing
+				// Extract eTLD+1 from domain (same behavior as etld_plus_one)
+				var rawDomain string
+				if metadata.Destination.IsFqdn() {
+					rawDomain = metadata.Destination.Fqdn
+				} else if metadata.Domain != "" {
+					rawDomain = metadata.Domain
+				}
+				etldPlusOne := domain.ExtractETLDPlusOne(rawDomain)
+				parts = append(parts, etldPlusOne)
+			}
 		default:
 			parts = append(parts, "-")
 		}

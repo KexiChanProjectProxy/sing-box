@@ -52,10 +52,15 @@ type LoadBalanceTopNOptions struct {
 //   - "etld_plus_one": eTLD+1 of the destination domain (e.g., example.com from a.b.example.com)
 //                      Uses Public Suffix List for accurate extraction
 //                      Enables SRC_IP+TOP_DOMAIN hash mode
+//   - "matched_ruleset_or_etld": Smart fallback - use matched ruleset if available, otherwise eTLD+1
+//                                Priority: ruleset > eTLD+1
+//                                Enables unified hashing for both rule-based and direct connections
+//                                Use case: route by content category (ruleset) or domain grouping
 //
 // Example configurations:
 //   - ["src_ip", "matched_ruleset"] - Same source IP hitting same ruleset → same outbound
 //   - ["src_ip", "etld_plus_one"] - Same source IP accessing same top domain → same outbound
+//   - ["src_ip", "matched_ruleset_or_etld"] - Smart mode with ruleset priority
 //   - ["src_ip", "dst_ip", "dst_port"] - Traditional 5-tuple hashing
 //
 // Hash key construction:

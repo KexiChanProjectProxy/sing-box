@@ -43,8 +43,10 @@ func (r *RuleSetItem) Start() error {
 func (r *RuleSetItem) Match(metadata *adapter.InboundContext) bool {
 	metadata.IPCIDRMatchSource = r.ipCidrMatchSource
 	metadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
-	for _, ruleSet := range r.setList {
+	for i, ruleSet := range r.setList {
 		if ruleSet.Match(metadata) {
+			// Populate the matched ruleset tag for hash-based routing
+			metadata.MatchedRuleSet = r.tagList[i]
 			return true
 		}
 	}

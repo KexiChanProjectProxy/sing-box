@@ -73,8 +73,15 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		IdleSessionCheckInterval: options.IdleSessionCheckInterval.Build(),
 		IdleSessionTimeout:       options.IdleSessionTimeout.Build(),
 		MinIdleSession:           options.MinIdleSession,
-		DialOut:                  outbound.dialOut,
-		Logger:                   logger,
+		// Note: New session management options are defined in option.AnyTLSOutboundOptions
+		// and will be passed to anytls.ClientConfig when the library supports them:
+		// - EnsureIdleSession
+		// - EnsureIdleSessionCreateRate
+		// - MaxConnectionLifetime
+		// - ConnectionLifetimeJitter
+		// - MinIdleSessionForAge
+		DialOut: outbound.dialOut,
+		Logger:  logger,
 	})
 	if err != nil {
 		return nil, err

@@ -142,10 +142,7 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		dialer.Timeout = C.TCPConnectTimeout
 	}
 	// Enable TCP keep-alive using OS defaults
-	// Set to -1 to use system defaults instead of hardcoded values
-	dialer.KeepAlive = -1
-	// Use system-level TCP keep-alive settings for better adaptability
-	dialer.Control = control.Append(dialer.Control, control.SetKeepAlivePeriod(-1, -1))
+	setKeepAliveConfig(&dialer)
 	var udpFragment bool
 	if options.UDPFragment != nil {
 		udpFragment = *options.UDPFragment

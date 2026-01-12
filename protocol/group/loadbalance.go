@@ -274,8 +274,8 @@ func (lb *LoadBalance) NewConnectionEx(ctx context.Context, conn net.Conn, metad
 	if connHandler, ok := outbound.(adapter.ConnectionHandlerEx); ok {
 		connHandler.NewConnectionEx(ctx, conn, metadata, onClose)
 	} else {
-		N.CloseOnHandshakeFailure(conn, onClose, E.New("outbound ", outbound.Tag(), " does not support connection handling"))
-		lb.logger.ErrorContext(ctx, "outbound ", outbound.Tag(), " does not support connection handling")
+		// Fallback to standard connection handling for outbounds that don't implement ConnectionHandlerEx
+		lb.connection.NewConnection(ctx, outbound, conn, metadata, onClose)
 	}
 }
 
@@ -289,8 +289,8 @@ func (lb *LoadBalance) NewPacketConnectionEx(ctx context.Context, conn N.PacketC
 	if packetHandler, ok := outbound.(adapter.PacketConnectionHandlerEx); ok {
 		packetHandler.NewPacketConnectionEx(ctx, conn, metadata, onClose)
 	} else {
-		N.CloseOnHandshakeFailure(conn, onClose, E.New("outbound ", outbound.Tag(), " does not support packet connection handling"))
-		lb.logger.ErrorContext(ctx, "outbound ", outbound.Tag(), " does not support packet connection handling")
+		// Fallback to standard packet connection handling for outbounds that don't implement PacketConnectionHandlerEx
+		lb.connection.NewPacketConnection(ctx, outbound, conn, metadata, onClose)
 	}
 }
 

@@ -80,6 +80,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		// - MaxConnectionLifetime
 		// - ConnectionLifetimeJitter
 		// - MinIdleSessionForAge
+		// - Heartbeat
 		DialOut: outbound.dialOut,
 		Logger:  logger,
 	})

@@ -22,6 +22,7 @@ icon: material/new-box
   "max_connection_lifetime": "",
   "connection_lifetime_jitter": "",
   "min_idle_session_for_age": 0,
+  "heartbeat": "11s",
   "tls": {},
 
   ... // Dial Fields
@@ -126,6 +127,22 @@ Use cases:
 - Balanced protection for both scenarios
 
 Default: `0` (use same as `min_idle_session`)
+
+!!! note "New in sing-box 1.12.15"
+
+#### heartbeat
+
+Interval for sending heartbeat packets to keep connections alive and detect connection failures early.
+
+Heartbeat packets help maintain connection health and allow faster detection of dead connections.
+
+Example: `11s` (send heartbeat every 11 seconds)
+
+Default: disabled (no heartbeat)
+
+!!! note "Requires anytls library support"
+
+    This option will be passed to the anytls library once heartbeat support is added.
 
 #### tls
 

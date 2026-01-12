@@ -22,6 +22,7 @@ icon: material/new-box
   "max_connection_lifetime": "",
   "connection_lifetime_jitter": "",
   "min_idle_session_for_age": 0,
+  "heartbeat": "11s",
   "tls": {},
 
   ... // 拨号字段
@@ -126,6 +127,22 @@ AnyTLS 密码。
 - 两种场景的平衡保护
 
 默认值：`0`（使用与 `min_idle_session` 相同的值）
+
+!!! note "自 sing-box 1.12.15 起新增"
+
+#### heartbeat
+
+发送心跳包的时间间隔，用于保持连接活跃并尽早检测连接故障。
+
+心跳包有助于维护连接健康状态，并允许更快地检测死连接。
+
+示例：`11s`（每 11 秒发送一次心跳）
+
+默认值：禁用（无心跳）
+
+!!! note "需要 anytls 库支持"
+
+    一旦 anytls 库添加心跳支持，此选项将传递给它。
 
 #### tls
 

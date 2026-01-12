@@ -27,4 +27,5 @@ type AnyTLSOutboundOptions struct {
 	MaxConnectionLifetime        badoption.Duration `json:"max_connection_lifetime,omitempty"`
 	ConnectionLifetimeJitter     badoption.Duration `json:"connection_lifetime_jitter,omitempty"`
 	MinIdleSessionForAge         int                `json:"min_idle_session_for_age,omitempty"`
+	Heartbeat                    badoption.Duration `json:"heartbeat,omitempty"`
 }

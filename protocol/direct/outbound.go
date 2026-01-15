@@ -39,6 +39,7 @@ type Outbound struct {
 	overrideOption      int
 	overrideDestination M.Socksaddr
 	isEmpty             bool
+	xlat464Prefix       netip.Prefix
 	// loopBack *loopBackDetector
 }
 
@@ -56,15 +57,39 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	if err != nil {
 		return nil, err
 	}
+
+	var finalDialer dialer.ParallelInterfaceDialer
+	finalDialer = outboundDialer.(dialer.ParallelInterfaceDialer)
+
+	// Wrap with XLAT464 dialer if configured
+	var xlat464Prefix netip.Prefix
+	if options.XLAT464Prefix != nil {
+		xlat464Prefix = options.XLAT464Prefix.Build(netip.Prefix{})
+		if xlat464Prefix.IsValid() {
+			// Validate prefix is /96
+			if xlat464Prefix.Bits() != 96 {
+				return nil, E.New("xlat464_prefix must be a /96 prefix per RFC 6052")
+			}
+
+			// Warn if not using ipv4_only
+			if C.DomainStrategy(options.DomainStrategy) != C.DomainStrategyIPv4Only {
+				logger.Warn("xlat464_prefix is configured but domain_strategy is not ipv4_only, translation may not work as expected")
+			}
+
+			finalDialer = dialer.NewXLAT464Dialer(finalDialer, xlat464Prefix)
+		}
+	}
+
 	outbound := &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeDirect, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.DialerOptions),
 		logger:  logger,
 		//nolint:staticcheck
 		domainStrategy: C.DomainStrategy(options.DomainStrategy),
 		fallbackDelay:  time.Duration(options.FallbackDelay),
-		dialer:         outboundDialer.(dialer.ParallelInterfaceDialer),
+		dialer:         finalDialer,
 		//nolint:staticcheck
-		isEmpty: reflect.DeepEqual(options.DialerOptions, option.DialerOptions{UDPFragmentDefault: true}) && options.OverrideAddress == "" && options.OverridePort == 0,
+		isEmpty:       reflect.DeepEqual(options.DialerOptions, option.DialerOptions{UDPFragmentDefault: true}) && options.OverrideAddress == "" && options.OverridePort == 0,
+		xlat464Prefix: xlat464Prefix,
 		// loopBack:       newLoopBackDetector(router),
 	}
 	//nolint:staticcheck

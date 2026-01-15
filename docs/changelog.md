@@ -2,6 +2,45 @@
 icon: material/alert-decagram
 ---
 
+#### 1.12.14.2
+
+* Add xhttp (splithttp) transport support **1**
+
+**1**:
+
+xhttp transport provides HTTP-based tunneling with advanced traffic obfuscation and connection optimization.
+
+Features:
+- **packet-up mode**: Sequence-based packet transmission with automatic reordering
+- **HTTP/1.1 and HTTP/2**: Automatic version detection based on TLS configuration
+- **Full Xmux connection pooling**: Configurable concurrency, request limits, connection reuse, and TTL
+- **Session management**: Automatic 30-second expiration for unused sessions
+- **Traffic obfuscation**: x_padding parameter for anti-detection
+- **Reliable delivery**: Heap-based upload queue for out-of-order packet handling
+
+Configuration example:
+
+```json
+{
+  "type": "vless",
+  "transport": {
+    "type": "xhttp",
+    "host": "example.com",
+    "path": "/xhttp/",
+    "mode": "packet-up",
+    "x_padding_bytes": {"from": 100, "to": 1000},
+    "xmux": {
+      "max_concurrency": {"from": 1, "to": 4},
+      "h_max_request_times": {"from": 600, "to": 900}
+    }
+  }
+}
+```
+
+Compatible with Xray-core's xhttp/splithttp transport.
+
+See [V2Ray Transport](/configuration/shared/v2ray-transport/#xhttp) for details.
+
 #### 1.12.14.1
 
 * Add 464XLAT (CLAT) support to direct outbound **1**

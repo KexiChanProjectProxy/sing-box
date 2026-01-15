@@ -15,6 +15,7 @@ V2Ray Transport 是 v2ray 发明的一组私有协议，并污染了其他协议
 * QUIC
 * gRPC
 * HTTPUpgrade
+* xhttp
 
 !!! warning "与 v2ray-core 的区别"
 
@@ -216,3 +217,189 @@ HTTP 请求路径
 HTTP 请求的额外标头。
 
 如果设置，服务器将写入响应。
+### xhttp
+
+```json
+{
+  "type": "xhttp",
+  "host": "",
+  "path": "/",
+  "mode": "auto",
+  "headers": {},
+  "x_padding_bytes": {
+    "from": 100,
+    "to": 1000
+  },
+  "sc_max_each_post_bytes": {
+    "from": 1000000,
+    "to": 1000000
+  },
+  "sc_min_posts_interval_ms": {
+    "from": 30,
+    "to": 30
+  },
+  "sc_max_buffered_posts": 30,
+  "no_grpc_header": false,
+  "xmux": {
+    "max_concurrency": {
+      "from": 0,
+      "to": 0
+    },
+    "max_connections": {
+      "from": 0,
+      "to": 0
+    },
+    "c_max_reuse_times": {
+      "from": 0,
+      "to": 0
+    },
+    "h_max_request_times": {
+      "from": 0,
+      "to": 0
+    },
+    "h_max_reusable_secs": {
+      "from": 0,
+      "to": 0
+    },
+    "h_keep_alive_period": 0
+  }
+}
+```
+
+!!! note ""
+
+    xhttp 传输层在 Xray-core 中也称为 splithttp。
+    它提供基于 HTTP 的隧道传输，具有高级流量混淆和连接优化功能。
+
+!!! warning ""
+
+    此传输层与 Xray-core 的 xhttp/splithttp 传输层兼容。
+
+#### host
+
+HTTP 请求的主机域名。
+
+如果不为空，服务端将验证。
+
+#### path
+
+HTTP 请求的路径。
+
+客户端会自动在路径后添加会话 ID。
+
+默认为 `/`。
+
+#### mode
+
+xhttp 传输的操作模式。
+
+当前支持：
+
+- `auto`：自动选择模式（默认为 `packet-up`）
+- `packet-up`：通过多个 POST 请求以序列化数据包发送数据
+
+默认值：`auto`
+
+!!! note ""
+
+    未来版本将支持更多模式（`stream-up`、`stream-down`、`stream-one`）。
+
+#### headers
+
+HTTP 请求的额外头部。
+
+如果不为空，服务端将在响应中写入。
+
+#### x_padding_bytes
+
+用于流量混淆的随机填充范围。
+
+每个请求将添加一个长度在此范围内的随机 `x_padding` 查询参数。
+
+默认值：`{"from": 100, "to": 1000}`
+
+#### sc_max_each_post_bytes
+
+每个 POST 请求的最大负载大小（字节）。
+
+默认值：`{"from": 1000000, "to": 1000000}`（1MB）
+
+#### sc_min_posts_interval_ms
+
+POST 请求之间的最小间隔（毫秒）。
+
+这有助于控制请求速率，避免服务器过载。
+
+默认值：`{"from": 30, "to": 30}`
+
+#### sc_max_buffered_posts
+
+上传队列中缓冲的最大数据包数量。
+
+如果队列超过此大小，连接将被断开以防止内存耗尽。
+
+默认值：`30`
+
+#### no_grpc_header
+
+如果启用，GET 响应中将不发送 `Content-Type: text/event-stream` 头部。
+
+默认值：`false`
+
+#### xmux
+
+用于优化连接复用的连接多路复用（Xmux）配置。
+
+##### max_concurrency
+
+每个池化连接允许的最大并发连接数。
+
+范围值，其中 `0` 表示无限制。
+
+默认值：`{"from": 0, "to": 0}`（无限制）
+
+##### max_connections
+
+连接池中的最大总连接数。
+
+范围值，其中 `0` 表示无限制。
+
+默认值：`{"from": 0, "to": 0}`（无限制）
+
+##### c_max_reuse_times
+
+连接可以被重用的最大次数。
+
+范围值，其中 `0` 表示无限制。
+
+默认值：`{"from": 0, "to": 0}`（无限制）
+
+##### h_max_request_times
+
+每个连接允许的最大 HTTP 请求数。
+
+范围值，其中 `0` 表示无限制。
+
+默认值：`{"from": 0, "to": 0}`（无限制）
+
+##### h_max_reusable_secs
+
+连接的最大生存时间（秒）（TTL）。
+
+范围值，其中 `0` 表示无限制。
+
+默认值：`{"from": 0, "to": 0}`（无限制）
+
+##### h_keep_alive_period
+
+空闲连接的保活超时时间（秒）。
+
+`0` 表示禁用。
+
+默认值：`0`
+
+!!! tip "范围配置"
+
+    许多 xhttp 参数使用带有 `from` 和 `to` 字段的范围配置。
+    实际使用的值将在此范围内随机选择，提供额外的混淆效果。
+    如果 `from` 等于 `to`，则使用该精确值。

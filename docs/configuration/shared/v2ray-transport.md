@@ -16,6 +16,7 @@ Available transports:
 * QUIC
 * gRPC
 * HTTPUpgrade
+* xhttp
 
 !!! warning "Difference from v2ray-core"
 
@@ -227,3 +228,189 @@ The server will verify.
 Extra headers of HTTP request.
 
 The server will write in response if not empty.
+### xhttp
+
+```json
+{
+  "type": "xhttp",
+  "host": "",
+  "path": "/",
+  "mode": "auto",
+  "headers": {},
+  "x_padding_bytes": {
+    "from": 100,
+    "to": 1000
+  },
+  "sc_max_each_post_bytes": {
+    "from": 1000000,
+    "to": 1000000
+  },
+  "sc_min_posts_interval_ms": {
+    "from": 30,
+    "to": 30
+  },
+  "sc_max_buffered_posts": 30,
+  "no_grpc_header": false,
+  "xmux": {
+    "max_concurrency": {
+      "from": 0,
+      "to": 0
+    },
+    "max_connections": {
+      "from": 0,
+      "to": 0
+    },
+    "c_max_reuse_times": {
+      "from": 0,
+      "to": 0
+    },
+    "h_max_request_times": {
+      "from": 0,
+      "to": 0
+    },
+    "h_max_reusable_secs": {
+      "from": 0,
+      "to": 0
+    },
+    "h_keep_alive_period": 0
+  }
+}
+```
+
+!!! note ""
+
+    xhttp transport is also known as splithttp in Xray-core.
+    It provides HTTP-based tunneling with advanced traffic obfuscation and connection optimization.
+
+!!! warning ""
+
+    This transport is compatible with Xray-core's xhttp/splithttp transport.
+
+#### host
+
+Host domain for HTTP requests.
+
+The server will verify if not empty.
+
+#### path
+
+Path of HTTP request.
+
+The path is automatically suffixed with a session ID on the client side.
+
+Defaults to `/`.
+
+#### mode
+
+Operation mode for xhttp transport.
+
+Currently supported:
+
+- `auto`: Automatically select mode (default: `packet-up`)
+- `packet-up`: Send data as sequenced packets via multiple POST requests
+
+Default: `auto`
+
+!!! note ""
+
+    Additional modes (`stream-up`, `stream-down`, `stream-one`) will be supported in future versions.
+
+#### headers
+
+Extra headers of HTTP request.
+
+The server will write in response if not empty.
+
+#### x_padding_bytes
+
+Random padding range for traffic obfuscation.
+
+A random `x_padding` query parameter with length in this range will be added to each request.
+
+Default: `{"from": 100, "to": 1000}`
+
+#### sc_max_each_post_bytes
+
+Maximum payload size for each POST request in bytes.
+
+Default: `{"from": 1000000, "to": 1000000}` (1MB)
+
+#### sc_min_posts_interval_ms
+
+Minimum interval between POST requests in milliseconds.
+
+This helps control the request rate and avoid overwhelming the server.
+
+Default: `{"from": 30, "to": 30}`
+
+#### sc_max_buffered_posts
+
+Maximum number of packets to buffer in the upload queue.
+
+If the queue exceeds this size, the connection will be torn down to prevent memory exhaustion.
+
+Default: `30`
+
+#### no_grpc_header
+
+If enabled, the `Content-Type: text/event-stream` header will not be sent in GET responses.
+
+Default: `false`
+
+#### xmux
+
+Connection multiplexing (Xmux) configuration for optimizing connection reuse.
+
+##### max_concurrency
+
+Maximum concurrent connections allowed per pooled connection.
+
+Range value where `0` means unlimited.
+
+Default: `{"from": 0, "to": 0}` (unlimited)
+
+##### max_connections
+
+Maximum total connections in the connection pool.
+
+Range value where `0` means unlimited.
+
+Default: `{"from": 0, "to": 0}` (unlimited)
+
+##### c_max_reuse_times
+
+Maximum number of times a connection can be reused.
+
+Range value where `0` means unlimited.
+
+Default: `{"from": 0, "to": 0}` (unlimited)
+
+##### h_max_request_times
+
+Maximum number of HTTP requests allowed per connection.
+
+Range value where `0` means unlimited.
+
+Default: `{"from": 0, "to": 0}` (unlimited)
+
+##### h_max_reusable_secs
+
+Maximum lifetime of a connection in seconds (TTL).
+
+Range value where `0` means unlimited.
+
+Default: `{"from": 0, "to": 0}` (unlimited)
+
+##### h_keep_alive_period
+
+Keep-alive timeout in seconds for idle connections.
+
+`0` means disabled.
+
+Default: `0`
+
+!!! tip "Range Configuration"
+
+    Many xhttp parameters use a range configuration with `from` and `to` fields.
+    The actual value used will be randomly selected within this range, providing additional obfuscation.
+    If `from` equals `to`, that exact value is used.

@@ -2,6 +2,28 @@
 icon: material/alert-decagram
 ---
 
+#### 1.12.14.1
+
+* Add 464XLAT (CLAT) support to direct outbound **1**
+
+**1**:
+
+464XLAT allows IPv4 connections over IPv6-only networks by translating IPv4 addresses to IPv6.
+
+Add `xlat464_prefix` field to direct outbound configuration with a /96 IPv6 prefix (per RFC 6052).
+
+Example configuration:
+
+```json
+{
+  "type": "direct",
+  "domain_strategy": "ipv4_only",
+  "xlat464_prefix": "64:ff9b::/96"
+}
+```
+
+See [Direct outbound](/configuration/outbound/direct/#xlat464_prefix) for details.
+
 #### 1.12.14
 
 * Fixes and improvements

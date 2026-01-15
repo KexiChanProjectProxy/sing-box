@@ -48,21 +48,10 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	if options.Detour != "" {
 		return nil, E.New("`detour` is not supported in direct context")
 	}
-	outboundDialer, err := dialer.NewWithOptions(dialer.Options{
-		Context:        ctx,
-		Options:        options.DialerOptions,
-		RemoteIsDomain: true,
-		DirectOutbound: true,
-	})
-	if err != nil {
-		return nil, err
-	}
 
-	var finalDialer dialer.ParallelInterfaceDialer
-	finalDialer = outboundDialer.(dialer.ParallelInterfaceDialer)
-
-	// Wrap with XLAT464 dialer if configured
+	// Check if XLAT464 is configured
 	var xlat464Prefix netip.Prefix
+	var needXLAT464 bool
 	if options.XLAT464Prefix != nil {
 		xlat464Prefix = options.XLAT464Prefix.Build(netip.Prefix{})
 		if xlat464Prefix.IsValid() {
@@ -76,8 +65,67 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 				logger.Warn("xlat464_prefix is configured but domain_strategy is not ipv4_only, translation may not work as expected")
 			}
 
-			finalDialer = dialer.NewXLAT464Dialer(finalDialer, xlat464Prefix)
+			needXLAT464 = true
 		}
+	}
+
+	// Build dialer chain with XLAT464 in the correct position
+	var finalDialer dialer.ParallelInterfaceDialer
+	if needXLAT464 {
+		// For XLAT464, we need to insert it AFTER DNS resolution
+		// Create base dialer first (without RemoteIsDomain)
+		baseDialer, err := dialer.NewWithOptions(dialer.Options{
+			Context:        ctx,
+			Options:        options.DialerOptions,
+			RemoteIsDomain: false,
+			DirectOutbound: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Wrap base dialer with XLAT464
+		xlat464Dialer := dialer.NewXLAT464Dialer(baseDialer, xlat464Prefix)
+
+		// Prepare DNS query options
+		var strategy C.DomainStrategy
+		var server string
+		if options.DomainResolver != nil {
+			if options.DomainResolver.Strategy != option.DomainStrategy(C.DomainStrategyAsIS) {
+				strategy = C.DomainStrategy(options.DomainResolver.Strategy)
+			} else if options.DomainStrategy != option.DomainStrategy(C.DomainStrategyAsIS) {
+				//nolint:staticcheck
+				strategy = C.DomainStrategy(options.DomainStrategy)
+			}
+			server = options.DomainResolver.Server
+		} else if options.DomainStrategy != option.DomainStrategy(C.DomainStrategyAsIS) {
+			//nolint:staticcheck
+			strategy = C.DomainStrategy(options.DomainStrategy)
+		}
+
+		// Now wrap with ResolveDialer so DNS resolution happens first
+		finalDialer = dialer.NewResolveDialer(
+			ctx,
+			xlat464Dialer,
+			true, // parallel
+			server,
+			adapter.DNSQueryOptions{
+				Strategy: strategy,
+			},
+			time.Duration(options.FallbackDelay),
+		).(dialer.ParallelInterfaceDialer)
+	} else {
+		// Normal path without XLAT464
+		outboundDialer, err := dialer.NewWithOptions(dialer.Options{
+			Context:        ctx,
+			Options:        options.DialerOptions,
+			RemoteIsDomain: true,
+			DirectOutbound: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		finalDialer = outboundDialer.(dialer.ParallelInterfaceDialer)
 	}
 
 	outbound := &Outbound{

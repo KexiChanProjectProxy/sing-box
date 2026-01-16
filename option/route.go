@@ -5,6 +5,7 @@ import "github.com/sagernet/sing/common/json/badoption"
 type RouteOptions struct {
 	GeoIP                      *GeoIPOptions                     `json:"geoip,omitempty"`
 	Geosite                    *GeositeOptions                   `json:"geosite,omitempty"`
+	ASN                        *ASNOptions                       `json:"asn,omitempty"`
 	Rules                      []Rule                            `json:"rules,omitempty"`
 	RuleSet                    []RuleSet                         `json:"rule_set,omitempty"`
 	Final                      string                            `json:"final,omitempty"`
@@ -29,6 +30,12 @@ type GeoIPOptions struct {
 }
 
 type GeositeOptions struct {
+	Path           string `json:"path,omitempty"`
+	DownloadURL    string `json:"download_url,omitempty"`
+	DownloadDetour string `json:"download_detour,omitempty"`
+}
+
+type ASNOptions struct {
 	Path           string `json:"path,omitempty"`
 	DownloadURL    string `json:"download_url,omitempty"`
 	DownloadDetour string `json:"download_detour,omitempty"`

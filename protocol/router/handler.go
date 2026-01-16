@@ -43,8 +43,8 @@ func (r *Inbound) handleWebSocketUpgrade(c *gin.Context, route *compiledRoute) {
 	ctx := c.Request.Context()
 	r.logger.InfoContext(ctx, "handling WebSocket upgrade for route: ", route.name)
 
-	// Hijack the connection
-	conn, err := r.hijackConnection(c)
+	// Hijack the connection and reconstruct the HTTP request for the target inbound
+	conn, err := r.hijackConnectionForForwarding(c)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "failed to hijack WebSocket connection: ", err)
 		c.AbortWithStatus(500)
@@ -55,6 +55,7 @@ func (r *Inbound) handleWebSocketUpgrade(c *gin.Context, route *compiledRoute) {
 	metadata := r.createMetadata(c, route)
 
 	// Forward to target inbound
+	r.logger.DebugContext(ctx, "forwarding WebSocket to ", route.targetInbound)
 	onClose := r.trackHijackedConn(conn)
 	if err := r.forwardToInbound(ctx, conn, route.targetInbound, metadata, onClose); err != nil {
 		r.logger.ErrorContext(ctx, "failed to forward WebSocket to ", route.targetInbound, ": ", err)
@@ -68,8 +69,8 @@ func (r *Inbound) handleHijackedConnection(c *gin.Context, route *compiledRoute)
 	ctx := c.Request.Context()
 	r.logger.DebugContext(ctx, "hijacking connection for route: ", route.name)
 
-	// Hijack the connection
-	conn, err := r.hijackConnection(c)
+	// Hijack the connection and reconstruct the HTTP request for the target inbound
+	conn, err := r.hijackConnectionForForwarding(c)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "failed to hijack connection: ", err)
 		c.AbortWithStatus(500)
@@ -80,6 +81,7 @@ func (r *Inbound) handleHijackedConnection(c *gin.Context, route *compiledRoute)
 	metadata := r.createMetadata(c, route)
 
 	// Forward to target inbound
+	r.logger.DebugContext(ctx, "forwarding connection to ", route.targetInbound)
 	onClose := r.trackHijackedConn(conn)
 	if err := r.forwardToInbound(ctx, conn, route.targetInbound, metadata, onClose); err != nil {
 		r.logger.ErrorContext(ctx, "failed to forward connection to ", route.targetInbound, ": ", err)

@@ -279,6 +279,7 @@ func (r *Inbound) forwardToInbound(ctx context.Context, conn net.Conn, targetTag
 	metadata.InboundDetour = targetTag
 
 	// Forward connection
+	r.logger.InfoContext(ctx, "successfully forwarding connection to inbound: ", targetTag)
 	injectable.NewConnectionEx(ctx, conn, metadata, onClose)
 	return nil
 }

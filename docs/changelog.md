@@ -2,6 +2,84 @@
 icon: material/alert-decagram
 ---
 
+#### 1.12.14.3
+
+* Add router inbound for HTTP/HTTPS routing to protocol inbounds **1**
+
+**1**:
+
+The router inbound is an HTTP/HTTPS routing layer that forwards traffic to other **inbounds** based on HTTP request properties.
+
+Features:
+- **Protocol Multiplexing**: Run multiple proxy protocols (Trojan, VMess, VLESS) on one HTTP/HTTPS port
+- **Path-Based Routing**: Different paths route to different protocols (e.g., `/trojan`, `/vmess`)
+- **Host-Based Routing**: Different domains route to different protocols with wildcard support
+- **Header-Based Routing**: Route based on authentication headers, user agents, etc.
+- **Internal-Only Mode**: Works with or without a TCP listener (can be used via detour)
+- **Flexible Matching**: Path prefix, path regex, host with wildcards, headers with patterns, HTTP methods
+- **Static File Fallback**: Serve static website while hiding proxy traffic for camouflage
+- **Full HTTP Support**: GET, POST, WebSocket, gRPC, HTTP/2 all supported
+
+Configuration example:
+
+```json
+{
+  "type": "router",
+  "tag": "https-router",
+  "listen": "0.0.0.0",
+  "listen_port": 443,
+  "tls": {
+    "enabled": true,
+    "server_name": "example.com",
+    "certificate_path": "/path/to/cert.pem",
+    "key_path": "/path/to/key.pem"
+  },
+  "routes": [
+    {
+      "name": "trojan-route",
+      "match": {
+        "path_prefix": ["/trojan"]
+      },
+      "target": "trojan-in",
+      "priority": 100
+    },
+    {
+      "name": "vmess-ws",
+      "match": {
+        "path_prefix": ["/vmess"],
+        "header": {"Upgrade": ["websocket"]}
+      },
+      "target": "vmess-in",
+      "priority": 90
+    }
+  ],
+  "fallback": {
+    "type": "static",
+    "webroot": "/var/www/html",
+    "index": ["index.html"]
+  }
+}
+```
+
+Target inbounds must be internal-only (no `listen_port`):
+
+```json
+{
+  "type": "trojan",
+  "tag": "trojan-in",
+  "users": [{"password": "password"}]
+}
+```
+
+Use cases:
+- **Protocol Multiplexing**: Multiple protocols on one port
+- **CDN Camouflage**: Mix proxy traffic with legitimate static website
+- **Path Distribution**: Different paths to different protocols
+- **Domain Routing**: Different domains to different backends
+- **Header Auth**: Route based on authentication tokens
+
+See [Router Inbound](/configuration/inbound/router/) for complete documentation.
+
 #### 1.12.14.2
 
 * Add xhttp (splithttp) transport support **1**

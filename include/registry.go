@@ -26,6 +26,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/mixed"
 	"github.com/sagernet/sing-box/protocol/naive"
 	"github.com/sagernet/sing-box/protocol/redirect"
+	"github.com/sagernet/sing-box/protocol/router"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/shadowtls"
 	"github.com/sagernet/sing-box/protocol/socks"
@@ -55,6 +56,7 @@ func InboundRegistry() *inbound.Registry {
 	socks.RegisterInbound(registry)
 	http.RegisterInbound(registry)
 	mixed.RegisterInbound(registry)
+	router.RegisterInbound(registry)
 
 	shadowsocks.RegisterInbound(registry)
 	vmess.RegisterInbound(registry)

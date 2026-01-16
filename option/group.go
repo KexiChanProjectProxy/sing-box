@@ -51,17 +51,30 @@ type LoadBalanceTopNOptions struct {
 //                        Enables SRC_IP+RULESET hash mode
 //   - "etld_plus_one": eTLD+1 of the destination domain (e.g., example.com from a.b.example.com)
 //                      Uses Public Suffix List for accurate extraction
-//                      Enables SRC_IP+TOP_DOMAIN hash mode
+//                      Enables SRC_IP+TOP_DOMAIN hash mode (domain suffix grouping)
 //   - "matched_ruleset_or_etld": Smart fallback - use matched ruleset if available, otherwise eTLD+1
 //                                Priority: ruleset > eTLD+1
 //                                Enables unified hashing for both rule-based and direct connections
 //                                Use case: route by content category (ruleset) or domain grouping
+//   - "dst_asn": Destination IP's Autonomous System Number (requires ASN database)
+//                Groups connections by ISP/CDN/cloud provider network
+//                Example: AS16509 (Amazon), AS13335 (Cloudflare), AS15169 (Google)
+//                Enables same-ISP routing for CDN optimization
+//                Requires route.asn configuration with path to GeoLite2-ASN MMDB
+//   - "dst_geosite": Destination domain's geosite category (requires geosite database)
+//                    Groups connections by geosite code (e.g., "google", "netflix", "openai")
+//                    All domains in the same geosite category use the same hash key
+//                    Example: youtube.com, googlevideo.com → "geosite:google"
+//                    Enables category-based routing and service isolation
+//                    Requires route.geosite configuration with path to geosite.db
 //
 // Example configurations:
 //   - ["src_ip", "matched_ruleset"] - Same source IP hitting same ruleset → same outbound
 //   - ["src_ip", "etld_plus_one"] - Same source IP accessing same top domain → same outbound
 //   - ["src_ip", "matched_ruleset_or_etld"] - Smart mode with ruleset priority
 //   - ["src_ip", "dst_ip", "dst_port"] - Traditional 5-tuple hashing
+//   - ["src_ip", "dst_asn"] - Same source IP accessing same ASN → same outbound (CDN optimization)
+//   - ["src_ip", "dst_geosite"] - Same source accessing same geosite → same outbound (service grouping)
 //
 // Hash key construction:
 //   - Parts are joined with "|" separator

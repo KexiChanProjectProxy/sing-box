@@ -87,6 +87,8 @@ type LoadBalance struct {
 	history                      adapter.URLTestHistoryStorage
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
+	asnReader                    adapter.ASNReader
+	geositeReader                adapter.GeositeReader
 
 	// Candidate pools and selection state
 	candidateState atomic.Value // *candidateSnapshot
@@ -269,6 +271,12 @@ func NewLoadBalance(
 	connectionManager := service.FromContext[adapter.ConnectionManager](ctx)
 	if connectionManager != nil {
 		lb.connection = connectionManager
+	}
+
+	// Get ASN reader from router if available
+	if router != nil {
+		lb.asnReader = router.ASNReader()
+		lb.geositeReader = router.GeositeReader()
 	}
 
 	return lb, nil
@@ -851,6 +859,45 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 				}
 				etldPlusOne := domain.ExtractETLDPlusOne(rawDomain)
 				parts = append(parts, etldPlusOne)
+			}
+		case "dst_asn":
+			// Lookup ASN for destination IP address
+			// Groups connections by Autonomous System Number (ISP/CDN/cloud provider)
+			// Requires ASN database to be configured in route.asn options
+			if lb.asnReader != nil && metadata.Destination.IsValid() && !metadata.Destination.IsFqdn() {
+				asn := lb.asnReader.Lookup(metadata.Destination.Addr)
+				if asn != 0 {
+					parts = append(parts, fmt.Sprintf("AS%d", asn))
+				} else {
+					parts = append(parts, "-")
+				}
+			} else {
+				parts = append(parts, "-")
+			}
+		case "dst_geosite":
+			// Lookup geosite code for destination domain
+			// Groups connections by geosite category (e.g., "google", "netflix", "openai")
+			// Requires geosite database to be configured in route.geosite options
+			// All domains in the same geosite category will use the same hash key
+			if lb.geositeReader != nil {
+				var lookupDomain string
+				if metadata.Destination.IsFqdn() {
+					lookupDomain = metadata.Destination.Fqdn
+				} else if metadata.Domain != "" {
+					lookupDomain = metadata.Domain
+				}
+				if lookupDomain != "" {
+					code := lb.geositeReader.Lookup(lookupDomain)
+					if code != "" {
+						parts = append(parts, fmt.Sprintf("geosite:%s", code))
+					} else {
+						parts = append(parts, "-")
+					}
+				} else {
+					parts = append(parts, "-")
+				}
+			} else {
+				parts = append(parts, "-")
 			}
 		default:
 			parts = append(parts, "-")

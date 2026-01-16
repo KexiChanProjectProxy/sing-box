@@ -26,6 +26,8 @@ type Router interface {
 	Rules() []Rule
 	AppendTracker(tracker ConnectionTracker)
 	ResetNetwork()
+	ASNReader() ASNReader
+	GeositeReader() GeositeReader
 }
 
 type ConnectionTracker interface {

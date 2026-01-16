@@ -117,6 +117,8 @@ Available key parts:
 | `matched_ruleset` | Tag of the ruleset that matched this connection | `geosite-netflix` |
 | `etld_plus_one` | eTLD+1 of the destination domain (PSL-based) | `example.com` |
 | `matched_ruleset_or_etld` | **Smart fallback**: Use matched ruleset if available, otherwise eTLD+1 | See below |
+| `dst_asn` | Destination IP's Autonomous System Number (requires ASN database) | `AS13335` |
+| `dst_geosite` | Destination domain's geosite category (requires geosite database) | `geosite:google` |
 
 **Common Configurations:**
 
@@ -125,6 +127,8 @@ Available key parts:
 - By ruleset category: `["src_ip", "matched_ruleset"]`
 - By top domain: `["src_ip", "etld_plus_one"]`
 - **Smart routing**: `["src_ip", "matched_ruleset_or_etld"]`
+- **By ASN (CDN optimization)**: `["src_ip", "dst_asn"]`
+- **By geosite (service grouping)**: `["src_ip", "dst_geosite"]`
 
 ##### hash.virtual_nodes
 
@@ -409,6 +413,126 @@ Routes by source IP + top domain. All subdomains of example.com from the same so
 - Handles both rule-based and direct traffic intelligently
 - No need for separate LoadBalance instances
 - Consistent routing for both categorized and uncategorized content
+
+### Example 7: ASN-Based Routing (CDN Optimization)
+
+```json
+{
+  "route": {
+    "asn": {
+      "path": "asn.mmdb",
+      "download_url": "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-ASN.mmdb"
+    },
+    "rules": [
+      {
+        "outbound": "lb-by-asn"
+      }
+    ]
+  },
+  "outbounds": [
+    {
+      "type": "loadbalance",
+      "tag": "lb-by-asn",
+      "primary_outbounds": [
+        "proxy-1",
+        "proxy-2",
+        "proxy-3",
+        "proxy-4"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "3m",
+      "strategy": "consistent_hash",
+      "hash": {
+        "key_parts": ["src_ip", "dst_asn"],
+        "virtual_nodes": 100
+      }
+    }
+  ]
+}
+```
+
+Routes by source IP + destination ASN (Autonomous System Number). All connections to the same ISP/CDN/cloud provider from the same source use the same proxy.
+
+**ASN Grouping Examples:**
+- All Cloudflare IPs (AS13335) → same proxy per user
+- All AWS IPs (AS16509) → same proxy per user
+- All Google IPs (AS15169) → same proxy per user
+
+**Benefits:**
+- **CDN optimization**: Maintains connection pooling with CDN edge servers
+- **Session consistency**: Keeps all requests to same ASN on same proxy
+- **Network topology awareness**: Routes based on destination network, not just IP
+
+**Requirements:**
+- ASN database must be configured in `route.asn` section
+- Database can be downloaded automatically from configured URL
+- Supports MaxMind GeoLite2-ASN format (MMDB)
+
+### Example 8: Geosite-Based Routing (Service Grouping)
+
+```json
+{
+  "route": {
+    "geosite": {
+      "path": "geosite.db",
+      "download_url": "https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite.db"
+    },
+    "rules": [
+      {
+        "outbound": "lb-by-geosite"
+      }
+    ]
+  },
+  "outbounds": [
+    {
+      "type": "loadbalance",
+      "tag": "lb-by-geosite",
+      "primary_outbounds": [
+        "proxy-1",
+        "proxy-2",
+        "proxy-3",
+        "proxy-4"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "3m",
+      "strategy": "consistent_hash",
+      "hash": {
+        "key_parts": ["src_ip", "dst_geosite"],
+        "virtual_nodes": 100
+      }
+    }
+  ]
+}
+```
+
+Routes by source IP + destination geosite category. All domains within the same geosite category from the same source use the same proxy.
+
+**Geosite Grouping Examples:**
+- All Google services (youtube.com, googlevideo.com, googleapis.com) → `geosite:google` → same proxy per user
+- All Netflix domains (netflix.com, nflxvideo.net, nflxext.com) → `geosite:netflix` → same proxy per user
+- All OpenAI domains (openai.com, oaistatic.com, oaiusercontent.com) → `geosite:openai` → same proxy per user
+
+**Benefits:**
+- **Service isolation**: Keeps all requests to the same service on same proxy
+- **Session consistency**: Maintains cookies and authentication across service subdomains
+- **Category-based routing**: Groups conceptually related domains together
+- **Fine-grained control**: More specific than domain suffix, more flexible than exact domain
+
+**How it works:**
+1. Load balancer looks up the destination domain in geosite database
+2. Finds matching geosite code (e.g., "google", "netflix")
+3. Uses the geosite code as part of the hash key
+4. All domains in the same geosite category get the same hash → same proxy
+
+**Difference from matched_ruleset:**
+- `matched_ruleset`: Uses the ruleset tag from routing rules (requires rule to match first)
+- `dst_geosite`: Direct geosite lookup, works without routing rules
+- `dst_geosite` can be used even when no routing rule matches
+
+**Requirements:**
+- Geosite database must be configured in `route.geosite` section
+- Supports sing-box geosite.db format
+- Database can be downloaded from SagerNet/sing-geosite repository
 
 ---
 

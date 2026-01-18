@@ -446,41 +446,40 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 		return
 	}
 
-	// Perform health checks in batches
-	batchSize := 10
+	// Perform health checks with controlled concurrency
+	// Use semaphore to limit concurrent checks while allowing full parallelism
+	maxConcurrent := 10
+	semaphore := make(chan struct{}, maxConcurrent)
 	resultChan := make(chan nodeStat, len(outbounds))
 
-	for i := 0; i < len(outbounds); i += batchSize {
-		end := i + batchSize
-		if end > len(outbounds) {
-			end = len(outbounds)
-		}
+	var wg sync.WaitGroup
+	for _, detour := range outbounds {
+		wg.Add(1)
+		go func(d adapter.Outbound) {
+			defer wg.Done()
 
-		var wg sync.WaitGroup
-		for _, detour := range outbounds[i:end] {
-			wg.Add(1)
-			go func(d adapter.Outbound) {
-				defer wg.Done()
+			// Acquire semaphore slot
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-				// Create context with timeout
-				testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
-				defer cancel()
+			// Create context with timeout
+			testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
+			defer cancel()
 
-				t, err := urltest.URLTest(testCtx, lb.link, d)
-				if err != nil {
-					lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
-					resultChan <- nodeStat{tag: d.Tag(), failure: true}
-				} else {
-					lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
-						Time:  time.Now(),
-						Delay: t,
-					})
-					resultChan <- nodeStat{tag: d.Tag(), delay: t}
-				}
-			}(detour)
-		}
-		wg.Wait()
+			t, err := urltest.URLTest(testCtx, lb.link, d)
+			if err != nil {
+				lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
+				resultChan <- nodeStat{tag: d.Tag(), failure: true}
+			} else {
+				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+					Time:  time.Now(),
+					Delay: t,
+				})
+				resultChan <- nodeStat{tag: d.Tag(), delay: t}
+			}
+		}(detour)
 	}
+	wg.Wait()
 	close(resultChan)
 
 	// Update candidate pools
@@ -1246,48 +1245,47 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 		return result, nil
 	}
 
-	// Perform health checks in batches
-	batchSize := 10
+	// Perform health checks with controlled concurrency
+	// Use semaphore to limit concurrent checks while allowing full parallelism
+	maxConcurrent := 10
+	semaphore := make(chan struct{}, maxConcurrent)
 	resultChan := make(chan nodeStat, len(outbounds))
 	var resultAccess sync.Mutex
 
-	for i := 0; i < len(outbounds); i += batchSize {
-		end := i + batchSize
-		if end > len(outbounds) {
-			end = len(outbounds)
-		}
+	var wg sync.WaitGroup
+	for _, detour := range outbounds {
+		wg.Add(1)
+		go func(d adapter.Outbound) {
+			defer wg.Done()
 
-		var wg sync.WaitGroup
-		for _, detour := range outbounds[i:end] {
-			wg.Add(1)
-			go func(d adapter.Outbound) {
-				defer wg.Done()
+			// Acquire semaphore slot
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-				// Create context with timeout
-				testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
-				defer cancel()
+			// Create context with timeout
+			testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
+			defer cancel()
 
-				t, err := urltest.URLTest(testCtx, lb.link, d)
-				if err != nil {
-					lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
-					resultChan <- nodeStat{tag: d.Tag(), failure: true}
-					lb.history.DeleteURLTestHistory(RealTag(d))
-				} else {
-					lb.logger.Debug("health check succeeded for ", d.Tag(), ": ", t, "ms")
-					lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
-						Time:  time.Now(),
-						Delay: t,
-					})
-					resultChan <- nodeStat{tag: d.Tag(), delay: t}
+			t, err := urltest.URLTest(testCtx, lb.link, d)
+			if err != nil {
+				lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
+				resultChan <- nodeStat{tag: d.Tag(), failure: true}
+				lb.history.DeleteURLTestHistory(RealTag(d))
+			} else {
+				lb.logger.Debug("health check succeeded for ", d.Tag(), ": ", t, "ms")
+				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+					Time:  time.Now(),
+					Delay: t,
+				})
+				resultChan <- nodeStat{tag: d.Tag(), delay: t}
 
-					resultAccess.Lock()
-					result[d.Tag()] = t
-					resultAccess.Unlock()
-				}
-			}(detour)
-		}
-		wg.Wait()
+				resultAccess.Lock()
+				result[d.Tag()] = t
+				resultAccess.Unlock()
+			}
+		}(detour)
 	}
+	wg.Wait()
 	close(resultChan)
 
 	// Update candidate pools after testing

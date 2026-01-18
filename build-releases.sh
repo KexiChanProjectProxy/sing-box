@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="1.12.14.4"
+VERSION="1.12.14.5"
 RELEASE_DIR="releases"
 # Full feature build tags for desktop platforms
 TAGS="with_acme,with_clash_api,with_dhcp,with_embedded_tor,with_grpc,with_gvisor,with_low_memory,with_quic,with_shadowsocksr,with_utls,with_wireguard,with_tailscale"

@@ -37,11 +37,27 @@ func (o *Options) UnmarshalJSONContext(ctx context.Context, content []byte) erro
 }
 
 type LogOptions struct {
-	Disabled     bool   `json:"disabled,omitempty"`
-	Level        string `json:"level,omitempty"`
-	Output       string `json:"output,omitempty"`
-	Timestamp    bool   `json:"timestamp,omitempty"`
-	DisableColor bool   `json:"-"`
+	Disabled     bool        `json:"disabled,omitempty"`
+	Level        string      `json:"level,omitempty"`
+	Output       string      `json:"output,omitempty"`
+	Timestamp    bool        `json:"timestamp,omitempty"`
+	DisableColor bool        `json:"-"`
+	Outputs      []LogOutput `json:"outputs,omitempty"`
+}
+
+type LogOutput struct {
+	Type          string `json:"type"` // "file", "stdout", "stderr", "http"
+	Format        string `json:"format,omitempty"` // "formatted", "json"
+	Path          string `json:"path,omitempty"`
+	URL           string `json:"url,omitempty"`
+	JWTToken      string `json:"jwt_token,omitempty"`
+	BatchSize     int    `json:"batch_size,omitempty"`
+	FlushInterval string `json:"flush_interval,omitempty"`
+	Timeout       string `json:"timeout,omitempty"`
+	Timestamp     bool   `json:"timestamp,omitempty"`
+	DisableColor  bool   `json:"disable_color,omitempty"`
+	Hostname      string `json:"hostname,omitempty"`
+	Version       string `json:"version,omitempty"`
 }
 
 type StubOptions struct{}

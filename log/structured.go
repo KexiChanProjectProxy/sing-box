@@ -21,8 +21,8 @@ func WithConnectionEvent(logger ContextLogger, ctx context.Context, level Level,
 	if ml, ok := logger.(*multiOutputLogger); ok {
 		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
 	} else {
-		// Fallback to regular logging
-		logger.Log(ctx, level, args)
+		// Fallback to regular logging (without event data)
+		logWithLevel(logger, ctx, level, args)
 	}
 }
 
@@ -31,8 +31,8 @@ func WithDNSEvent(logger ContextLogger, ctx context.Context, level Level, event 
 	if ml, ok := logger.(*multiOutputLogger); ok {
 		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
 	} else {
-		// Fallback to regular logging
-		logger.Log(ctx, level, args)
+		// Fallback to regular logging (without event data)
+		logWithLevel(logger, ctx, level, args)
 	}
 }
 
@@ -41,8 +41,8 @@ func WithRouterMatchEvent(logger ContextLogger, ctx context.Context, level Level
 	if ml, ok := logger.(*multiOutputLogger); ok {
 		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
 	} else {
-		// Fallback to regular logging
-		logger.Log(ctx, level, args)
+		// Fallback to regular logging (without event data)
+		logWithLevel(logger, ctx, level, args)
 	}
 }
 
@@ -51,8 +51,30 @@ func WithTransferEvent(logger ContextLogger, ctx context.Context, level Level, e
 	if ml, ok := logger.(*multiOutputLogger); ok {
 		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
 	} else {
-		// Fallback to regular logging
-		logger.Log(ctx, level, args)
+		// Fallback to regular logging (without event data)
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// logWithLevel calls the appropriate logging method based on level
+func logWithLevel(logger ContextLogger, ctx context.Context, level Level, args []any) {
+	switch level {
+	case LevelTrace:
+		logger.TraceContext(ctx, args...)
+	case LevelDebug:
+		logger.DebugContext(ctx, args...)
+	case LevelInfo:
+		logger.InfoContext(ctx, args...)
+	case LevelWarn:
+		logger.WarnContext(ctx, args...)
+	case LevelError:
+		logger.ErrorContext(ctx, args...)
+	case LevelFatal:
+		logger.FatalContext(ctx, args...)
+	case LevelPanic:
+		logger.PanicContext(ctx, args...)
+	default:
+		logger.InfoContext(ctx, args...)
 	}
 }
 

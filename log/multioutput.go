@@ -2,10 +2,9 @@ package log
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing/common"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/observable"
 )
@@ -102,7 +101,7 @@ func (f *multiOutputFactory) NewLogger(tag string) ContextLogger {
 // Subscribe subscribes to log entries (for observable pattern)
 func (f *multiOutputFactory) Subscribe() (subscription observable.Subscription[Entry], done <-chan struct{}, err error) {
 	if f.observer == nil {
-		return nil, nil, common.ErrNotInitialized
+		return nil, nil, errors.New("observer not initialized")
 	}
 	return f.observer.Subscribe()
 }
@@ -177,161 +176,10 @@ func (l *multiOutputLogger) buildLogEntry(ctx context.Context, level Level, mess
 		entry.ConnectionDuration = time.Since(id.CreatedAt)
 	}
 
-	// Extract InboundContext metadata
-	if metadata := adapter.ContextFrom(ctx); metadata != nil {
-		l.extractInboundMetadata(entry.Metadata, metadata)
-	}
+	// Note: InboundContext metadata is not automatically extracted to avoid import cycles.
+	// Use structured events (ConnectionEvent, DNSEvent, etc.) to include rich metadata.
 
 	return entry
-}
-
-// extractInboundMetadata extracts metadata from InboundContext
-func (l *multiOutputLogger) extractInboundMetadata(dest map[string]interface{}, metadata *adapter.InboundContext) {
-	// Network type
-	if metadata.Network != "" {
-		dest["network"] = metadata.Network
-	}
-
-	// Source
-	if metadata.Source.IsValid() {
-		dest["source_ip"] = metadata.Source.Addr.String()
-		dest["source_port"] = metadata.Source.Port
-	}
-
-	// Destination
-	if metadata.Destination.IsValid() {
-		dest["dest_ip"] = metadata.Destination.Addr.String()
-		dest["dest_port"] = metadata.Destination.Port
-		if metadata.Destination.IsFqdn() {
-			dest["dest_domain"] = metadata.Destination.Fqdn
-		}
-	}
-
-	// Destination addresses (resolved IPs)
-	if len(metadata.DestinationAddresses) > 0 {
-		addresses := make([]string, len(metadata.DestinationAddresses))
-		for i, addr := range metadata.DestinationAddresses {
-			addresses[i] = addr.String()
-		}
-		dest["dest_addresses"] = addresses
-	}
-
-	// Original destination (if different)
-	if metadata.OriginDestination.IsValid() {
-		dest["origin_dest_ip"] = metadata.OriginDestination.Addr.String()
-		dest["origin_dest_port"] = metadata.OriginDestination.Port
-	}
-
-	// Inbound
-	if metadata.Inbound != "" {
-		dest["inbound_tag"] = metadata.Inbound
-	}
-	if metadata.InboundType != "" {
-		dest["inbound_type"] = metadata.InboundType
-	}
-	if metadata.User != "" {
-		dest["user"] = metadata.User
-	}
-
-	// Outbound
-	if metadata.Outbound != "" {
-		dest["outbound_tag"] = metadata.Outbound
-	}
-
-	// Protocol
-	if metadata.Protocol != "" {
-		dest["protocol"] = metadata.Protocol
-	}
-	if metadata.Domain != "" && metadata.Domain != metadata.Destination.Fqdn {
-		// Include domain if different from destination
-		dest["domain"] = metadata.Domain
-	}
-	if metadata.Client != "" {
-		dest["tls_client"] = metadata.Client
-	}
-	if len(metadata.SnifferNames) > 0 {
-		dest["sniffer_names"] = metadata.SnifferNames
-	}
-	if metadata.SniffError != nil {
-		dest["sniff_error"] = metadata.SniffError.Error()
-	}
-
-	// Process info
-	if metadata.ProcessInfo != nil {
-		processInfo := make(map[string]interface{})
-		if metadata.ProcessInfo.ProcessID != 0 {
-			processInfo["id"] = metadata.ProcessInfo.ProcessID
-		}
-		if metadata.ProcessInfo.ProcessPath != "" {
-			processInfo["path"] = metadata.ProcessInfo.ProcessPath
-		}
-		if metadata.ProcessInfo.PackageName != "" {
-			processInfo["package"] = metadata.ProcessInfo.PackageName
-		}
-		if metadata.ProcessInfo.User != "" {
-			processInfo["user"] = metadata.ProcessInfo.User
-		}
-		if metadata.ProcessInfo.UserId != 0 {
-			processInfo["user_id"] = metadata.ProcessInfo.UserId
-		}
-		if len(processInfo) > 0 {
-			dest["process"] = processInfo
-		}
-	}
-
-	// GeoIP
-	if metadata.SourceGeoIPCode != "" {
-		dest["source_geoip"] = metadata.SourceGeoIPCode
-	}
-	if metadata.GeoIPCode != "" {
-		dest["dest_geoip"] = metadata.GeoIPCode
-	}
-
-	// Routing
-	if metadata.MatchedRuleSet != "" {
-		dest["matched_ruleset"] = metadata.MatchedRuleSet
-	}
-
-	// DNS
-	if metadata.QueryType != 0 {
-		dest["dns_query_type"] = metadata.QueryType
-	}
-	if metadata.FakeIP {
-		dest["fake_ip"] = true
-	}
-
-	// TLS
-	if metadata.TLSFragment {
-		dest["tls_fragment"] = true
-	}
-	if metadata.TLSRecordFragment {
-		dest["tls_record_fragment"] = true
-	}
-	if metadata.TLSFragmentFallbackDelay > 0 {
-		dest["tls_fragment_fallback_delay_ms"] = metadata.TLSFragmentFallbackDelay.Milliseconds()
-	}
-
-	// Network strategy
-	if metadata.NetworkStrategy != nil {
-		dest["network_strategy"] = metadata.NetworkStrategy.String()
-	}
-	if len(metadata.NetworkType) > 0 {
-		networkTypes := make([]string, len(metadata.NetworkType))
-		for i, nt := range metadata.NetworkType {
-			networkTypes[i] = nt.String()
-		}
-		dest["network_type"] = networkTypes
-	}
-	if len(metadata.FallbackNetworkType) > 0 {
-		fallbackTypes := make([]string, len(metadata.FallbackNetworkType))
-		for i, nt := range metadata.FallbackNetworkType {
-			fallbackTypes[i] = nt.String()
-		}
-		dest["fallback_network_type"] = fallbackTypes
-	}
-	if metadata.FallbackDelay > 0 {
-		dest["fallback_delay_ms"] = metadata.FallbackDelay.Milliseconds()
-	}
 }
 
 // Convenience methods

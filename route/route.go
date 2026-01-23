@@ -343,6 +343,7 @@ func (r *Router) matchRule(
 	//nolint:staticcheck
 	if metadata.InboundOptions != common.DefaultValue[option.InboundOptions]() {
 		if !preMatch && metadata.InboundOptions.SniffEnabled {
+			r.logger.DebugContext(ctx, "legacy sniff action triggered for inbound ", metadata.Inbound)
 			newBuffer, newPackerBuffers, newErr := r.actionSniff(ctx, metadata, &R.RuleActionSniff{
 				OverrideDestination: metadata.InboundOptions.SniffOverrideDestination,
 				Timeout:             time.Duration(metadata.InboundOptions.SniffTimeout),
@@ -492,6 +493,9 @@ func (r *Router) actionSniff(
 	ctx context.Context, metadata *adapter.InboundContext, action *R.RuleActionSniff,
 	inputConn net.Conn, inputPacketConn N.PacketConn, inputBuffers []*buf.Buffer, inputPacketBuffers []*N.PacketBuffer,
 ) (buffer *buf.Buffer, packetBuffers []*N.PacketBuffer, fatalErr error) {
+	r.logger.DebugContext(ctx, "actionSniff called: inputConn=", inputConn != nil, ", inputPacketConn=", inputPacketConn != nil,
+		", destination=", metadata.Destination, ", action.StreamSniffers=", len(action.StreamSniffers),
+		", action.PacketSniffers=", len(action.PacketSniffers))
 	if sniff.Skip(metadata) {
 		r.logger.DebugContext(ctx, "sniff skipped due to port considered as server-first")
 		return
@@ -520,6 +524,7 @@ func (r *Router) actionSniff(
 			}
 		}
 		sniffBuffer := buf.NewPacket()
+		r.logger.DebugContext(ctx, "attempting stream sniff with ", len(streamSniffers), " sniffers")
 		err := sniff.PeekStream(
 			ctx,
 			metadata,
@@ -546,6 +551,8 @@ func (r *Router) actionSniff(
 			} else {
 				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol)
 			}
+		} else if err != nil {
+			r.logger.DebugContext(ctx, "stream sniff failed: ", err)
 		}
 		if !sniffBuffer.IsEmpty() {
 			buffer = sniffBuffer

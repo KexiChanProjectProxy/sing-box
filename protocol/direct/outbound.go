@@ -162,6 +162,7 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
+	originalDestination := destination
 	switch h.overrideOption {
 	case 1:
 		destination = h.overrideDestination
@@ -178,6 +179,13 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 		h.logger.InfoContext(ctx, "outbound connection to ", destination)
 	case N.NetworkUDP:
 		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	}
+	if h.xlat464Prefix.IsValid() {
+		h.logger.DebugContext(ctx, "xlat464 enabled, original destination: ", originalDestination,
+			", Addr.IsValid=", originalDestination.Addr.IsValid(),
+			", Addr.Is4=", originalDestination.Addr.Is4(),
+			", Addr=", originalDestination.Addr,
+			", Fqdn=", originalDestination.Fqdn)
 	}
 	/*conn, err := h.dialer.DialContext(ctx, network, destination)
 	if err != nil {

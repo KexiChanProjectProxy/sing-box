@@ -27,14 +27,23 @@ func NewXLAT464Dialer(dialer N.Dialer, prefix netip.Prefix) ParallelInterfaceDia
 }
 
 func (d *xlat464Dialer) translateDestination(destination M.Socksaddr) M.Socksaddr {
+	// Debug: Check what we received
+	// log.Printf("XLAT464: Received destination: %+v, IsIP=%v, IsFqdn=%v, Addr=%v",
+	//            destination, destination.IsIP(), destination.IsFqdn(), destination.Addr)
+
 	// Only translate IPv4 addresses
-	if !destination.IsIP() || !destination.Addr.Is4() {
-		return destination
+	// Check if we have an IPv4 address (either as Addr or if Fqdn is empty)
+	if destination.Addr.IsValid() && destination.Addr.Is4() {
+		// Translate IPv4 to IPv6
+		translatedAddr := translateIPv4ToIPv6(destination.Addr, d.prefix)
+		result := M.SocksaddrFrom(translatedAddr, destination.Port)
+		// Debug: Show translation result
+		// log.Printf("XLAT464: Translated %v to %v", destination.Addr, translatedAddr)
+		return result
 	}
 
-	// Translate IPv4 to IPv6
-	translatedAddr := translateIPv4ToIPv6(destination.Addr, d.prefix)
-	return M.SocksaddrFrom(translatedAddr, destination.Port)
+	// Pass through domain names, IPv6, or invalid addresses unchanged
+	return destination
 }
 
 func (d *xlat464Dialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {

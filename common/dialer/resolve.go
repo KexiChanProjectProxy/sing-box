@@ -97,16 +97,13 @@ func (d *resolveDialer) DialContext(ctx context.Context, network string, destina
 		return nil, err
 	}
 	if !destination.IsFqdn() {
-		log.DebugContext(ctx, "resolve: destination is already IP, passing through: ", destination)
 		return d.dialer.DialContext(ctx, network, destination)
 	}
-	log.DebugContext(ctx, "resolve: resolving domain ", destination.Fqdn, " with strategy ", d.queryOptions.Strategy)
 	ctx = log.ContextWithOverrideLevel(ctx, log.LevelDebug)
 	addresses, err := d.router.Lookup(ctx, destination.Fqdn, d.queryOptions)
 	if err != nil {
 		return nil, err
 	}
-	log.DebugContext(ctx, "resolve: resolved ", destination.Fqdn, " to ", len(addresses), " addresses: ", addresses)
 	if d.parallel {
 		return N.DialParallel(ctx, d.dialer, network, destination, addresses, d.queryOptions.Strategy == C.DomainStrategyPreferIPv6, d.fallbackDelay)
 	} else {

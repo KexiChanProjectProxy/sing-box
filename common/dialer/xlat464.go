@@ -7,6 +7,7 @@ import (
 	"time"
 
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -26,42 +27,43 @@ func NewXLAT464Dialer(dialer N.Dialer, prefix netip.Prefix) ParallelInterfaceDia
 	}
 }
 
-func (d *xlat464Dialer) translateDestination(destination M.Socksaddr) M.Socksaddr {
-	// Debug: Check what we received
-	// log.Printf("XLAT464: Received destination: %+v, IsIP=%v, IsFqdn=%v, Addr=%v",
-	//            destination, destination.IsIP(), destination.IsFqdn(), destination.Addr)
+func (d *xlat464Dialer) translateDestination(ctx context.Context, destination M.Socksaddr) M.Socksaddr {
+	// Log what we received from ResolveDialer
+	log.DebugContext(ctx, "xlat464: received destination: ", destination,
+		", Addr.IsValid=", destination.Addr.IsValid(),
+		", Addr.Is4=", destination.Addr.Is4(),
+		", Fqdn=", destination.Fqdn)
 
 	// Only translate IPv4 addresses
-	// Check if we have an IPv4 address (either as Addr or if Fqdn is empty)
 	if destination.Addr.IsValid() && destination.Addr.Is4() {
 		// Translate IPv4 to IPv6
 		translatedAddr := translateIPv4ToIPv6(destination.Addr, d.prefix)
 		result := M.SocksaddrFrom(translatedAddr, destination.Port)
-		// Debug: Show translation result
-		// log.Printf("XLAT464: Translated %v to %v", destination.Addr, translatedAddr)
+		log.DebugContext(ctx, "xlat464: translated ", destination.Addr, " to ", translatedAddr)
 		return result
 	}
 
 	// Pass through domain names, IPv6, or invalid addresses unchanged
+	log.DebugContext(ctx, "xlat464: skipping translation (not IPv4)")
 	return destination
 }
 
 func (d *xlat464Dialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	return d.dialer.DialContext(ctx, network, d.translateDestination(destination))
+	return d.dialer.DialContext(ctx, network, d.translateDestination(ctx, destination))
 }
 
 func (d *xlat464Dialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return d.dialer.ListenPacket(ctx, d.translateDestination(destination))
+	return d.dialer.ListenPacket(ctx, d.translateDestination(ctx, destination))
 }
 
 func (d *xlat464Dialer) DialParallelInterface(ctx context.Context, network string, destination M.Socksaddr, strategy *C.NetworkStrategy, interfaceType []C.InterfaceType, fallbackInterfaceType []C.InterfaceType, fallbackDelay time.Duration) (net.Conn, error) {
 	parallelDialer := d.dialer.(ParallelInterfaceDialer)
-	return parallelDialer.DialParallelInterface(ctx, network, d.translateDestination(destination), strategy, interfaceType, fallbackInterfaceType, fallbackDelay)
+	return parallelDialer.DialParallelInterface(ctx, network, d.translateDestination(ctx, destination), strategy, interfaceType, fallbackInterfaceType, fallbackDelay)
 }
 
 func (d *xlat464Dialer) ListenSerialInterfacePacket(ctx context.Context, destination M.Socksaddr, strategy *C.NetworkStrategy, interfaceType []C.InterfaceType, fallbackInterfaceType []C.InterfaceType, fallbackDelay time.Duration) (net.PacketConn, error) {
 	parallelDialer := d.dialer.(ParallelInterfaceDialer)
-	return parallelDialer.ListenSerialInterfacePacket(ctx, d.translateDestination(destination), strategy, interfaceType, fallbackInterfaceType, fallbackDelay)
+	return parallelDialer.ListenSerialInterfacePacket(ctx, d.translateDestination(ctx, destination), strategy, interfaceType, fallbackInterfaceType, fallbackDelay)
 }
 
 func (d *xlat464Dialer) Upstream() any {

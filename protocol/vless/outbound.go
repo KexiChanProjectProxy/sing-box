@@ -38,6 +38,7 @@ type Outbound struct {
 	transport       adapter.V2RayClientTransport
 	packetAddr      bool
 	xudp            bool
+	connPool        *ConnectionPool
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.VLESSOutboundOptions) (adapter.Outbound, error) {
@@ -80,6 +81,31 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	if err != nil {
 		return nil, err
 	}
+
+	// Initialize connection pool if configured
+	if options.ConnectionPool != nil {
+		// Validate: TCP Fast Open is incompatible with connection pooling
+		if options.DialerOptions.TCPFastOpen {
+			return nil, E.New("tcp_fast_open is not supported with connection_pool")
+		}
+
+		poolConfig := ConnectionPoolConfig{
+			EnsureIdle:       options.ConnectionPool.EnsureIdleSession,
+			EnsureCreateRate: options.ConnectionPool.EnsureIdleSessionCreateRate,
+			MinIdle:          options.ConnectionPool.MinIdleSession,
+			MinIdleForAge:    options.ConnectionPool.MinIdleSessionForAge,
+			CheckInterval:    options.ConnectionPool.IdleSessionCheckInterval.Build(),
+			IdleTimeout:      options.ConnectionPool.IdleSessionTimeout.Build(),
+			MaxLifetime:      options.ConnectionPool.MaxConnectionLifetime.Build(),
+			LifetimeJitter:   options.ConnectionPool.ConnectionLifetimeJitter.Build(),
+			Heartbeat:        options.ConnectionPool.Heartbeat.Build(),
+			CreateConn:       (*vlessDialer)(outbound).createBaseConnection,
+			Logger:           logger,
+		}
+
+		outbound.connPool = NewConnectionPool(ctx, poolConfig)
+	}
+
 	outbound.multiplexDialer, err = mux.NewClientWithOptions((*vlessDialer)(outbound), logger, common.PtrValueOrDefault(options.Multiplex))
 	if err != nil {
 		return nil, err
@@ -124,20 +150,22 @@ func (h *Outbound) InterfaceUpdated() {
 	if h.multiplexDialer != nil {
 		h.multiplexDialer.Reset()
 	}
+	if h.connPool != nil {
+		h.connPool.Reset()
+	}
 }
 
 func (h *Outbound) Close() error {
-	return common.Close(common.PtrOrNil(h.multiplexDialer), h.transport)
+	return common.Close(common.PtrOrNil(h.multiplexDialer), h.transport, h.connPool)
 }
 
 type vlessDialer Outbound
 
-func (h *vlessDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	ctx, metadata := adapter.ExtendContext(ctx)
-	metadata.Outbound = h.Tag()
-	metadata.Destination = destination
+// createBaseConnection creates a TCP+TLS connection (no VLESS handshake yet)
+func (h *vlessDialer) createBaseConnection(ctx context.Context) (net.Conn, error) {
 	var conn net.Conn
 	var err error
+
 	if h.transport != nil {
 		conn, err = h.transport.DialContext(ctx)
 	} else {
@@ -146,9 +174,29 @@ func (h *vlessDialer) DialContext(ctx context.Context, network string, destinati
 			conn, err = tls.ClientHandshake(ctx, conn, h.tlsConfig)
 		}
 	}
+
+	return conn, err
+}
+
+func (h *vlessDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	ctx, metadata := adapter.ExtendContext(ctx)
+	metadata.Outbound = h.Tag()
+	metadata.Destination = destination
+	var conn net.Conn
+	var err error
+
+	// Use pool if available
+	if h.connPool != nil {
+		conn, err = h.connPool.GetConn(ctx)
+	} else {
+		conn, err = h.createBaseConnection(ctx)
+	}
+
 	if err != nil {
 		return nil, err
 	}
+
+	// Perform VLESS protocol handshake
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
 		h.logger.InfoContext(ctx, "outbound connection to ", destination)

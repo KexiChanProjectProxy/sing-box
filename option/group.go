@@ -105,6 +105,10 @@ type TieredLoadBalanceOutboundOptions struct {
 	LatencyMonitoring         *LatencyMonitoringOptions `json:"latency_monitoring,omitempty"`
 	EmptyPoolAction           string                    `json:"empty_pool_action,omitempty"`
 	InterruptExistConnections bool                      `json:"interrupt_exist_connections,omitempty"`
+	URL                       string                    `json:"url,omitempty"`
+	Interval                  badoption.Duration        `json:"interval,omitempty"`
+	Timeout                   badoption.Duration        `json:"timeout,omitempty"`
+	IdleTimeout               badoption.Duration        `json:"idle_timeout,omitempty"`
 }
 
 type LoadBalanceTierOptions struct {

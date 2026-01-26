@@ -15,6 +15,7 @@ import (
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/domain"
 	"github.com/sagernet/sing-box/common/interrupt"
+	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -23,6 +24,8 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
+	"github.com/sagernet/sing/service/pause"
+	"github.com/sagernet/sing/common/x/list"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -71,6 +74,18 @@ type TieredLoadBalance struct {
 	// Periodic update
 	updateMu sync.Mutex
 	close    chan struct{}
+
+	// URLTest support (optional for Clash API compatibility)
+	link         string
+	interval     time.Duration
+	timeout      time.Duration
+	idleTimeout  time.Duration
+	history      adapter.URLTestHistoryStorage
+	pauseManager pause.Manager
+	pauseCallback *list.Element[pause.Callback]
+	ticker       *time.Ticker
+	tickerAccess sync.Mutex
+	checking     atomic.Bool
 }
 
 // TierConfig holds configuration for a single tier
@@ -306,6 +321,26 @@ func NewTieredLoadBalance(
 		lb.geositeReader = router.GeositeReader()
 	}
 
+	// URLTest configuration (optional, for Clash API compatibility)
+	lb.link = options.URL
+	lb.interval = time.Duration(options.Interval)
+	lb.timeout = time.Duration(options.Timeout)
+	lb.idleTimeout = time.Duration(options.IdleTimeout)
+
+	// Set defaults for URLTest
+	if lb.link == "" {
+		lb.link = "https://www.gstatic.com/generate_204"
+	}
+	if lb.interval == 0 {
+		lb.interval = defaultInterval
+	}
+	if lb.timeout == 0 {
+		lb.timeout = defaultTimeout
+	}
+	if lb.idleTimeout == 0 {
+		lb.idleTimeout = defaultIdleTimeout
+	}
+
 	return lb, nil
 }
 
@@ -318,6 +353,20 @@ func (lb *TieredLoadBalance) Start(stage adapter.StartStage) error {
 		return nil
 	}
 
+	// Retrieve shared history storage for URLTest support
+	var history adapter.URLTestHistoryStorage
+	if historyFromCtx := service.PtrFromContext[urltest.HistoryStorage](lb.ctx); historyFromCtx != nil {
+		history = historyFromCtx
+	} else if clashServer := service.FromContext[adapter.ClashServer](lb.ctx); clashServer != nil {
+		history = clashServer.HistoryStorage()
+	} else {
+		history = urltest.NewHistoryStorage()
+	}
+	lb.history = history
+
+	// Initialize pause manager
+	lb.pauseManager = service.FromContext[pause.Manager](lb.ctx)
+
 	return nil
 }
 
@@ -329,6 +378,16 @@ func (lb *TieredLoadBalance) PostStart() error {
 
 func (lb *TieredLoadBalance) Close() error {
 	close(lb.close)
+
+	lb.tickerAccess.Lock()
+	if lb.ticker != nil {
+		lb.ticker.Stop()
+		if lb.pauseManager != nil && lb.pauseCallback != nil {
+			lb.pauseManager.UnregisterCallback(lb.pauseCallback)
+		}
+	}
+	lb.tickerAccess.Unlock()
+
 	return nil
 }
 
@@ -410,6 +469,9 @@ func (lb *TieredLoadBalance) ListenPacket(ctx context.Context, destination M.Soc
 
 // selectOutbound selects an outbound from the active tier
 func (lb *TieredLoadBalance) selectOutbound(network string, metadata *adapter.InboundContext) (adapter.Outbound, int, error) {
+	// Touch to maintain activity
+	lb.Touch()
+
 	pools := lb.candidatePools.Load().(*CandidatePoolSnapshot)
 	tierState := lb.tierState.Load().(*TierStateSnapshot)
 
@@ -545,6 +607,9 @@ func (lb *TieredLoadBalance) updateCandidates() {
 		candidates := lb.selectTopNForTier(tier)
 		newPools.tierCandidates[tier.level] = candidates
 
+		// Log candidates for this tier
+		lb.logCandidates(tier.level, candidates)
+
 		// Build hash ring if needed
 		if tier.strategy == strategyConsistentHash && len(candidates) > 0 {
 			newPools.tierHashRings[tier.level] = lb.buildHashRing(candidates)
@@ -552,7 +617,17 @@ func (lb *TieredLoadBalance) updateCandidates() {
 	}
 
 	// Update tier state
+	oldTierState := lb.tierState.Load().(*TierStateSnapshot)
 	lb.checkTierTransition(newPools)
+	newTierState := lb.tierState.Load().(*TierStateSnapshot)
+
+	// Log tier transition
+	if oldTierState.activeTierLevel != newTierState.activeTierLevel {
+		lb.logger.Warn(
+			"tier transition: tier ", oldTierState.activeTierLevel,
+			" -> tier ", newTierState.activeTierLevel,
+		)
+	}
 
 	// Atomically update pools
 	oldPools := lb.candidatePools.Swap(newPools)
@@ -872,4 +947,225 @@ func (lb *TieredLoadBalance) All() []string {
 		result = append(result, tag)
 	}
 	return result
+}
+
+// Touch starts or resets the idle timeout for periodic URLTest checks
+func (lb *TieredLoadBalance) Touch() {
+	if lb.idleTimeout == 0 {
+		return
+	}
+
+	lb.tickerAccess.Lock()
+	defer lb.tickerAccess.Unlock()
+
+	if lb.ticker != nil {
+		return
+	}
+
+	lb.ticker = time.NewTicker(lb.interval)
+	if lb.pauseManager != nil {
+		lb.pauseCallback = pause.RegisterTicker(lb.pauseManager, lb.ticker, lb.interval, nil)
+	}
+	go lb.loopCheck()
+}
+
+func (lb *TieredLoadBalance) loopCheck() {
+	if lb.idleTimeout == 0 {
+		select {}
+	}
+
+	idleTimer := time.NewTimer(lb.idleTimeout)
+	defer idleTimer.Stop()
+
+	for {
+		select {
+		case <-lb.close:
+			return
+		case <-idleTimer.C:
+			lb.tickerAccess.Lock()
+			lb.ticker.Stop()
+			lb.ticker = nil
+			lb.tickerAccess.Unlock()
+			return
+		case <-lb.ticker.C:
+			// Perform URL test to gather additional health data
+			go lb.performURLTest(lb.ctx)
+			idleTimer.Reset(lb.idleTimeout)
+		}
+	}
+}
+
+// performURLTest performs URL testing for all configured outbounds
+func (lb *TieredLoadBalance) performURLTest(ctx context.Context) {
+	if lb.checking.Swap(true) {
+		return
+	}
+	defer lb.checking.Store(false)
+
+	if lb.pauseManager != nil && lb.pauseManager.IsPaused() {
+		return
+	}
+
+	// Collect all unique tags
+	allTags := make(map[string]bool)
+	for _, tier := range lb.tiers {
+		for _, tag := range tier.tags {
+			allTags[tag] = true
+		}
+	}
+
+	// Collect outbounds
+	outbounds := make([]adapter.Outbound, 0, len(allTags))
+	for tag := range allTags {
+		detour, loaded := lb.outbound.Outbound(tag)
+		if !loaded {
+			lb.logger.Error("outbound not found: ", tag)
+			continue
+		}
+		outbounds = append(outbounds, detour)
+	}
+
+	if len(outbounds) == 0 {
+		return
+	}
+
+	// Perform URL tests with controlled concurrency
+	maxConcurrent := 10
+	semaphore := make(chan struct{}, maxConcurrent)
+
+	var wg sync.WaitGroup
+	for _, detour := range outbounds {
+		wg.Add(1)
+		go func(d adapter.Outbound) {
+			defer wg.Done()
+
+			// Acquire semaphore slot
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// Create context with timeout
+			testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
+			defer cancel()
+
+			t, err := urltest.URLTest(testCtx, lb.link, d)
+			if err != nil {
+				lb.logger.Debug("URL test failed for ", d.Tag(), ": ", err)
+				lb.history.DeleteURLTestHistory(RealTag(d))
+			} else {
+				lb.logger.Debug("URL test succeeded for ", d.Tag(), ": ", t, "ms")
+				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+					Time:  time.Now(),
+					Delay: t,
+				})
+			}
+		}(detour)
+	}
+	wg.Wait()
+
+	// Note: We don't update candidates here since real latency tracking is primary
+	// URL test is only for Clash API compatibility and monitoring
+}
+
+// URLTest performs on-demand URL testing and returns latency results
+func (lb *TieredLoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
+	result := make(map[string]uint16)
+
+	// Prevent concurrent health checks
+	if lb.checking.Swap(true) {
+		return result, nil
+	}
+	defer lb.checking.Store(false)
+
+	// Check if paused
+	if lb.pauseManager != nil && lb.pauseManager.IsPaused() {
+		return result, nil
+	}
+
+	// Collect all unique tags
+	allTags := make(map[string]bool)
+	for _, tier := range lb.tiers {
+		for _, tag := range tier.tags {
+			allTags[tag] = true
+		}
+	}
+
+	// Collect outbounds to test
+	outbounds := make([]adapter.Outbound, 0, len(allTags))
+	for tag := range allTags {
+		detour, loaded := lb.outbound.Outbound(tag)
+		if !loaded {
+			lb.logger.Error("outbound not found: ", tag)
+			continue
+		}
+		outbounds = append(outbounds, detour)
+	}
+
+	if len(outbounds) == 0 {
+		return result, nil
+	}
+
+	// Perform health checks with controlled concurrency
+	maxConcurrent := 10
+	semaphore := make(chan struct{}, maxConcurrent)
+	var resultAccess sync.Mutex
+
+	var wg sync.WaitGroup
+	for _, detour := range outbounds {
+		wg.Add(1)
+		go func(d adapter.Outbound) {
+			defer wg.Done()
+
+			// Acquire semaphore slot
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// Create context with timeout
+			testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
+			defer cancel()
+
+			t, err := urltest.URLTest(testCtx, lb.link, d)
+			if err != nil {
+				lb.logger.Debug("URL test failed for ", d.Tag(), ": ", err)
+				lb.history.DeleteURLTestHistory(RealTag(d))
+			} else {
+				lb.logger.Debug("URL test succeeded for ", d.Tag(), ": ", t, "ms")
+				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+					Time:  time.Now(),
+					Delay: t,
+				})
+
+				resultAccess.Lock()
+				result[d.Tag()] = t
+				resultAccess.Unlock()
+			}
+		}(detour)
+	}
+	wg.Wait()
+
+	return result, nil
+}
+
+// logCandidates logs detailed candidate information for a tier
+func (lb *TieredLoadBalance) logCandidates(tierLevel int, candidates []adapter.Outbound) {
+	if len(candidates) == 0 {
+		lb.logger.Debug("tier ", tierLevel, ": 0 candidates")
+		return
+	}
+
+	// Build latency info
+	tags := make([]string, len(candidates))
+	for i, c := range candidates {
+		latency := lb.latencyTracker.GetAverageLatency(c.Tag())
+		if latency > 0 {
+			tags[i] = fmt.Sprintf("%s(%dms)", c.Tag(), latency.Milliseconds())
+		} else {
+			tags[i] = fmt.Sprintf("%s(?)", c.Tag())
+		}
+	}
+
+	lb.logger.Info(
+		"tier ", tierLevel, ": ", len(candidates), " candidates: [",
+		strings.Join(tags, ", "),
+		"]",
+	)
 }

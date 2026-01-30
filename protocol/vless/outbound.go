@@ -156,7 +156,7 @@ func (h *Outbound) InterfaceUpdated() {
 }
 
 func (h *Outbound) Close() error {
-	return common.Close(common.PtrOrNil(h.multiplexDialer), h.transport, h.connPool)
+	return common.Close(common.PtrOrNil(h.multiplexDialer), h.transport, common.PtrOrNil(h.connPool))
 }
 
 type vlessDialer Outbound

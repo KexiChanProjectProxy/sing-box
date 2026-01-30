@@ -168,8 +168,11 @@ func (r *Router) Initialize(rules []option.Rule, ruleSets []option.RuleSet) erro
 
 func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath string) error {
 	if dirPath == "" {
+		r.logger.Debug("hash_rule_set_directory not configured, skipping")
 		return nil
 	}
+
+	r.logger.Info("loading hash-only rulesets from directory: ", dirPath)
 
 	// Make sure the directory exists
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {

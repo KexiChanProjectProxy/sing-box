@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -77,7 +78,7 @@ type hashDomainKeywordEntry struct {
 }
 
 type hashDomainRegexEntry struct {
-	pattern     string
+	pattern     *regexp.Regexp  // Compiled regex pattern
 	rulesetTag  string
 	specificity int
 }
@@ -175,6 +176,7 @@ func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath stri
 	}
 
 	r.logger.Info("loading hash-only rulesets from directory: ", dirPath)
+	r.logger.Debug("hash ruleset directory check: path=", dirPath)
 
 	// Make sure the directory exists
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
@@ -284,6 +286,10 @@ func (r *Router) buildHashDomainMatchIndex() error {
 			return E.Cause(err, "extract domain rules from ", tag)
 		}
 
+		r.logger.Debug("extracted from ", tag, ": ", len(domainRules.ExactDomains), " exact, ",
+			len(domainRules.DomainSuffixes), " suffixes, ", len(domainRules.DomainKeywords), " keywords, ",
+			len(domainRules.DomainRegex), " regex")
+
 		for _, domain := range domainRules.ExactDomains {
 			domain = strings.ToLower(domain)
 			if existing, exists := index.exactDomains[domain]; exists {
@@ -317,8 +323,13 @@ func (r *Router) buildHashDomainMatchIndex() error {
 		}
 
 		for _, pattern := range domainRules.DomainRegex {
+			compiled, err := regexp.Compile(pattern)
+			if err != nil {
+				r.logger.Warn("invalid domain_regex in ", tag, ": ", pattern, ", error: ", err)
+				continue
+			}
 			index.domainRegex = append(index.domainRegex, hashDomainRegexEntry{
-				pattern:     pattern,
+				pattern:     compiled,
 				rulesetTag:  tag,
 				specificity: 1,
 			})

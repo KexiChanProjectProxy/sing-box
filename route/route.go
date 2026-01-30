@@ -556,7 +556,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 
 			if bestSpecificity < 1 {
 				for _, regexEntry := range r.hashDomainMatcher.domainRegex {
-					if strings.Contains(domainHost, regexEntry.pattern) {
+					if regexEntry.pattern.MatchString(domainHost) {
 						if regexEntry.specificity > bestSpecificity {
 							bestSpecificity = regexEntry.specificity
 							bestMatch = regexEntry.rulesetTag

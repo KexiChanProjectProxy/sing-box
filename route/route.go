@@ -494,6 +494,7 @@ match:
 
 func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 	if r.hashDomainMatcher == nil && r.hashIPMatcher == nil {
+		r.logger.Debug("matchHashRuleSets: matchers are nil, skipping")
 		return false
 	}
 
@@ -510,6 +511,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 
 		if domainHost != "" {
 			domainHost = strings.ToLower(domainHost)
+			r.logger.Debug("matchHashRuleSets: checking domain=", domainHost, ", regex count=", len(r.hashDomainMatcher.domainRegex))
 
 			if cachedTag, found := r.getCachedDomainMatch(domainHost); found {
 				if cachedTag != "" {

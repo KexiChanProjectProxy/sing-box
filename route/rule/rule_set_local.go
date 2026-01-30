@@ -266,12 +266,26 @@ func (s *LocalRuleSet) ExtractIPRules() (*adapter.ExtractedIPRules, error) {
 	for _, ruleOpt := range s.ruleOptions {
 		switch ruleOpt.Type {
 		case "", C.RuleTypeDefault:
+			// Extract from IPCIDR string array
 			result.IPCIDRs = append(result.IPCIDRs, ruleOpt.DefaultOptions.IPCIDR...)
+
+			// Extract from IPSet object (used in .srs geoip files)
+			if ruleOpt.DefaultOptions.IPSet != nil {
+				// Convert IPSet to CIDR strings
+				for _, prefix := range ruleOpt.DefaultOptions.IPSet.Prefixes() {
+					result.IPCIDRs = append(result.IPCIDRs, prefix.String())
+				}
+			}
 		case C.RuleTypeLogical:
 			// Recursively extract from logical rules
 			for _, subRule := range ruleOpt.LogicalOptions.Rules {
 				if subRule.DefaultOptions.IPCIDR != nil {
 					result.IPCIDRs = append(result.IPCIDRs, subRule.DefaultOptions.IPCIDR...)
+				}
+				if subRule.DefaultOptions.IPSet != nil {
+					for _, prefix := range subRule.DefaultOptions.IPSet.Prefixes() {
+						result.IPCIDRs = append(result.IPCIDRs, prefix.String())
+					}
 				}
 			}
 		}

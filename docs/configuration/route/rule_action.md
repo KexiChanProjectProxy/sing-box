@@ -194,11 +194,50 @@ Fragment TLS handshake into multiple TLS records to bypass firewalls.
 
 ### sniff
 
+!!! quote "Changes in sing-box 1.12.14.10"
+
+    :material-plus: [protocols](#protocols)
+    :material-plus: [skip_domain](#skip_domain)
+    :material-plus: [skip_domain_suffix](#skip_domain_suffix)
+    :material-plus: [skip_src_address](#skip_src_address)
+    :material-plus: [skip_dst_address](#skip_dst_address)
+
+**Legacy Mode (Simple):**
+
 ```json
 {
   "action": "sniff",
   "sniffer": [],
-  "timeout": ""
+  "timeout": "",
+  "override_destination": false
+}
+```
+
+**Advanced Mode:**
+
+```json
+{
+  "action": "sniff",
+  "timeout": "300ms",
+  "override_destination": false,
+  "protocols": {
+    "http": {
+      "ports": [80],
+      "port_ranges": ["8080-8880", "3000:3100"],
+      "override_destination": true
+    },
+    "tls": {
+      "ports": [443, 8443],
+      "override_destination": true
+    },
+    "quic": {
+      "ports": [443]
+    }
+  },
+  "skip_domain": ["example.com"],
+  "skip_domain_suffix": ["local", "lan"],
+  "skip_src_address": ["192.168.0.3/32"],
+  "skip_dst_address": ["127.0.0.1"]
 }
 ```
 
@@ -206,19 +245,180 @@ Fragment TLS handshake into multiple TLS records to bypass firewalls.
 
 For deprecated `inbound.sniff` options, it is considered to `sniff()` performed before routing.
 
+!!! note "Mode Detection"
+
+    - If `protocols` field is present → **Advanced Mode**
+    - If only `sniffer` field is present → **Legacy Mode**
+    - If both `protocols` and `sniffer` are present → **Error** (mutually exclusive)
+
 #### sniffer
 
 Enabled sniffers.
 
 All sniffers enabled by default.
 
-Available protocol values an be found on in [Protocol Sniff](../sniff/)
+Available protocol values can be found on in [Protocol Sniff](../sniff/)
 
 #### timeout
 
 Timeout for sniffing.
 
 `300ms` is used by default.
+
+#### override_destination
+
+!!! question "Since sing-box 1.12.14.10"
+
+Global default for whether to override the connection destination with the sniffed domain.
+
+Can be overridden per-protocol in advanced mode.
+
+Default: `false`
+
+#### protocols
+
+!!! question "Since sing-box 1.12.14.10"
+
+Per-protocol configuration for advanced sniffing control.
+
+When using `protocols`, the `sniffer` field cannot be used.
+
+**Available protocols:** `http`, `tls`, `quic`, `dns`, `stun`, `bittorrent`, `dtls`, `ssh`, `rdp`, `ntp`
+
+Each protocol configuration supports:
+
+##### ports
+
+List of specific ports to sniff for this protocol.
+
+Example: `[80, 8080]`
+
+##### port_ranges
+
+List of port ranges to sniff for this protocol.
+
+Supports both dash (`8080-8880`) and colon (`8080:8880`) formats.
+
+Example: `["8080-8880", "3000:3100"]`
+
+##### override_destination
+
+Per-protocol override destination setting.
+
+- If `null` or not specified: Uses global `override_destination` setting
+- If `true`: Override destination for this protocol
+- If `false`: Don't override destination for this protocol
+
+#### skip_domain
+
+!!! question "Since sing-box 1.12.14.10"
+
+List of exact domain names that should NOT have their destination overridden.
+
+Sniffing still occurs, but the destination remains as the original IP address.
+
+Example: `["Mijia Cloud", "api.example.com"]`
+
+#### skip_domain_suffix
+
+!!! question "Since sing-box 1.12.14.10"
+
+List of domain suffixes that should NOT have their destination overridden.
+
+Uses standard domain suffix matching (e.g., `"local"` matches `*.local`).
+
+Example: `["local", "lan", "internal"]`
+
+#### skip_src_address
+
+!!! question "Since sing-box 1.12.14.10"
+
+List of source IP addresses or CIDR ranges to skip sniffing entirely.
+
+When a connection's source IP matches, no sniffing is performed.
+
+Accepts both single IPs and CIDR notation.
+
+Example: `["192.168.0.3/32", "10.0.0.0/8"]`
+
+#### skip_dst_address
+
+!!! question "Since sing-box 1.12.14.10"
+
+List of destination IP addresses or CIDR ranges to skip sniffing entirely.
+
+When a connection's destination IP matches, no sniffing is performed.
+
+Example: `["127.0.0.1", "192.168.0.0/16"]`
+
+## Configuration Examples
+
+### Example 1: HTTP on Non-Standard Ports
+
+Sniff HTTP traffic on port 80 and range 8080-8880, override destination:
+
+```json
+{
+  "action": "sniff",
+  "protocols": {
+    "http": {
+      "ports": [80],
+      "port_ranges": ["8080-8880"],
+      "override_destination": true
+    }
+  }
+}
+```
+
+### Example 2: Skip Override for Local Domains
+
+Sniff TLS and HTTP but don't override .local or .lan domains:
+
+```json
+{
+  "action": "sniff",
+  "sniffer": ["tls", "http"],
+  "override_destination": true,
+  "skip_domain_suffix": ["local", "lan"]
+}
+```
+
+### Example 3: Skip Private Network Sniffing
+
+Don't sniff internal network traffic:
+
+```json
+{
+  "action": "sniff",
+  "sniffer": ["tls", "http"],
+  "skip_src_address": ["10.0.0.0/8", "192.168.0.0/16"],
+  "skip_dst_address": ["127.0.0.0/8"]
+}
+```
+
+### Example 4: Per-Protocol Override Control
+
+Override for HTTP and TLS, but not QUIC:
+
+```json
+{
+  "action": "sniff",
+  "override_destination": false,
+  "protocols": {
+    "http": {
+      "ports": [80],
+      "override_destination": true
+    },
+    "tls": {
+      "ports": [443],
+      "override_destination": true
+    },
+    "quic": {
+      "ports": [443]
+    }
+  }
+}
+```
 
 ### resolve
 

@@ -50,3 +50,26 @@ func (r *PortItem) String() string {
 	}
 	return description
 }
+
+var _ RuleItem = (*CompositePortMatcher)(nil)
+
+type CompositePortMatcher struct {
+	items []RuleItem
+}
+
+func (c *CompositePortMatcher) Match(metadata *adapter.InboundContext) bool {
+	for _, item := range c.items {
+		if item.Match(metadata) {
+			return true // OR logic - any match succeeds
+		}
+	}
+	return false
+}
+
+func (c *CompositePortMatcher) String() string {
+	var parts []string
+	for _, item := range c.items {
+		parts = append(parts, item.String())
+	}
+	return F.ToString("composite(", strings.Join(parts, ","), ")")
+}

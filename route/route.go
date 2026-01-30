@@ -343,6 +343,7 @@ func (r *Router) matchRule(
 	//nolint:staticcheck
 	if metadata.InboundOptions != common.DefaultValue[option.InboundOptions]() {
 		if !preMatch && metadata.InboundOptions.SniffEnabled {
+			r.logger.WarnContext(ctx, "inbound-level sniff options are deprecated; please migrate to route rule actions")
 			r.logger.DebugContext(ctx, "legacy sniff action triggered for inbound ", metadata.Inbound)
 			newBuffer, newPackerBuffers, newErr := r.actionSniff(ctx, metadata, &R.RuleActionSniff{
 				OverrideDestination: metadata.InboundOptions.SniffOverrideDestination,
@@ -496,6 +497,22 @@ func (r *Router) actionSniff(
 	r.logger.DebugContext(ctx, "actionSniff called: inputConn=", inputConn != nil, ", inputPacketConn=", inputPacketConn != nil,
 		", destination=", metadata.Destination, ", action.StreamSniffers=", len(action.StreamSniffers),
 		", action.PacketSniffers=", len(action.PacketSniffers))
+
+	// IP-based skip filtering (before any sniffing attempt)
+	if action.SkipSrcIPSet != nil && metadata.Source.Addr.IsValid() {
+		if action.SkipSrcIPSet.Contains(metadata.Source.Addr) {
+			r.logger.DebugContext(ctx, "sniff skipped: source IP ", metadata.Source.Addr, " in skip list")
+			return
+		}
+	}
+
+	if action.SkipDstIPSet != nil && metadata.Destination.Addr.IsValid() {
+		if action.SkipDstIPSet.Contains(metadata.Destination.Addr) {
+			r.logger.DebugContext(ctx, "sniff skipped: destination IP ", metadata.Destination.Addr, " in skip list")
+			return
+		}
+	}
+
 	if sniff.Skip(metadata) {
 		r.logger.DebugContext(ctx, "sniff skipped due to port considered as server-first")
 		return
@@ -511,9 +528,27 @@ func (r *Router) actionSniff(
 			return
 		}
 		var streamSniffers []sniff.StreamSniffer
-		if len(action.StreamSniffers) > 0 {
+
+		if len(action.ProtocolConfigs) > 0 {
+			// Advanced mode: filter sniffers by port
+			for _, config := range action.ProtocolConfigs {
+				// Skip if port doesn't match
+				if config.PortMatcher != nil && !config.PortMatcher.Match(metadata) {
+					continue
+				}
+				// Add this protocol's sniffers
+				streamSniffers = append(streamSniffers, config.StreamSniffers...)
+			}
+
+			if len(streamSniffers) == 0 {
+				r.logger.DebugContext(ctx, "no stream sniffers match port filter for port ", metadata.Destination.Port)
+				return
+			}
+		} else if len(action.StreamSniffers) > 0 {
+			// Legacy mode: use pre-configured sniffers
 			streamSniffers = action.StreamSniffers
 		} else {
+			// Default: all stream sniffers
 			streamSniffers = []sniff.StreamSniffer{
 				sniff.TLSClientHello,
 				sniff.HTTPHost,
@@ -537,8 +572,29 @@ func (r *Router) actionSniff(
 		metadata.SnifferNames = action.SnifferNames
 		metadata.SniffError = err
 		if err == nil {
+			// Determine if we should override destination
+			shouldOverride := action.OverrideDestination // Start with global default
+
+			// Check per-protocol override setting (advanced mode)
+			if len(action.ProtocolConfigs) > 0 && metadata.Protocol != "" {
+				if config, ok := action.ProtocolConfigs[metadata.Protocol]; ok {
+					if config.OverrideDestination != nil {
+						shouldOverride = *config.OverrideDestination
+					}
+				}
+			}
+
+			// Apply skip_domain filter (prevents override even if enabled)
+			if shouldOverride && action.SkipDomainMatcher != nil && metadata.Domain != "" {
+				if (*action.SkipDomainMatcher).Match(strings.ToLower(metadata.Domain)) {
+					shouldOverride = false
+					r.logger.DebugContext(ctx, "skip override for domain: ", metadata.Domain)
+				}
+			}
+
+			// Perform override if allowed
 			//goland:noinspection GoDeprecation
-			if action.OverrideDestination && M.IsDomainName(metadata.Domain) {
+			if shouldOverride && M.IsDomainName(metadata.Domain) {
 				metadata.Destination = M.Socksaddr{
 					Fqdn: metadata.Domain,
 					Port: metadata.Destination.Port,
@@ -570,9 +626,27 @@ func (r *Router) actionSniff(
 			return slices.Equal(metadata.SnifferNames, action.SnifferNames) && errors.Is(metadata.SniffError, sniff.ErrNeedMoreData)
 		}
 		var packetSniffers []sniff.PacketSniffer
-		if len(action.PacketSniffers) > 0 {
+
+		if len(action.ProtocolConfigs) > 0 {
+			// Advanced mode: filter sniffers by port
+			for _, config := range action.ProtocolConfigs {
+				// Skip if port doesn't match
+				if config.PortMatcher != nil && !config.PortMatcher.Match(metadata) {
+					continue
+				}
+				// Add this protocol's sniffers
+				packetSniffers = append(packetSniffers, config.PacketSniffers...)
+			}
+
+			if len(packetSniffers) == 0 {
+				r.logger.DebugContext(ctx, "no packet sniffers match port filter for port ", metadata.Destination.Port)
+				return
+			}
+		} else if len(action.PacketSniffers) > 0 {
+			// Legacy mode: use pre-configured sniffers
 			packetSniffers = action.PacketSniffers
 		} else {
+			// Default: all packet sniffers
 			packetSniffers = []sniff.PacketSniffer{
 				sniff.DomainNameQuery,
 				sniff.QUICClientHello,
@@ -671,8 +745,29 @@ func (r *Router) actionSniff(
 		}
 	finally:
 		if err == nil {
+			// Determine if we should override destination
+			shouldOverride := action.OverrideDestination // Start with global default
+
+			// Check per-protocol override setting (advanced mode)
+			if len(action.ProtocolConfigs) > 0 && metadata.Protocol != "" {
+				if config, ok := action.ProtocolConfigs[metadata.Protocol]; ok {
+					if config.OverrideDestination != nil {
+						shouldOverride = *config.OverrideDestination
+					}
+				}
+			}
+
+			// Apply skip_domain filter (prevents override even if enabled)
+			if shouldOverride && action.SkipDomainMatcher != nil && metadata.Domain != "" {
+				if (*action.SkipDomainMatcher).Match(strings.ToLower(metadata.Domain)) {
+					shouldOverride = false
+					r.logger.DebugContext(ctx, "skip override for domain: ", metadata.Domain)
+				}
+			}
+
+			// Perform override if allowed
 			//goland:noinspection GoDeprecation
-			if action.OverrideDestination && M.IsDomainName(metadata.Domain) {
+			if shouldOverride && M.IsDomainName(metadata.Domain) {
 				metadata.Destination = M.Socksaddr{
 					Fqdn: metadata.Domain,
 					Port: metadata.Destination.Port,

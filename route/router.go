@@ -171,30 +171,43 @@ func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath stri
 		return nil
 	}
 
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return E.Cause(err, "read hash ruleset directory: ", dirPath)
+	// Make sure the directory exists
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		return E.New("hash ruleset directory does not exist: ", dirPath)
 	}
 
-	var rulesetFiles []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	var loadedCount int
+
+	// Recursively walk the directory tree
+	err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		name := entry.Name()
-		if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".srs") {
-			rulesetFiles = append(rulesetFiles, name)
+
+		// Skip directories themselves
+		if d.IsDir() {
+			return nil
 		}
-	}
 
-	if len(rulesetFiles) == 0 {
-		r.logger.Warn("hash_rule_set_directory configured but no .json or .srs files found: ", dirPath)
-		return nil
-	}
+		// Only process .json and .srs files
+		name := d.Name()
+		if !strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, ".srs") {
+			return nil
+		}
 
-	for _, filename := range rulesetFiles {
-		tag := strings.TrimSuffix(filename, filepath.Ext(filename))
+		// Calculate tag from relative path
+		// Example: /etc/sing-box/ruleset/sing-geoip/cn.json -> "sing-geoip-cn"
+		relPath, err := filepath.Rel(dirPath, path)
+		if err != nil {
+			return E.Cause(err, "calculate relative path for: ", path)
+		}
 
+		// Replace path separators with hyphens and remove extension
+		// sing-geoip/cn.json -> sing-geoip-cn
+		tag := strings.ReplaceAll(relPath, string(filepath.Separator), "-")
+		tag = strings.TrimSuffix(tag, filepath.Ext(tag))
+
+		// Check for duplicate tags
 		if _, exists := r.ruleSetMap[tag]; exists {
 			return E.New("duplicate ruleset tag between routing and hash rulesets: ", tag)
 		}
@@ -202,23 +215,37 @@ func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath stri
 			return E.New("duplicate hash ruleset tag: ", tag)
 		}
 
-		filePath := filepath.Join(dirPath, filename)
+		// Create ruleset options
 		rulesetOptions := option.RuleSet{
 			Type: C.RuleSetTypeLocal,
 			Tag:  tag,
 		}
-		rulesetOptions.LocalOptions.Path = filePath
+		rulesetOptions.LocalOptions.Path = path
 
+		// Load the ruleset
 		ruleSet, err := R.NewRuleSet(ctx, r.logger, rulesetOptions)
 		if err != nil {
-			return E.Cause(err, "load hash ruleset: ", filename)
+			return E.Cause(err, "load hash ruleset: ", relPath)
 		}
 
 		r.hashRuleSets = append(r.hashRuleSets, ruleSet)
 		r.hashRuleSetMap[tag] = ruleSet
+		loadedCount++
+
+		r.logger.Debug("loaded hash ruleset: ", tag, " from ", relPath)
+		return nil
+	})
+
+	if err != nil {
+		return E.Cause(err, "walk hash ruleset directory: ", dirPath)
 	}
 
-	r.logger.Info("loaded ", len(r.hashRuleSets), " hash-only rulesets from ", dirPath)
+	if loadedCount == 0 {
+		r.logger.Warn("hash_rule_set_directory configured but no .json or .srs files found in: ", dirPath)
+	} else {
+		r.logger.Info("loaded ", loadedCount, " hash-only rulesets from ", dirPath, " (including subdirectories)")
+	}
+
 	return nil
 }
 

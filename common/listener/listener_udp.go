@@ -126,6 +126,17 @@ func (l *Listener) loopUDPIn() {
 				return
 			}
 			buffer.Truncate(n)
+
+			// Check IP filter before processing packet
+			if l.ipFilter != nil && !l.ipFilter.Allow(addr.Addr()) {
+				if l.threadUnsafePacketWriter {
+					buffer.Release()
+				}
+				// Use Trace level to avoid log spam from UDP probes
+				l.logger.Trace("rejected UDP packet from ", addr.Addr(), " (IP filter)")
+				continue
+			}
+
 			l.oobPacketHandler.NewPacketEx(buffer, oob[:oobN], M.SocksaddrFromNetIP(addr).Unwrap())
 		}
 	} else {
@@ -148,6 +159,16 @@ func (l *Listener) loopUDPIn() {
 				return
 			}
 			buffer.Truncate(n)
+
+			// Check IP filter before processing packet
+			if l.ipFilter != nil && !l.ipFilter.Allow(addr.Addr()) {
+				if l.threadUnsafePacketWriter {
+					buffer.Release()
+				}
+				l.logger.Trace("rejected UDP packet from ", addr.Addr(), " (IP filter)")
+				continue
+			}
+
 			l.packetHandler.NewPacketEx(buffer, M.SocksaddrFromNetIP(addr).Unwrap())
 		}
 	}

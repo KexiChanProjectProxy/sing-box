@@ -2,8 +2,12 @@ package route
 
 import (
 	"context"
+	"net/netip"
 	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/asn"
@@ -24,28 +28,87 @@ import (
 var _ adapter.Router = (*Router)(nil)
 
 type Router struct {
-	ctx               context.Context
-	logger            log.ContextLogger
-	inbound           adapter.InboundManager
-	outbound          adapter.OutboundManager
-	dns               adapter.DNSRouter
-	dnsTransport      adapter.DNSTransportManager
-	connection        adapter.ConnectionManager
-	network           adapter.NetworkManager
-	rules             []adapter.Rule
-	needFindProcess   bool
-	ruleSets          []adapter.RuleSet
-	ruleSetMap        map[string]adapter.RuleSet
-	processSearcher   process.Searcher
-	pauseManager      pause.Manager
-	trackers          []adapter.ConnectionTracker
-	platformInterface platform.Interface
-	needWIFIState     bool
-	started           bool
-	asnReader         adapter.ASNReader
-	asnPath           string
-	geositeReader     adapter.GeositeReader
-	geositePath       string
+	ctx                context.Context
+	logger             log.ContextLogger
+	inbound            adapter.InboundManager
+	outbound           adapter.OutboundManager
+	dns                adapter.DNSRouter
+	dnsTransport       adapter.DNSTransportManager
+	connection         adapter.ConnectionManager
+	network            adapter.NetworkManager
+	rules              []adapter.Rule
+	needFindProcess    bool
+	ruleSets           []adapter.RuleSet
+	ruleSetMap         map[string]adapter.RuleSet
+	hashRuleSets       []adapter.RuleSet
+	hashRuleSetMap     map[string]adapter.RuleSet
+	hashDomainMatcher  *hashDomainMatchIndex
+	hashIPMatcher      *hashIPMatchIndex
+	hashMatchCache     *hashMatchCache
+	processSearcher    process.Searcher
+	pauseManager       pause.Manager
+	trackers           []adapter.ConnectionTracker
+	platformInterface  platform.Interface
+	needWIFIState      bool
+	started            bool
+	asnReader          adapter.ASNReader
+	asnPath            string
+	geositeReader      adapter.GeositeReader
+	geositePath        string
+}
+
+type hashDomainMatchEntry struct {
+	rulesetTag  string
+	specificity int
+}
+
+type hashDomainMatchIndex struct {
+	exactDomains   map[string]hashDomainMatchEntry
+	domainSuffixes map[string]hashDomainMatchEntry
+	domainKeywords []hashDomainKeywordEntry
+	domainRegex    []hashDomainRegexEntry
+}
+
+type hashDomainKeywordEntry struct {
+	keyword     string
+	rulesetTag  string
+	specificity int
+}
+
+type hashDomainRegexEntry struct {
+	pattern     string
+	rulesetTag  string
+	specificity int
+}
+
+type hashIPMatchIndex struct {
+	ipv4Tree *ipIntervalTree
+	ipv6Tree *ipIntervalTree
+}
+
+type ipIntervalTree struct {
+	intervals []ipInterval
+}
+
+type ipInterval struct {
+	start      string
+	end        string
+	rulesetTag string
+	prefixBits int
+}
+
+type hashMatchCache struct {
+	domainCache map[string]string
+	ipCache     map[string]string
+	maxSize     int
+}
+
+func newHashMatchCache(maxSize int) *hashMatchCache {
+	return &hashMatchCache{
+		domainCache: make(map[string]string),
+		ipCache:     make(map[string]string),
+		maxSize:     maxSize,
+	}
 }
 
 func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions) *Router {
@@ -60,6 +123,8 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 		network:           service.FromContext[adapter.NetworkManager](ctx),
 		rules:             make([]adapter.Rule, 0, len(options.Rules)),
 		ruleSetMap:        make(map[string]adapter.RuleSet),
+		hashRuleSetMap:    make(map[string]adapter.RuleSet),
+		hashMatchCache:    newHashMatchCache(10000),
 		needFindProcess:   hasRule(options.Rules, isProcessRule) || hasDNSRule(dnsOptions.Rules, isProcessDNSRule) || options.FindProcess,
 		pauseManager:      service.FromContext[pause.Manager](ctx),
 		platformInterface: service.FromContext[platform.Interface](ctx),
@@ -101,6 +166,240 @@ func (r *Router) Initialize(rules []option.Rule, ruleSets []option.RuleSet) erro
 	return nil
 }
 
+func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath string) error {
+	if dirPath == "" {
+		return nil
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return E.Cause(err, "read hash ruleset directory: ", dirPath)
+	}
+
+	var rulesetFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".srs") {
+			rulesetFiles = append(rulesetFiles, name)
+		}
+	}
+
+	if len(rulesetFiles) == 0 {
+		r.logger.Warn("hash_rule_set_directory configured but no .json or .srs files found: ", dirPath)
+		return nil
+	}
+
+	for _, filename := range rulesetFiles {
+		tag := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+		if _, exists := r.ruleSetMap[tag]; exists {
+			return E.New("duplicate ruleset tag between routing and hash rulesets: ", tag)
+		}
+		if _, exists := r.hashRuleSetMap[tag]; exists {
+			return E.New("duplicate hash ruleset tag: ", tag)
+		}
+
+		filePath := filepath.Join(dirPath, filename)
+		rulesetOptions := option.RuleSet{
+			Type: C.RuleSetTypeLocal,
+			Tag:  tag,
+		}
+		rulesetOptions.LocalOptions.Path = filePath
+
+		ruleSet, err := R.NewRuleSet(ctx, r.logger, rulesetOptions)
+		if err != nil {
+			return E.Cause(err, "load hash ruleset: ", filename)
+		}
+
+		r.hashRuleSets = append(r.hashRuleSets, ruleSet)
+		r.hashRuleSetMap[tag] = ruleSet
+	}
+
+	r.logger.Info("loaded ", len(r.hashRuleSets), " hash-only rulesets from ", dirPath)
+	return nil
+}
+
+func (r *Router) buildHashDomainMatchIndex() error {
+	if len(r.hashRuleSets) == 0 {
+		return nil
+	}
+
+	index := &hashDomainMatchIndex{
+		exactDomains:   make(map[string]hashDomainMatchEntry),
+		domainSuffixes: make(map[string]hashDomainMatchEntry),
+		domainKeywords: make([]hashDomainKeywordEntry, 0),
+		domainRegex:    make([]hashDomainRegexEntry, 0),
+	}
+
+	for _, ruleSet := range r.hashRuleSets {
+		tag := ruleSet.Name()
+
+		domainRules, err := ruleSet.ExtractDomainRules()
+		if err != nil {
+			return E.Cause(err, "extract domain rules from ", tag)
+		}
+
+		for _, domain := range domainRules.ExactDomains {
+			domain = strings.ToLower(domain)
+			if existing, exists := index.exactDomains[domain]; exists {
+				r.logger.Warn("duplicate domain rule: ", domain, " in ", existing.rulesetTag, " and ", tag)
+				continue
+			}
+			index.exactDomains[domain] = hashDomainMatchEntry{
+				rulesetTag:  tag,
+				specificity: 1000,
+			}
+		}
+
+		for _, suffix := range domainRules.DomainSuffixes {
+			suffix = strings.ToLower(suffix)
+			if existing, exists := index.domainSuffixes[suffix]; exists {
+				r.logger.Warn("duplicate domain_suffix rule: ", suffix, " in ", existing.rulesetTag, " and ", tag)
+				continue
+			}
+			index.domainSuffixes[suffix] = hashDomainMatchEntry{
+				rulesetTag:  tag,
+				specificity: 100,
+			}
+		}
+
+		for _, keyword := range domainRules.DomainKeywords {
+			index.domainKeywords = append(index.domainKeywords, hashDomainKeywordEntry{
+				keyword:     strings.ToLower(keyword),
+				rulesetTag:  tag,
+				specificity: 10,
+			})
+		}
+
+		for _, pattern := range domainRules.DomainRegex {
+			index.domainRegex = append(index.domainRegex, hashDomainRegexEntry{
+				pattern:     pattern,
+				rulesetTag:  tag,
+				specificity: 1,
+			})
+		}
+	}
+
+	r.hashDomainMatcher = index
+	r.logger.Info("built domain match index: ", len(index.exactDomains), " exact, ",
+		len(index.domainSuffixes), " suffixes, ", len(index.domainKeywords), " keywords, ",
+		len(index.domainRegex), " regex")
+
+	return nil
+}
+
+func (r *Router) buildHashIPMatchIndex() error {
+	if len(r.hashRuleSets) == 0 {
+		return nil
+	}
+
+	var ipv4Intervals []ipInterval
+	var ipv6Intervals []ipInterval
+
+	for _, ruleSet := range r.hashRuleSets {
+		tag := ruleSet.Name()
+
+		ipRules, err := ruleSet.ExtractIPRules()
+		if err != nil {
+			return E.Cause(err, "extract IP rules from ", tag)
+		}
+
+		for _, cidrStr := range ipRules.IPCIDRs {
+			start, end, prefixBits, err := parseCIDRRange(cidrStr)
+			if err != nil {
+				r.logger.Warn("invalid ip_cidr in ", tag, ": ", err)
+				continue
+			}
+
+			interval := ipInterval{
+				start:      start,
+				end:        end,
+				rulesetTag: tag,
+				prefixBits: prefixBits,
+			}
+
+			if strings.Contains(cidrStr, ".") {
+				ipv4Intervals = append(ipv4Intervals, interval)
+			} else {
+				ipv6Intervals = append(ipv6Intervals, interval)
+			}
+		}
+	}
+
+	r.hashIPMatcher = &hashIPMatchIndex{
+		ipv4Tree: buildIPIntervalTree(ipv4Intervals),
+		ipv6Tree: buildIPIntervalTree(ipv6Intervals),
+	}
+
+	r.logger.Info("built IP match index: ", len(ipv4Intervals), " IPv4, ", len(ipv6Intervals), " IPv6")
+	return nil
+}
+
+func parseCIDRRange(cidrStr string) (start, end string, prefixBits int, err error) {
+	prefix, parseErr := netip.ParsePrefix(cidrStr)
+	if parseErr != nil {
+		err = parseErr
+		return
+	}
+
+	prefixBits = prefix.Bits()
+	startAddr := prefix.Addr()
+	start = startAddr.String()
+
+	if prefix.IsSingleIP() {
+		end = start
+		return
+	}
+
+	lastAddr := lastAddrInPrefix(prefix)
+	end = lastAddr.String()
+	return
+}
+
+func lastAddrInPrefix(prefix netip.Prefix) netip.Addr {
+	addr := prefix.Addr()
+	bits := prefix.Bits()
+
+	if addr.Is4() {
+		a := addr.As4()
+		val := uint32(a[0])<<24 | uint32(a[1])<<16 | uint32(a[2])<<8 | uint32(a[3])
+		mask := ^uint32(0) << (32 - bits)
+		val |= ^mask
+		return netip.AddrFrom4([4]byte{byte(val >> 24), byte(val >> 16), byte(val >> 8), byte(val)})
+	} else {
+		a := addr.As16()
+		val := make([]byte, 16)
+		copy(val, a[:])
+
+		remainingBits := 128 - bits
+		byteIndex := 15
+
+		for remainingBits > 0 {
+			if remainingBits >= 8 {
+				val[byteIndex] = 0xFF
+				remainingBits -= 8
+			} else {
+				val[byteIndex] |= byte(0xFF >> (8 - remainingBits))
+				remainingBits = 0
+			}
+			byteIndex--
+		}
+
+		return netip.AddrFrom16([16]byte(val))
+	}
+}
+
+func buildIPIntervalTree(intervals []ipInterval) *ipIntervalTree {
+	sort.Slice(intervals, func(i, j int) bool {
+		return intervals[i].prefixBits > intervals[j].prefixBits
+	})
+
+	return &ipIntervalTree{intervals: intervals}
+}
+
 func (r *Router) Start(stage adapter.StartStage) error {
 	monitor := taskmonitor.New(r.logger, C.StartTimeout)
 	switch stage {
@@ -130,6 +429,52 @@ func (r *Router) Start(stage adapter.StartStage) error {
 		}
 		if cacheContext != nil {
 			cacheContext.Close()
+		}
+		// Start hash-only rulesets
+		if len(r.hashRuleSets) > 0 {
+			monitor.Start("initialize hash-only rule-sets")
+			if cacheContext == nil {
+				cacheContext = adapter.NewHTTPStartContext(r.ctx)
+			}
+			var hashRuleSetStartGroup task.Group
+			for i, ruleSet := range r.hashRuleSets {
+				ruleSetInPlace := ruleSet
+				ruleSetIndex := i
+				hashRuleSetStartGroup.Append0(func(ctx context.Context) error {
+					err := ruleSetInPlace.StartContext(ctx, cacheContext)
+					if err != nil {
+						return E.Cause(err, "initialize hash rule-set[", ruleSetIndex, "]")
+					}
+					return nil
+				})
+			}
+			hashRuleSetStartGroup.Concurrency(5)
+			hashRuleSetStartGroup.FastFail()
+			err := hashRuleSetStartGroup.Run(r.ctx)
+			if err != nil {
+				if cacheContext != nil {
+					cacheContext.Close()
+				}
+				return err
+			}
+			monitor.Finish()
+		}
+		// Close cache context if it was created for hash rulesets
+		if cacheContext != nil && len(r.ruleSets) == 0 {
+			cacheContext.Close()
+		}
+		// Build hash match indices
+		if len(r.hashRuleSets) > 0 {
+			monitor.Start("build hash match indices")
+			err := r.buildHashDomainMatchIndex()
+			if err != nil {
+				return err
+			}
+			err = r.buildHashIPMatchIndex()
+			if err != nil {
+				return err
+			}
+			monitor.Finish()
 		}
 		// Initialize ASN reader if path is configured
 		if r.asnPath != "" {
@@ -240,6 +585,13 @@ func (r *Router) Close() error {
 		monitor.Start("close rule-set[", i, "]")
 		err = E.Append(err, ruleSet.Close(), func(err error) error {
 			return E.Cause(err, "close rule-set[", i, "]")
+		})
+		monitor.Finish()
+	}
+	for i, ruleSet := range r.hashRuleSets {
+		monitor.Start("close hash rule-set[", i, "]")
+		err = E.Append(err, ruleSet.Close(), func(err error) error {
+			return E.Cause(err, "close hash rule-set[", i, "]")
 		})
 		monitor.Finish()
 	}

@@ -97,6 +97,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 	if err != nil {
 		return err
 	}
+	r.matchHashRuleSets(&metadata)
 	var selectedOutbound adapter.Outbound
 	if selectedRule != nil {
 		switch action := selectedRule.Action().(type) {
@@ -211,6 +212,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if err != nil {
 		return err
 	}
+	r.matchHashRuleSets(&metadata)
 	var selectedOutbound adapter.Outbound
 	var selectReturn bool
 	if selectedRule != nil {
@@ -490,6 +492,208 @@ match:
 	return
 }
 
+func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
+	if r.hashDomainMatcher == nil && r.hashIPMatcher == nil {
+		return false
+	}
+
+	var bestMatch string
+	var bestSpecificity int
+	var domainHost string
+
+	if r.hashDomainMatcher != nil {
+		domainHost = metadata.Domain
+		if domainHost == "" {
+			domainHost = metadata.Destination.Fqdn
+		}
+
+		if domainHost != "" {
+			domainHost = strings.ToLower(domainHost)
+
+			if cachedTag, found := r.getCachedDomainMatch(domainHost); found {
+				if cachedTag != "" {
+					metadata.MatchedRuleSet = cachedTag
+					return true
+				}
+				goto ipMatching
+			}
+
+			if entry, exists := r.hashDomainMatcher.exactDomains[domainHost]; exists {
+				if entry.specificity > bestSpecificity {
+					bestSpecificity = entry.specificity
+					bestMatch = entry.rulesetTag
+				}
+			}
+
+			if bestSpecificity < 100 {
+				parts := strings.Split(domainHost, ".")
+				for i := 0; i < len(parts); i++ {
+					suffix := strings.Join(parts[i:], ".")
+					if entry, exists := r.hashDomainMatcher.domainSuffixes[suffix]; exists {
+						if entry.specificity > bestSpecificity {
+							bestSpecificity = entry.specificity
+							bestMatch = entry.rulesetTag
+						}
+					}
+				}
+			}
+
+			if bestSpecificity < 10 {
+				for _, keywordEntry := range r.hashDomainMatcher.domainKeywords {
+					if strings.Contains(domainHost, keywordEntry.keyword) {
+						if keywordEntry.specificity > bestSpecificity {
+							bestSpecificity = keywordEntry.specificity
+							bestMatch = keywordEntry.rulesetTag
+						}
+					}
+				}
+			}
+
+			if bestSpecificity < 1 {
+				for _, regexEntry := range r.hashDomainMatcher.domainRegex {
+					if strings.Contains(domainHost, regexEntry.pattern) {
+						if regexEntry.specificity > bestSpecificity {
+							bestSpecificity = regexEntry.specificity
+							bestMatch = regexEntry.rulesetTag
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if bestMatch != "" {
+		r.setCachedDomainMatch(domainHost, bestMatch)
+		metadata.MatchedRuleSet = bestMatch
+		return true
+	}
+
+	if domainHost != "" {
+		r.setCachedDomainMatch(domainHost, "")
+	}
+
+ipMatching:
+	if r.hashIPMatcher != nil {
+		destIP := metadata.Destination.Addr
+		if !destIP.IsValid() && len(metadata.DestinationAddresses) > 0 {
+			destIP = metadata.DestinationAddresses[0]
+		}
+
+		if destIP.IsValid() {
+			ipStr := destIP.String()
+
+			if cachedTag, found := r.getCachedIPMatch(ipStr); found {
+				if cachedTag != "" {
+					metadata.MatchedRuleSet = cachedTag
+					return true
+				}
+				return false
+			}
+
+			var tree *ipIntervalTree
+			if destIP.Is4() {
+				tree = r.hashIPMatcher.ipv4Tree
+			} else {
+				tree = r.hashIPMatcher.ipv6Tree
+			}
+
+			if tree != nil {
+				for _, interval := range tree.intervals {
+					if ipInRange(ipStr, interval.start, interval.end) {
+						r.setCachedIPMatch(ipStr, interval.rulesetTag)
+						metadata.MatchedRuleSet = interval.rulesetTag
+						return true
+					}
+				}
+			}
+
+			r.setCachedIPMatch(ipStr, "")
+		}
+	}
+
+	return false
+}
+
+func ipInRange(ip, start, end string) bool {
+	ipAddr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	startAddr, err := netip.ParseAddr(start)
+	if err != nil {
+		return false
+	}
+	endAddr, err := netip.ParseAddr(end)
+	if err != nil {
+		return false
+	}
+
+	return !ipAddr.Less(startAddr) && !endAddr.Less(ipAddr)
+}
+
+func (r *Router) getCachedDomainMatch(domain string) (tag string, found bool) {
+	if r.hashMatchCache == nil {
+		return "", false
+	}
+	tag, found = r.hashMatchCache.domainCache[domain]
+	return
+}
+
+func (r *Router) setCachedDomainMatch(domain string, tag string) {
+	if r.hashMatchCache == nil {
+		return
+	}
+	if len(r.hashMatchCache.domainCache) >= r.hashMatchCache.maxSize {
+		r.hashMatchCache.domainCache = make(map[string]string)
+	}
+	r.hashMatchCache.domainCache[domain] = tag
+}
+
+func (r *Router) getCachedIPMatch(ip string) (tag string, found bool) {
+	if r.hashMatchCache == nil {
+		return "", false
+	}
+	tag, found = r.hashMatchCache.ipCache[ip]
+	return
+}
+
+func (r *Router) setCachedIPMatch(ip string, tag string) {
+	if r.hashMatchCache == nil {
+		return
+	}
+	if len(r.hashMatchCache.ipCache) >= r.hashMatchCache.maxSize {
+		r.hashMatchCache.ipCache = make(map[string]string)
+	}
+	r.hashMatchCache.ipCache[ip] = tag
+}
+
+// shouldSkipForDomain checks if a domain matches skip filters (static or ruleset)
+func (r *Router) shouldSkipForDomain(action *R.RuleActionSniff, metadata *adapter.InboundContext, domain string) bool {
+	if domain == "" {
+		return false
+	}
+
+	domainLower := strings.ToLower(domain)
+
+	// Check static domain matcher
+	if action.SkipDomainMatcher != nil {
+		if (*action.SkipDomainMatcher).Match(domainLower) {
+			return true
+		}
+	}
+
+	// Check ruleset matcher
+	if action.SkipDomainRuleSetItem != nil {
+		tempMetadata := *metadata
+		tempMetadata.Domain = domain
+		if action.SkipDomainRuleSetItem.Match(&tempMetadata) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (r *Router) actionSniff(
 	ctx context.Context, metadata *adapter.InboundContext, action *R.RuleActionSniff,
 	inputConn net.Conn, inputPacketConn N.PacketConn, inputBuffers []*buf.Buffer, inputPacketBuffers []*N.PacketBuffer,
@@ -509,6 +713,14 @@ func (r *Router) actionSniff(
 	if action.SkipDstIPSet != nil && metadata.Destination.Addr.IsValid() {
 		if action.SkipDstIPSet.Contains(metadata.Destination.Addr) {
 			r.logger.DebugContext(ctx, "sniff skipped: destination IP ", metadata.Destination.Addr, " in skip list")
+			return
+		}
+	}
+
+	// Domain-based skip filtering BEFORE sniffing (if skip_sniffing enabled)
+	if action.SkipSniffing && metadata.Domain != "" {
+		if r.shouldSkipForDomain(action, metadata, metadata.Domain) {
+			r.logger.DebugContext(ctx, "sniff skipped: pre-sniff domain ", metadata.Domain, " in skip list (skip_sniffing=true)")
 			return
 		}
 	}
@@ -585,8 +797,8 @@ func (r *Router) actionSniff(
 			}
 
 			// Apply skip_domain filter (prevents override even if enabled)
-			if shouldOverride && action.SkipDomainMatcher != nil && metadata.Domain != "" {
-				if (*action.SkipDomainMatcher).Match(strings.ToLower(metadata.Domain)) {
+			if shouldOverride && metadata.Domain != "" {
+				if r.shouldSkipForDomain(action, metadata, metadata.Domain) {
 					shouldOverride = false
 					r.logger.DebugContext(ctx, "skip override for domain: ", metadata.Domain)
 				}
@@ -758,8 +970,8 @@ func (r *Router) actionSniff(
 			}
 
 			// Apply skip_domain filter (prevents override even if enabled)
-			if shouldOverride && action.SkipDomainMatcher != nil && metadata.Domain != "" {
-				if (*action.SkipDomainMatcher).Match(strings.ToLower(metadata.Domain)) {
+			if shouldOverride && metadata.Domain != "" {
+				if r.shouldSkipForDomain(action, metadata, metadata.Domain) {
 					shouldOverride = false
 					r.logger.DebugContext(ctx, "skip override for domain: ", metadata.Domain)
 				}

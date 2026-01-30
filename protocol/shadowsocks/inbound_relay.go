@@ -74,7 +74,7 @@ func newRelayInbound(ctx context.Context, router adapter.Router, logger log.Cont
 		return nil, err
 	}
 	inbound.service = service
-	inbound.listener = listener.New(listener.Options{
+	inbound.listener, err = listener.New(listener.Options{
 		Context:                  ctx,
 		Logger:                   logger,
 		Network:                  options.Network.Build(),
@@ -83,6 +83,9 @@ func newRelayInbound(ctx context.Context, router adapter.Router, logger log.Cont
 		PacketHandler:            inbound,
 		ThreadUnsafePacketWriter: true,
 	})
+	if err != nil {
+		return nil, err
+	}
 	return inbound, err
 }
 
@@ -136,6 +139,7 @@ func (h *RelayInbound) newConnection(ctx context.Context, conn net.Conn, metadat
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = h.listener.ListenOptions().InboundOptions
+	metadata.BindInterface = h.listener.ListenOptions().BindInterface
 	return h.router.RouteConnection(ctx, conn, metadata)
 }
 
@@ -159,6 +163,7 @@ func (h *RelayInbound) newPacketConnection(ctx context.Context, conn N.PacketCon
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = h.listener.ListenOptions().InboundOptions
+	metadata.BindInterface = h.listener.ListenOptions().BindInterface
 	return h.router.RoutePacketConnection(ctx, conn, metadata)
 }
 

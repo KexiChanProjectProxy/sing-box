@@ -100,13 +100,16 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		return nil, err
 	}
 	inbound.service = service
-	inbound.listener = listener.New(listener.Options{
+	inbound.listener, err = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
 		Network:           []string{N.NetworkTCP},
 		Listen:            options.ListenOptions,
 		ConnectionHandler: inbound,
 	})
+	if err != nil {
+		return nil, err
+	}
 	return inbound, nil
 }
 
@@ -252,6 +255,7 @@ func (h *inboundTransportHandler) NewConnectionEx(ctx context.Context, conn net.
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = h.listener.ListenOptions().InboundOptions
+	metadata.BindInterface = h.listener.ListenOptions().BindInterface
 	h.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
 	(*Inbound)(h).NewConnectionEx(ctx, conn, metadata, onClose)
 }

@@ -86,6 +86,11 @@ func NewDefaultRule(ctx context.Context, logger log.ContextLogger, options optio
 		rule.items = append(rule.items, item)
 		rule.allItems = append(rule.allItems, item)
 	}
+	if len(options.Interface) > 0 {
+		item := NewInterfaceItem(options.Interface)
+		rule.items = append(rule.items, item)
+		rule.allItems = append(rule.allItems, item)
+	}
 	if len(options.AuthUser) > 0 {
 		item := NewAuthUserItem(options.AuthUser)
 		rule.items = append(rule.items, item)

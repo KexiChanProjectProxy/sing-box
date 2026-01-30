@@ -197,6 +197,10 @@ func New(options Options) (*Box, error) {
 	if err != nil {
 		return nil, E.Cause(err, "initialize router")
 	}
+	err = router.LoadHashRuleSetsFromDirectory(ctx, routeOptions.HashRuleSetDirectory)
+	if err != nil {
+		return nil, E.Cause(err, "load hash rulesets")
+	}
 	ntpOptions := common.PtrValueOrDefault(options.NTP)
 	var timeService *tls.TimeServiceWrapper
 	if ntpOptions.Enabled {

@@ -22,6 +22,7 @@ import (
 	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing/service"
 
 	"github.com/miekg/dns"
 	"go4.org/netipx"
@@ -99,7 +100,32 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 			OverrideDestination: action.SniffOptions.OverrideDestination,
 		}
 
-		return sniffAction, sniffAction.build(action.SniffOptions)
+		err := sniffAction.build(action.SniffOptions)
+		if err != nil {
+			return nil, err
+		}
+
+		// Initialize RuleSetItem for skip_domain_rule_set
+		if len(action.SniffOptions.SkipDomainRuleSet) > 0 {
+			router := service.FromContext[adapter.Router](ctx)
+			if router == nil {
+				return nil, E.New("router not available in context")
+			}
+
+			sniffAction.SkipDomainRuleSetItem = NewRuleSetItem(
+				router,
+				action.SniffOptions.SkipDomainRuleSet,
+				false, // ipCIDRMatchSource - match destination
+				false, // ipCidrAcceptEmpty
+			)
+
+			err := sniffAction.SkipDomainRuleSetItem.Start()
+			if err != nil {
+				return nil, E.Cause(err, "skip_domain_rule_set")
+			}
+		}
+
+		return sniffAction, nil
 	case C.RuleActionTypeResolve:
 		return &RuleActionResolve{
 			Server:       action.ResolveOptions.Server,
@@ -386,10 +412,12 @@ type RuleActionSniff struct {
 	OverrideDestination bool
 
 	// NEW: Advanced mode fields
-	ProtocolConfigs   map[string]*ProtocolSniffConfig
-	SkipDomainMatcher *domain.Matcher
-	SkipSrcIPSet      *netipx.IPSet
-	SkipDstIPSet      *netipx.IPSet
+	ProtocolConfigs       map[string]*ProtocolSniffConfig
+	SkipDomainMatcher     *domain.Matcher
+	SkipDomainRuleSetItem *RuleSetItem
+	SkipSniffing          bool
+	SkipSrcIPSet          *netipx.IPSet
+	SkipDstIPSet          *netipx.IPSet
 }
 
 func (r *RuleActionSniff) Type() string {
@@ -545,6 +573,9 @@ func (r *RuleActionSniff) build(opts option.RouteActionSniff) error {
 		r.SkipDstIPSet = ipSet
 	}
 
+	// Store skip sniffing flag
+	r.SkipSniffing = opts.SkipSniffing
+
 	return nil
 }
 
@@ -563,6 +594,13 @@ func (r *RuleActionSniff) String() string {
 		return "sniff"
 	}
 	return F.ToString("sniff(", strings.Join(parts, ","), ")")
+}
+
+func (r *RuleActionSniff) Close() error {
+	if r.SkipDomainRuleSetItem != nil {
+		return common.Close(r.SkipDomainRuleSetItem)
+	}
+	return nil
 }
 
 type RuleActionResolve struct {

@@ -222,6 +222,13 @@ func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath stri
 		}
 		rulesetOptions.LocalOptions.Path = path
 
+		// Set format based on file extension
+		if strings.HasSuffix(name, ".srs") {
+			rulesetOptions.Format = C.RuleSetFormatBinary
+		} else {
+			rulesetOptions.Format = C.RuleSetFormatSource
+		}
+
 		// Load the ruleset
 		ruleSet, err := R.NewRuleSet(ctx, r.logger, rulesetOptions)
 		if err != nil {

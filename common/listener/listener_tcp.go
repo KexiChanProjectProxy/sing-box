@@ -98,7 +98,17 @@ func (l *Listener) loopTCPIn() {
 		metadata.InboundDetour = l.listenOptions.Detour
 		//nolint:staticcheck
 		metadata.InboundOptions = l.listenOptions.InboundOptions
+		metadata.BindInterface = l.listenOptions.BindInterface
 		metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
+
+		// Check IP filter before processing connection
+		if l.ipFilter != nil && !l.ipFilter.Allow(metadata.Source.Addr) {
+			ctx := log.ContextWithNewID(l.ctx)
+			l.logger.WarnContext(ctx, "rejected connection from ", metadata.Source, " (IP filter)")
+			conn.Close()
+			continue
+		}
+
 		metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 		ctx := log.ContextWithNewID(l.ctx)
 		l.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)

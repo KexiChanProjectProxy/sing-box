@@ -103,24 +103,22 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 		if options.STUN.ListenPort == 0 {
 			options.STUN.ListenPort = 3478
 		}
-		stunListener = listener.New(listener.Options{
+		var err error
+		stunListener, err = listener.New(listener.Options{
 			Context: ctx,
 			Logger:  logger,
 			Network: []string{N.NetworkUDP},
 			Listen:  options.STUN.ListenOptions,
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &Service{
+	service := &Service{
 		Adapter: boxService.NewAdapter(C.TypeDERP, tag),
 		ctx:     ctx,
 		logger:  logger,
-		listener: listener.New(listener.Options{
-			Context: ctx,
-			Logger:  logger,
-			Network: []string{N.NetworkTCP},
-			Listen:  options.ListenOptions,
-		}),
 		stunListener:         stunListener,
 		tlsConfig:            tlsConfig,
 		configPath:           configPath,
@@ -128,9 +126,19 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 		verifyClientURL:      options.VerifyClientURL,
 		home:                 options.Home,
 		meshKey:              options.MeshPSK,
-		meshKeyPath:          options.MeshPSKFile,
 		meshWith:             options.MeshWith,
-	}, nil
+		meshKeyPath:          options.MeshPSKFile,
+	}
+	service.listener, err = listener.New(listener.Options{
+			Context: ctx,
+			Logger:  logger,
+			Network: []string{N.NetworkTCP},
+			Listen:  options.ListenOptions,
+		})
+	if err != nil {
+		return nil, err
+	}
+	return service, nil
 }
 
 func (d *Service) Start(stage adapter.StartStage) error {

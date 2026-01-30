@@ -48,7 +48,8 @@ func NewTProxy(ctx context.Context, router adapter.Router, logger log.ContextLog
 		udpTimeout = C.UDPTimeout
 	}
 	tproxy.udpNat = udpnat.New(tproxy, tproxy.preparePacketConnection, udpTimeout, false)
-	tproxy.listener = listener.New(listener.Options{
+	var err error
+	tproxy.listener, err = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
 		Network:           options.Network.Build(),
@@ -57,6 +58,9 @@ func NewTProxy(ctx context.Context, router adapter.Router, logger log.ContextLog
 		OOBPacketHandler:  tproxy,
 		TProxy:            true,
 	})
+	if err != nil {
+		return nil, err
+	}
 	return tproxy, nil
 }
 

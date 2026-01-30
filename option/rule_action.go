@@ -304,11 +304,13 @@ type RouteActionSniff struct {
 	OverrideDestination bool                       `json:"override_destination,omitempty"`
 
 	// NEW: Advanced fields
-	Protocols        map[string]SniffProtocolConfig `json:"protocols,omitempty"`
-	SkipDomain       badoption.Listable[string]     `json:"skip_domain,omitempty"`
-	SkipDomainSuffix badoption.Listable[string]     `json:"skip_domain_suffix,omitempty"`
-	SkipSrcAddress   badoption.Listable[string]     `json:"skip_src_address,omitempty"`
-	SkipDstAddress   badoption.Listable[string]     `json:"skip_dst_address,omitempty"`
+	Protocols          map[string]SniffProtocolConfig `json:"protocols,omitempty"`
+	SkipDomain         badoption.Listable[string]     `json:"skip_domain,omitempty"`
+	SkipDomainSuffix   badoption.Listable[string]     `json:"skip_domain_suffix,omitempty"`
+	SkipDomainRuleSet  badoption.Listable[string]     `json:"skip_domain_rule_set,omitempty"`
+	SkipSniffing       bool                           `json:"skip_sniffing,omitempty"`
+	SkipSrcAddress     badoption.Listable[string]     `json:"skip_src_address,omitempty"`
+	SkipDstAddress     badoption.Listable[string]     `json:"skip_dst_address,omitempty"`
 }
 
 func (r *RouteActionSniff) Validate() error {

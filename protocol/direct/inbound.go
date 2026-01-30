@@ -58,7 +58,8 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		udpTimeout = C.UDPTimeout
 	}
 	inbound.udpNat = udpnat.New(inbound, inbound.preparePacketConnection, udpTimeout, false)
-	inbound.listener = listener.New(listener.Options{
+	var err error
+	inbound.listener, err = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
 		Network:           options.Network.Build(),
@@ -66,6 +67,9 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		ConnectionHandler: inbound,
 		PacketHandler:     inbound,
 	})
+	if err != nil {
+		return nil, err
+	}
 	return inbound, nil
 }
 
@@ -112,6 +116,7 @@ func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	metadata.InboundDetour = i.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = i.listener.ListenOptions().InboundOptions
+	metadata.BindInterface = i.listener.ListenOptions().BindInterface
 	metadata.Source = source
 	destination = i.listener.UDPAddr()
 	switch i.overrideOption {

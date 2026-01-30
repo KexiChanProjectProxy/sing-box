@@ -55,14 +55,18 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		ctx:     ctx,
 		router:  uot.NewRouter(router, logger),
 		logger:  logger,
-		listener: listener.New(listener.Options{
-			Context: ctx,
-			Logger:  logger,
-			Listen:  options.ListenOptions,
-		}),
 		networkIsDefault: options.Network == "",
 		network:          options.Network.Build(),
 		authenticator:    auth.NewAuthenticator(options.Users),
+	}
+	var err error
+	inbound.listener, err = listener.New(listener.Options{
+			Context: ctx,
+			Logger:  logger,
+			Listen:  options.ListenOptions,
+		})
+	if err != nil {
+		return nil, err
 	}
 	if common.Contains(inbound.network, N.NetworkUDP) {
 		if options.TLS == nil || !options.TLS.Enabled {
@@ -209,6 +213,7 @@ func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net
 	metadata.InboundDetour = n.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = n.listener.ListenOptions().InboundOptions
+	metadata.BindInterface = n.listener.ListenOptions().BindInterface
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()

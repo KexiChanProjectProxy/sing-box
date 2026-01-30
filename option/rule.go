@@ -70,6 +70,7 @@ type RawDefaultRule struct {
 	Inbound                  badoption.Listable[string]        `json:"inbound,omitempty"`
 	IPVersion                int                               `json:"ip_version,omitempty"`
 	Network                  badoption.Listable[string]        `json:"network,omitempty"`
+	Interface                badoption.Listable[string]        `json:"interface,omitempty"`
 	AuthUser                 badoption.Listable[string]        `json:"auth_user,omitempty"`
 	Protocol                 badoption.Listable[string]        `json:"protocol,omitempty"`
 	Client                   badoption.Listable[string]        `json:"client,omitempty"`

@@ -1,0 +1,24 @@
+Building release binaries for v1.12.14.10...
+
+Building sing-box-linux-amd64 with full features...
+✓ Built sing-box-linux-amd64 (56M)
+Building sing-box-linux-arm64 with full features...
+✓ Built sing-box-linux-arm64 (53M)
+Building sing-box-windows-amd64.exe with full features...
+✓ Built sing-box-windows-amd64.exe (56M)
+Building sing-box-windows-arm64.exe with full features...
+✓ Built sing-box-windows-arm64.exe (52M)
+Building sing-box-darwin-amd64 with full features...
+✓ Built sing-box-darwin-amd64 (56M)
+Building sing-box-darwin-arm64 with full features...
+✓ Built sing-box-darwin-arm64 (52M)
+
+Build complete! Binaries in releases/
+total 323M
+drwxrwxr-x 2 kexi kexi 4.0K Jan 19 05:35 android
+-rwxrwxr-x 1 kexi kexi  56M Jan 30 10:43 sing-box-darwin-amd64
+-rwxrwxr-x 1 kexi kexi  52M Jan 30 10:44 sing-box-darwin-arm64
+-rwxrwxr-x 1 kexi kexi  56M Jan 30 10:41 sing-box-linux-amd64
+-rwxrwxr-x 1 kexi kexi  53M Jan 30 10:41 sing-box-linux-arm64
+-rwxrwxr-x 1 kexi kexi  56M Jan 30 10:42 sing-box-windows-amd64.exe
+-rwxrwxr-x 1 kexi kexi  52M Jan 30 10:43 sing-box-windows-arm64.exe

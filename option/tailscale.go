@@ -97,7 +97,7 @@ func (d DERPSTUNListenOptions) MarshalJSON() ([]byte, error) {
 			ListenPort: d.ListenPort,
 		},
 	}
-	if _DERPSTUNListenOptions(d) == portOptions {
+	if reflect.DeepEqual(_DERPSTUNListenOptions(d), portOptions) {
 		return json.Marshal(d.Enabled)
 	} else {
 		return json.Marshal(_DERPSTUNListenOptions(d))

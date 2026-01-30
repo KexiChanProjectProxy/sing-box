@@ -8,6 +8,7 @@ type RouteOptions struct {
 	ASN                        *ASNOptions                       `json:"asn,omitempty"`
 	Rules                      []Rule                            `json:"rules,omitempty"`
 	RuleSet                    []RuleSet                         `json:"rule_set,omitempty"`
+	HashRuleSetDirectory       string                            `json:"hash_rule_set_directory,omitempty"`
 	Final                      string                            `json:"final,omitempty"`
 	FindProcess                bool                              `json:"find_process,omitempty"`
 	AutoDetectInterface        bool                              `json:"auto_detect_interface,omitempty"`

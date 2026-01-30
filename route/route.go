@@ -500,6 +500,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 	var bestMatch string
 	var bestSpecificity int
 	var domainHost string
+	var matchType string // For logging: "exact", "suffix", "keyword", "regex", "ip"
 
 	if r.hashDomainMatcher != nil {
 		domainHost = metadata.Domain
@@ -513,6 +514,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 			if cachedTag, found := r.getCachedDomainMatch(domainHost); found {
 				if cachedTag != "" {
 					metadata.MatchedRuleSet = cachedTag
+					r.logger.Debug("hash ruleset matched (cached): domain=", domainHost, " → ruleset=", cachedTag)
 					return true
 				}
 				goto ipMatching
@@ -522,6 +524,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 				if entry.specificity > bestSpecificity {
 					bestSpecificity = entry.specificity
 					bestMatch = entry.rulesetTag
+					matchType = "exact"
 				}
 			}
 
@@ -533,6 +536,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 						if entry.specificity > bestSpecificity {
 							bestSpecificity = entry.specificity
 							bestMatch = entry.rulesetTag
+							matchType = "suffix"
 						}
 					}
 				}
@@ -544,6 +548,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 						if keywordEntry.specificity > bestSpecificity {
 							bestSpecificity = keywordEntry.specificity
 							bestMatch = keywordEntry.rulesetTag
+							matchType = "keyword"
 						}
 					}
 				}
@@ -555,6 +560,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 						if regexEntry.specificity > bestSpecificity {
 							bestSpecificity = regexEntry.specificity
 							bestMatch = regexEntry.rulesetTag
+							matchType = "regex"
 						}
 					}
 				}
@@ -565,6 +571,7 @@ func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
 	if bestMatch != "" {
 		r.setCachedDomainMatch(domainHost, bestMatch)
 		metadata.MatchedRuleSet = bestMatch
+		r.logger.Info("hash ruleset matched (", matchType, "): domain=", domainHost, " → ruleset=", bestMatch)
 		return true
 	}
 
@@ -585,6 +592,7 @@ ipMatching:
 			if cachedTag, found := r.getCachedIPMatch(ipStr); found {
 				if cachedTag != "" {
 					metadata.MatchedRuleSet = cachedTag
+					r.logger.Debug("hash ruleset matched (cached): ip=", ipStr, " → ruleset=", cachedTag)
 					return true
 				}
 				return false
@@ -602,6 +610,7 @@ ipMatching:
 					if ipInRange(ipStr, interval.start, interval.end) {
 						r.setCachedIPMatch(ipStr, interval.rulesetTag)
 						metadata.MatchedRuleSet = interval.rulesetTag
+						r.logger.Info("hash ruleset matched (ip): ip=", ipStr, " → ruleset=", interval.rulesetTag)
 						return true
 					}
 				}
@@ -611,6 +620,7 @@ ipMatching:
 		}
 	}
 
+	r.logger.Debug("hash ruleset no match: domain=", domainHost, ", ip=", metadata.Destination.Addr)
 	return false
 }
 

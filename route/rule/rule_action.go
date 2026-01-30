@@ -16,6 +16,7 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
+	"github.com/sagernet/sing/common/domain"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/logger"
@@ -23,6 +24,7 @@ import (
 	N "github.com/sagernet/sing/common/network"
 
 	"github.com/miekg/dns"
+	"go4.org/netipx"
 )
 
 func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action option.RuleAction) (adapter.RuleAction, error) {
@@ -86,11 +88,18 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 	case C.RuleActionTypeHijackDNS:
 		return &RuleActionHijackDNS{}, nil
 	case C.RuleActionTypeSniff:
-		sniffAction := &RuleActionSniff{
-			SnifferNames: action.SniffOptions.Sniffer,
-			Timeout:      time.Duration(action.SniffOptions.Timeout),
+		// Validate the config first
+		if err := action.SniffOptions.Validate(); err != nil {
+			return nil, err
 		}
-		return sniffAction, sniffAction.build()
+
+		sniffAction := &RuleActionSniff{
+			SnifferNames:        action.SniffOptions.Sniffer,
+			Timeout:             time.Duration(action.SniffOptions.Timeout),
+			OverrideDestination: action.SniffOptions.OverrideDestination,
+		}
+
+		return sniffAction, sniffAction.build(action.SniffOptions)
 	case C.RuleActionTypeResolve:
 		return &RuleActionResolve{
 			Server:       action.ResolveOptions.Server,
@@ -360,62 +369,200 @@ func (r *RuleActionHijackDNS) String() string {
 	return "hijack-dns"
 }
 
+type ProtocolSniffConfig struct {
+	PortMatcher         RuleItem  // Reuses PortItem/PortRangeItem
+	StreamSniffers      []sniff.StreamSniffer
+	PacketSniffers      []sniff.PacketSniffer
+	OverrideDestination *bool     // nil = use global setting
+}
+
 type RuleActionSniff struct {
+	// Existing fields
 	SnifferNames   []string
 	StreamSniffers []sniff.StreamSniffer
 	PacketSniffers []sniff.PacketSniffer
 	Timeout        time.Duration
 	// Deprecated
 	OverrideDestination bool
+
+	// NEW: Advanced mode fields
+	ProtocolConfigs   map[string]*ProtocolSniffConfig
+	SkipDomainMatcher *domain.Matcher
+	SkipSrcIPSet      *netipx.IPSet
+	SkipDstIPSet      *netipx.IPSet
 }
 
 func (r *RuleActionSniff) Type() string {
 	return C.RuleActionTypeSniff
 }
 
-func (r *RuleActionSniff) build() error {
-	for _, name := range r.SnifferNames {
-		switch name {
-		case C.ProtocolTLS:
-			r.StreamSniffers = append(r.StreamSniffers, sniff.TLSClientHello)
-		case C.ProtocolHTTP:
-			r.StreamSniffers = append(r.StreamSniffers, sniff.HTTPHost)
-		case C.ProtocolQUIC:
-			r.PacketSniffers = append(r.PacketSniffers, sniff.QUICClientHello)
-		case C.ProtocolDNS:
-			r.StreamSniffers = append(r.StreamSniffers, sniff.StreamDomainNameQuery)
-			r.PacketSniffers = append(r.PacketSniffers, sniff.DomainNameQuery)
-		case C.ProtocolSTUN:
-			r.PacketSniffers = append(r.PacketSniffers, sniff.STUNMessage)
-		case C.ProtocolBitTorrent:
-			r.StreamSniffers = append(r.StreamSniffers, sniff.BitTorrent)
-			r.PacketSniffers = append(r.PacketSniffers, sniff.UTP)
-			r.PacketSniffers = append(r.PacketSniffers, sniff.UDPTracker)
-		case C.ProtocolDTLS:
-			r.PacketSniffers = append(r.PacketSniffers, sniff.DTLSRecord)
-		case C.ProtocolSSH:
-			r.StreamSniffers = append(r.StreamSniffers, sniff.SSH)
-		case C.ProtocolRDP:
-			r.StreamSniffers = append(r.StreamSniffers, sniff.RDP)
-		case C.ProtocolNTP:
-			r.PacketSniffers = append(r.PacketSniffers, sniff.NTP)
-		default:
-			return E.New("unknown sniffer: ", name)
+func (r *RuleActionSniff) build(opts option.RouteActionSniff) error {
+	// Mode 1: Advanced mode with protocol configs
+	if len(opts.Protocols) > 0 {
+		r.ProtocolConfigs = make(map[string]*ProtocolSniffConfig)
+		for protocolName, config := range opts.Protocols {
+			protoConfig := &ProtocolSniffConfig{
+				OverrideDestination: config.OverrideDestination,
+			}
+
+			// Build port matcher if ports/ranges specified
+			var portItems []RuleItem
+			if len(config.Ports) > 0 {
+				portItems = append(portItems, NewPortItem(false, config.Ports))
+			}
+			if len(config.PortRanges) > 0 {
+				// Convert port ranges from user format to internal format
+				convertedRanges := make([]string, 0, len(config.PortRanges))
+				for _, userRange := range config.PortRanges {
+					converted, err := ParsePortRange(userRange)
+					if err != nil {
+						return E.Cause(err, "protocol ", protocolName, " port_ranges")
+					}
+					convertedRanges = append(convertedRanges, converted)
+				}
+				rangeItem, err := NewPortRangeItem(false, convertedRanges)
+				if err != nil {
+					return E.Cause(err, "protocol ", protocolName, " port_ranges")
+				}
+				portItems = append(portItems, rangeItem)
+			}
+
+			// Create composite matcher if we have port items
+			if len(portItems) > 0 {
+				protoConfig.PortMatcher = &CompositePortMatcher{items: portItems}
+			}
+
+			// Map protocol name to sniffers
+			switch protocolName {
+			case C.ProtocolTLS:
+				protoConfig.StreamSniffers = append(protoConfig.StreamSniffers, sniff.TLSClientHello)
+			case C.ProtocolHTTP:
+				protoConfig.StreamSniffers = append(protoConfig.StreamSniffers, sniff.HTTPHost)
+			case C.ProtocolQUIC:
+				protoConfig.PacketSniffers = append(protoConfig.PacketSniffers, sniff.QUICClientHello)
+			case C.ProtocolDNS:
+				protoConfig.StreamSniffers = append(protoConfig.StreamSniffers, sniff.StreamDomainNameQuery)
+				protoConfig.PacketSniffers = append(protoConfig.PacketSniffers, sniff.DomainNameQuery)
+			case C.ProtocolSTUN:
+				protoConfig.PacketSniffers = append(protoConfig.PacketSniffers, sniff.STUNMessage)
+			case C.ProtocolBitTorrent:
+				protoConfig.StreamSniffers = append(protoConfig.StreamSniffers, sniff.BitTorrent)
+				protoConfig.PacketSniffers = append(protoConfig.PacketSniffers, sniff.UTP, sniff.UDPTracker)
+			case C.ProtocolDTLS:
+				protoConfig.PacketSniffers = append(protoConfig.PacketSniffers, sniff.DTLSRecord)
+			case C.ProtocolSSH:
+				protoConfig.StreamSniffers = append(protoConfig.StreamSniffers, sniff.SSH)
+			case C.ProtocolRDP:
+				protoConfig.StreamSniffers = append(protoConfig.StreamSniffers, sniff.RDP)
+			case C.ProtocolNTP:
+				protoConfig.PacketSniffers = append(protoConfig.PacketSniffers, sniff.NTP)
+			default:
+				return E.New("unknown protocol: ", protocolName)
+			}
+
+			r.ProtocolConfigs[protocolName] = protoConfig
+		}
+	} else {
+		// Mode 2: Legacy mode with sniffer list (existing code unchanged)
+		for _, name := range r.SnifferNames {
+			switch name {
+			case C.ProtocolTLS:
+				r.StreamSniffers = append(r.StreamSniffers, sniff.TLSClientHello)
+			case C.ProtocolHTTP:
+				r.StreamSniffers = append(r.StreamSniffers, sniff.HTTPHost)
+			case C.ProtocolQUIC:
+				r.PacketSniffers = append(r.PacketSniffers, sniff.QUICClientHello)
+			case C.ProtocolDNS:
+				r.StreamSniffers = append(r.StreamSniffers, sniff.StreamDomainNameQuery)
+				r.PacketSniffers = append(r.PacketSniffers, sniff.DomainNameQuery)
+			case C.ProtocolSTUN:
+				r.PacketSniffers = append(r.PacketSniffers, sniff.STUNMessage)
+			case C.ProtocolBitTorrent:
+				r.StreamSniffers = append(r.StreamSniffers, sniff.BitTorrent)
+				r.PacketSniffers = append(r.PacketSniffers, sniff.UTP)
+				r.PacketSniffers = append(r.PacketSniffers, sniff.UDPTracker)
+			case C.ProtocolDTLS:
+				r.PacketSniffers = append(r.PacketSniffers, sniff.DTLSRecord)
+			case C.ProtocolSSH:
+				r.StreamSniffers = append(r.StreamSniffers, sniff.SSH)
+			case C.ProtocolRDP:
+				r.StreamSniffers = append(r.StreamSniffers, sniff.RDP)
+			case C.ProtocolNTP:
+				r.PacketSniffers = append(r.PacketSniffers, sniff.NTP)
+			default:
+				return E.New("unknown sniffer: ", name)
+			}
 		}
 	}
+
+	// Build domain matcher for skip_domain filtering
+	if len(opts.SkipDomain) > 0 || len(opts.SkipDomainSuffix) > 0 {
+		matcher := domain.NewMatcher(opts.SkipDomain, opts.SkipDomainSuffix, false)
+		r.SkipDomainMatcher = matcher
+	}
+
+	// Build IP set for skip_src_address filtering
+	if len(opts.SkipSrcAddress) > 0 {
+		var builder netipx.IPSetBuilder
+		for _, cidr := range opts.SkipSrcAddress {
+			prefix, err := netip.ParsePrefix(cidr)
+			if err != nil {
+				// Try parsing as single IP
+				addr, addrErr := netip.ParseAddr(cidr)
+				if addrErr != nil {
+					return E.Cause(err, "skip_src_address: ", cidr)
+				}
+				prefix = netip.PrefixFrom(addr, addr.BitLen())
+			}
+			builder.AddPrefix(prefix)
+		}
+		ipSet, err := builder.IPSet()
+		if err != nil {
+			return E.Cause(err, "skip_src_address")
+		}
+		r.SkipSrcIPSet = ipSet
+	}
+
+	// Build IP set for skip_dst_address filtering
+	if len(opts.SkipDstAddress) > 0 {
+		var builder netipx.IPSetBuilder
+		for _, cidr := range opts.SkipDstAddress {
+			prefix, err := netip.ParsePrefix(cidr)
+			if err != nil {
+				// Try parsing as single IP
+				addr, addrErr := netip.ParseAddr(cidr)
+				if addrErr != nil {
+					return E.Cause(err, "skip_dst_address: ", cidr)
+				}
+				prefix = netip.PrefixFrom(addr, addr.BitLen())
+			}
+			builder.AddPrefix(prefix)
+		}
+		ipSet, err := builder.IPSet()
+		if err != nil {
+			return E.Cause(err, "skip_dst_address")
+		}
+		r.SkipDstIPSet = ipSet
+	}
+
 	return nil
 }
 
 func (r *RuleActionSniff) String() string {
-	if len(r.SnifferNames) == 0 && r.Timeout == 0 {
-		return "sniff"
-	} else if len(r.SnifferNames) > 0 && r.Timeout == 0 {
-		return F.ToString("sniff(", strings.Join(r.SnifferNames, ","), ")")
-	} else if len(r.SnifferNames) == 0 && r.Timeout > 0 {
-		return F.ToString("sniff(", r.Timeout.String(), ")")
-	} else {
-		return F.ToString("sniff(", strings.Join(r.SnifferNames, ","), ",", r.Timeout.String(), ")")
+	var parts []string
+	if len(r.SnifferNames) > 0 {
+		parts = append(parts, strings.Join(r.SnifferNames, ","))
 	}
+	if r.Timeout > 0 {
+		parts = append(parts, r.Timeout.String())
+	}
+	if r.OverrideDestination {
+		parts = append(parts, "override-dest")
+	}
+	if len(parts) == 0 {
+		return "sniff"
+	}
+	return F.ToString("sniff(", strings.Join(parts, ","), ")")
 }
 
 type RuleActionResolve struct {

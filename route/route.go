@@ -635,7 +635,9 @@ func (r *Router) getCachedDomainMatch(domain string) (tag string, found bool) {
 	if r.hashMatchCache == nil {
 		return "", false
 	}
+	r.hashMatchCache.RLock()
 	tag, found = r.hashMatchCache.domainCache[domain]
+	r.hashMatchCache.RUnlock()
 	return
 }
 
@@ -643,17 +645,21 @@ func (r *Router) setCachedDomainMatch(domain string, tag string) {
 	if r.hashMatchCache == nil {
 		return
 	}
+	r.hashMatchCache.Lock()
 	if len(r.hashMatchCache.domainCache) >= r.hashMatchCache.maxSize {
 		r.hashMatchCache.domainCache = make(map[string]string)
 	}
 	r.hashMatchCache.domainCache[domain] = tag
+	r.hashMatchCache.Unlock()
 }
 
 func (r *Router) getCachedIPMatch(ip string) (tag string, found bool) {
 	if r.hashMatchCache == nil {
 		return "", false
 	}
+	r.hashMatchCache.RLock()
 	tag, found = r.hashMatchCache.ipCache[ip]
+	r.hashMatchCache.RUnlock()
 	return
 }
 
@@ -661,10 +667,12 @@ func (r *Router) setCachedIPMatch(ip string, tag string) {
 	if r.hashMatchCache == nil {
 		return
 	}
+	r.hashMatchCache.Lock()
 	if len(r.hashMatchCache.ipCache) >= r.hashMatchCache.maxSize {
 		r.hashMatchCache.ipCache = make(map[string]string)
 	}
 	r.hashMatchCache.ipCache[ip] = tag
+	r.hashMatchCache.Unlock()
 }
 
 // shouldSkipForDomain checks if a domain matches skip filters (static or ruleset)

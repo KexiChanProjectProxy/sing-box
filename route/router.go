@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/asn"
@@ -98,6 +99,7 @@ type ipInterval struct {
 }
 
 type hashMatchCache struct {
+	sync.RWMutex
 	domainCache map[string]string
 	ipCache     map[string]string
 	maxSize     int

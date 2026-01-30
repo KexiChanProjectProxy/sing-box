@@ -234,6 +234,9 @@ func (r *Router) LoadHashRuleSetsFromDirectory(ctx context.Context, dirPath stri
 			rulesetOptions.Format = C.RuleSetFormatSource
 		}
 
+		// Disable file watching for hash-only rulesets to prevent "too many open files"
+		rulesetOptions.DisableWatcher = true
+
 		// Load the ruleset
 		ruleSet, err := R.NewRuleSet(ctx, r.logger, rulesetOptions)
 		if err != nil {

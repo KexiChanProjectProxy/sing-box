@@ -62,19 +62,22 @@ func NewLocalRuleSet(ctx context.Context, logger logger.Logger, options option.R
 		if err != nil {
 			return nil, err
 		}
-		watcher, err := fswatch.NewWatcher(fswatch.Options{
-			Path: []string{filePath},
-			Callback: func(path string) {
-				uErr := ruleSet.reloadFile(path)
-				if uErr != nil {
-					logger.Error(E.Cause(uErr, "reload rule-set ", options.Tag))
-				}
-			},
-		})
-		if err != nil {
-			return nil, err
+		// Only create file watcher if not disabled (hash-only rulesets disable watching)
+		if !options.DisableWatcher {
+			watcher, err := fswatch.NewWatcher(fswatch.Options{
+				Path: []string{filePath},
+				Callback: func(path string) {
+					uErr := ruleSet.reloadFile(path)
+					if uErr != nil {
+						logger.Error(E.Cause(uErr, "reload rule-set ", options.Tag))
+					}
+				},
+			})
+			if err != nil {
+				return nil, err
+			}
+			ruleSet.watcher = watcher
 		}
-		ruleSet.watcher = watcher
 	}
 	return ruleSet, nil
 }

@@ -18,12 +18,13 @@ import (
 )
 
 type _RuleSet struct {
-	Type          string        `json:"type,omitempty"`
-	Tag           string        `json:"tag"`
-	Format        string        `json:"format,omitempty"`
-	InlineOptions PlainRuleSet  `json:"-"`
-	LocalOptions  LocalRuleSet  `json:"-"`
-	RemoteOptions RemoteRuleSet `json:"-"`
+	Type           string        `json:"type,omitempty"`
+	Tag            string        `json:"tag"`
+	Format         string        `json:"format,omitempty"`
+	InlineOptions  PlainRuleSet  `json:"-"`
+	LocalOptions   LocalRuleSet  `json:"-"`
+	RemoteOptions  RemoteRuleSet `json:"-"`
+	DisableWatcher bool          `json:"-"` // Internal: disable file watching for hash-only rulesets
 }
 
 type RuleSet _RuleSet

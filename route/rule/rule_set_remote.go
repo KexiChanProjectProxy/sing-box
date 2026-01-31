@@ -344,29 +344,7 @@ func (s *RemoteRuleSet) ExtractDomainRules() (*adapter.ExtractedDomainRules, err
 	}
 
 	for _, ruleOpt := range s.ruleOptions {
-		switch ruleOpt.Type {
-		case "", C.RuleTypeDefault:
-			result.ExactDomains = append(result.ExactDomains, ruleOpt.DefaultOptions.Domain...)
-			result.DomainSuffixes = append(result.DomainSuffixes, ruleOpt.DefaultOptions.DomainSuffix...)
-			result.DomainKeywords = append(result.DomainKeywords, ruleOpt.DefaultOptions.DomainKeyword...)
-			result.DomainRegex = append(result.DomainRegex, ruleOpt.DefaultOptions.DomainRegex...)
-		case C.RuleTypeLogical:
-			// Recursively extract from logical rules
-			for _, subRule := range ruleOpt.LogicalOptions.Rules {
-				if subRule.DefaultOptions.Domain != nil {
-					result.ExactDomains = append(result.ExactDomains, subRule.DefaultOptions.Domain...)
-				}
-				if subRule.DefaultOptions.DomainSuffix != nil {
-					result.DomainSuffixes = append(result.DomainSuffixes, subRule.DefaultOptions.DomainSuffix...)
-				}
-				if subRule.DefaultOptions.DomainKeyword != nil {
-					result.DomainKeywords = append(result.DomainKeywords, subRule.DefaultOptions.DomainKeyword...)
-				}
-				if subRule.DefaultOptions.DomainRegex != nil {
-					result.DomainRegex = append(result.DomainRegex, subRule.DefaultOptions.DomainRegex...)
-				}
-			}
-		}
+		extractDomainRulesFromHeadless(ruleOpt, result)
 	}
 
 	return result, nil
@@ -381,17 +359,7 @@ func (s *RemoteRuleSet) ExtractIPRules() (*adapter.ExtractedIPRules, error) {
 	}
 
 	for _, ruleOpt := range s.ruleOptions {
-		switch ruleOpt.Type {
-		case "", C.RuleTypeDefault:
-			result.IPCIDRs = append(result.IPCIDRs, ruleOpt.DefaultOptions.IPCIDR...)
-		case C.RuleTypeLogical:
-			// Recursively extract from logical rules
-			for _, subRule := range ruleOpt.LogicalOptions.Rules {
-				if subRule.DefaultOptions.IPCIDR != nil {
-					result.IPCIDRs = append(result.IPCIDRs, subRule.DefaultOptions.IPCIDR...)
-				}
-			}
-		}
+		extractIPRulesFromHeadless(ruleOpt, result)
 	}
 
 	return result, nil

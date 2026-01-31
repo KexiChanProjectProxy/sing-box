@@ -215,6 +215,43 @@ func (s *LocalRuleSet) Match(metadata *adapter.InboundContext) bool {
 	return false
 }
 
+// extractDomainRulesFromHeadless recursively extracts domain rules from a headless rule
+func extractDomainRulesFromHeadless(rule option.HeadlessRule, result *adapter.ExtractedDomainRules) {
+	switch rule.Type {
+	case "", C.RuleTypeDefault:
+		result.ExactDomains = append(result.ExactDomains, rule.DefaultOptions.Domain...)
+		result.DomainSuffixes = append(result.DomainSuffixes, rule.DefaultOptions.DomainSuffix...)
+		result.DomainKeywords = append(result.DomainKeywords, rule.DefaultOptions.DomainKeyword...)
+		result.DomainRegex = append(result.DomainRegex, rule.DefaultOptions.DomainRegex...)
+	case C.RuleTypeLogical:
+		// Recursively process nested logical rules
+		for _, subRule := range rule.LogicalOptions.Rules {
+			extractDomainRulesFromHeadless(subRule, result)
+		}
+	}
+}
+
+// extractIPRulesFromHeadless recursively extracts IP rules from a headless rule
+func extractIPRulesFromHeadless(rule option.HeadlessRule, result *adapter.ExtractedIPRules) {
+	switch rule.Type {
+	case "", C.RuleTypeDefault:
+		// Extract from IPCIDR string array
+		result.IPCIDRs = append(result.IPCIDRs, rule.DefaultOptions.IPCIDR...)
+
+		// Extract from IPSet object (used in .srs geoip files)
+		if rule.DefaultOptions.IPSet != nil {
+			for _, prefix := range rule.DefaultOptions.IPSet.Prefixes() {
+				result.IPCIDRs = append(result.IPCIDRs, prefix.String())
+			}
+		}
+	case C.RuleTypeLogical:
+		// Recursively process nested logical rules
+		for _, subRule := range rule.LogicalOptions.Rules {
+			extractIPRulesFromHeadless(subRule, result)
+		}
+	}
+}
+
 func (s *LocalRuleSet) ExtractDomainRules() (*adapter.ExtractedDomainRules, error) {
 	s.access.RLock()
 	defer s.access.RUnlock()
@@ -227,29 +264,7 @@ func (s *LocalRuleSet) ExtractDomainRules() (*adapter.ExtractedDomainRules, erro
 	}
 
 	for _, ruleOpt := range s.ruleOptions {
-		switch ruleOpt.Type {
-		case "", C.RuleTypeDefault:
-			result.ExactDomains = append(result.ExactDomains, ruleOpt.DefaultOptions.Domain...)
-			result.DomainSuffixes = append(result.DomainSuffixes, ruleOpt.DefaultOptions.DomainSuffix...)
-			result.DomainKeywords = append(result.DomainKeywords, ruleOpt.DefaultOptions.DomainKeyword...)
-			result.DomainRegex = append(result.DomainRegex, ruleOpt.DefaultOptions.DomainRegex...)
-		case C.RuleTypeLogical:
-			// Recursively extract from logical rules
-			for _, subRule := range ruleOpt.LogicalOptions.Rules {
-				if subRule.DefaultOptions.Domain != nil {
-					result.ExactDomains = append(result.ExactDomains, subRule.DefaultOptions.Domain...)
-				}
-				if subRule.DefaultOptions.DomainSuffix != nil {
-					result.DomainSuffixes = append(result.DomainSuffixes, subRule.DefaultOptions.DomainSuffix...)
-				}
-				if subRule.DefaultOptions.DomainKeyword != nil {
-					result.DomainKeywords = append(result.DomainKeywords, subRule.DefaultOptions.DomainKeyword...)
-				}
-				if subRule.DefaultOptions.DomainRegex != nil {
-					result.DomainRegex = append(result.DomainRegex, subRule.DefaultOptions.DomainRegex...)
-				}
-			}
-		}
+		extractDomainRulesFromHeadless(ruleOpt, result)
 	}
 
 	return result, nil
@@ -264,31 +279,7 @@ func (s *LocalRuleSet) ExtractIPRules() (*adapter.ExtractedIPRules, error) {
 	}
 
 	for _, ruleOpt := range s.ruleOptions {
-		switch ruleOpt.Type {
-		case "", C.RuleTypeDefault:
-			// Extract from IPCIDR string array
-			result.IPCIDRs = append(result.IPCIDRs, ruleOpt.DefaultOptions.IPCIDR...)
-
-			// Extract from IPSet object (used in .srs geoip files)
-			if ruleOpt.DefaultOptions.IPSet != nil {
-				// Convert IPSet to CIDR strings
-				for _, prefix := range ruleOpt.DefaultOptions.IPSet.Prefixes() {
-					result.IPCIDRs = append(result.IPCIDRs, prefix.String())
-				}
-			}
-		case C.RuleTypeLogical:
-			// Recursively extract from logical rules
-			for _, subRule := range ruleOpt.LogicalOptions.Rules {
-				if subRule.DefaultOptions.IPCIDR != nil {
-					result.IPCIDRs = append(result.IPCIDRs, subRule.DefaultOptions.IPCIDR...)
-				}
-				if subRule.DefaultOptions.IPSet != nil {
-					for _, prefix := range subRule.DefaultOptions.IPSet.Prefixes() {
-						result.IPCIDRs = append(result.IPCIDRs, prefix.String())
-					}
-				}
-			}
-		}
+		extractIPRulesFromHeadless(ruleOpt, result)
 	}
 
 	return result, nil

@@ -85,23 +85,3 @@ func (r *PortRangeItem) String() string {
 	}
 	return description
 }
-
-// ParsePortRange converts user-friendly "8080-8880" or "8080:8880" to internal "8080:8880"
-func ParsePortRange(userRange string) (string, error) {
-	// Already has colon - pass through
-	if strings.Contains(userRange, ":") {
-		return userRange, nil
-	}
-
-	// Convert dash to colon
-	if strings.Contains(userRange, "-") {
-		parts := strings.SplitN(userRange, "-", 2)
-		if len(parts) != 2 {
-			return "", E.New("invalid port range format: ", userRange)
-		}
-		return parts[0] + ":" + parts[1], nil
-	}
-
-	// No separator - invalid
-	return "", E.New("port range must contain '-' or ':', got: ", userRange)
-}

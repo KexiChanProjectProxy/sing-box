@@ -44,7 +44,6 @@ type RemoteRuleSet struct {
 	dialer         N.Dialer
 	access         sync.RWMutex
 	rules          []adapter.HeadlessRule
-	ruleOptions    []option.HeadlessRule
 	metadata       adapter.RuleSetMetadata
 	lastUpdated    time.Time
 	lastEtag       string
@@ -195,7 +194,6 @@ func (s *RemoteRuleSet) loadBytes(content []byte) error {
 	s.metadata.ContainsWIFIRule = hasHeadlessRule(plainRuleSet.Rules, isWIFIHeadlessRule)
 	s.metadata.ContainsIPCIDRRule = hasHeadlessRule(plainRuleSet.Rules, isIPCIDRHeadlessRule)
 	s.rules = rules
-	s.ruleOptions = plainRuleSet.Rules
 	callbacks := s.callbacks.Array()
 	s.access.Unlock()
 	for _, callback := range callbacks {
@@ -330,37 +328,4 @@ func (s *RemoteRuleSet) Match(metadata *adapter.InboundContext) bool {
 		}
 	}
 	return false
-}
-
-func (s *RemoteRuleSet) ExtractDomainRules() (*adapter.ExtractedDomainRules, error) {
-	s.access.RLock()
-	defer s.access.RUnlock()
-
-	result := &adapter.ExtractedDomainRules{
-		ExactDomains:   make([]string, 0),
-		DomainSuffixes: make([]string, 0),
-		DomainKeywords: make([]string, 0),
-		DomainRegex:    make([]string, 0),
-	}
-
-	for _, ruleOpt := range s.ruleOptions {
-		extractDomainRulesFromHeadless(ruleOpt, result)
-	}
-
-	return result, nil
-}
-
-func (s *RemoteRuleSet) ExtractIPRules() (*adapter.ExtractedIPRules, error) {
-	s.access.RLock()
-	defer s.access.RUnlock()
-
-	result := &adapter.ExtractedIPRules{
-		IPCIDRs: make([]string, 0),
-	}
-
-	for _, ruleOpt := range s.ruleOptions {
-		extractIPRulesFromHeadless(ruleOpt, result)
-	}
-
-	return result, nil
 }

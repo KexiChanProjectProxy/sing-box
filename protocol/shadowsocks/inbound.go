@@ -83,7 +83,7 @@ func newInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 	default:
 		err = E.New("unsupported method: ", options.Method)
 	}
-	inbound.listener, err = listener.New(listener.Options{
+	inbound.listener = listener.New(listener.Options{
 		Context:                  ctx,
 		Logger:                   logger,
 		Network:                  options.Network.Build(),
@@ -92,9 +92,6 @@ func newInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		PacketHandler:            inbound,
 		ThreadUnsafePacketWriter: true,
 	})
-	if err != nil {
-		return nil, err
-	}
 	return inbound, err
 }
 

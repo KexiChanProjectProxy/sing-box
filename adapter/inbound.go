@@ -42,13 +42,12 @@ type InboundManager interface {
 }
 
 type InboundContext struct {
-	Inbound       string
-	InboundType   string
-	IPVersion     uint8
-	Network       string
-	BindInterface string
-	Source        M.Socksaddr
-	Destination   M.Socksaddr
+	Inbound     string
+	InboundType string
+	IPVersion   uint8
+	Network     string
+	Source      M.Socksaddr
+	Destination M.Socksaddr
 	User        string
 	Outbound    string
 

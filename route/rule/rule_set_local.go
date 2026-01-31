@@ -27,17 +27,16 @@ import (
 var _ adapter.RuleSet = (*LocalRuleSet)(nil)
 
 type LocalRuleSet struct {
-	ctx         context.Context
-	logger      logger.Logger
-	tag         string
-	access      sync.RWMutex
-	rules       []adapter.HeadlessRule
-	ruleOptions []option.HeadlessRule
-	metadata    adapter.RuleSetMetadata
-	fileFormat  string
-	watcher     *fswatch.Watcher
-	callbacks   list.List[adapter.RuleSetUpdateCallback]
-	refs        atomic.Int32
+	ctx        context.Context
+	logger     logger.Logger
+	tag        string
+	access     sync.RWMutex
+	rules      []adapter.HeadlessRule
+	metadata   adapter.RuleSetMetadata
+	fileFormat string
+	watcher    *fswatch.Watcher
+	callbacks  list.List[adapter.RuleSetUpdateCallback]
+	refs       atomic.Int32
 }
 
 func NewLocalRuleSet(ctx context.Context, logger logger.Logger, options option.RuleSet) (*LocalRuleSet, error) {
@@ -62,22 +61,19 @@ func NewLocalRuleSet(ctx context.Context, logger logger.Logger, options option.R
 		if err != nil {
 			return nil, err
 		}
-		// Only create file watcher if not disabled (hash-only rulesets disable watching)
-		if !options.DisableWatcher {
-			watcher, err := fswatch.NewWatcher(fswatch.Options{
-				Path: []string{filePath},
-				Callback: func(path string) {
-					uErr := ruleSet.reloadFile(path)
-					if uErr != nil {
-						logger.Error(E.Cause(uErr, "reload rule-set ", options.Tag))
-					}
-				},
-			})
-			if err != nil {
-				return nil, err
-			}
-			ruleSet.watcher = watcher
+		watcher, err := fswatch.NewWatcher(fswatch.Options{
+			Path: []string{filePath},
+			Callback: func(path string) {
+				uErr := ruleSet.reloadFile(path)
+				if uErr != nil {
+					logger.Error(E.Cause(uErr, "reload rule-set ", options.Tag))
+				}
+			},
+		})
+		if err != nil {
+			return nil, err
 		}
+		ruleSet.watcher = watcher
 	}
 	return ruleSet, nil
 }
@@ -147,7 +143,6 @@ func (s *LocalRuleSet) reloadRules(headlessRules []option.HeadlessRule) error {
 	metadata.ContainsIPCIDRRule = hasHeadlessRule(headlessRules, isIPCIDRHeadlessRule)
 	s.access.Lock()
 	s.rules = rules
-	s.ruleOptions = headlessRules
 	s.metadata = metadata
 	callbacks := s.callbacks.Array()
 	s.access.Unlock()
@@ -213,74 +208,4 @@ func (s *LocalRuleSet) Match(metadata *adapter.InboundContext) bool {
 		}
 	}
 	return false
-}
-
-// extractDomainRulesFromHeadless recursively extracts domain rules from a headless rule
-func extractDomainRulesFromHeadless(rule option.HeadlessRule, result *adapter.ExtractedDomainRules) {
-	switch rule.Type {
-	case "", C.RuleTypeDefault:
-		result.ExactDomains = append(result.ExactDomains, rule.DefaultOptions.Domain...)
-		result.DomainSuffixes = append(result.DomainSuffixes, rule.DefaultOptions.DomainSuffix...)
-		result.DomainKeywords = append(result.DomainKeywords, rule.DefaultOptions.DomainKeyword...)
-		result.DomainRegex = append(result.DomainRegex, rule.DefaultOptions.DomainRegex...)
-	case C.RuleTypeLogical:
-		// Recursively process nested logical rules
-		for _, subRule := range rule.LogicalOptions.Rules {
-			extractDomainRulesFromHeadless(subRule, result)
-		}
-	}
-}
-
-// extractIPRulesFromHeadless recursively extracts IP rules from a headless rule
-func extractIPRulesFromHeadless(rule option.HeadlessRule, result *adapter.ExtractedIPRules) {
-	switch rule.Type {
-	case "", C.RuleTypeDefault:
-		// Extract from IPCIDR string array
-		result.IPCIDRs = append(result.IPCIDRs, rule.DefaultOptions.IPCIDR...)
-
-		// Extract from IPSet object (used in .srs geoip files)
-		if rule.DefaultOptions.IPSet != nil {
-			for _, prefix := range rule.DefaultOptions.IPSet.Prefixes() {
-				result.IPCIDRs = append(result.IPCIDRs, prefix.String())
-			}
-		}
-	case C.RuleTypeLogical:
-		// Recursively process nested logical rules
-		for _, subRule := range rule.LogicalOptions.Rules {
-			extractIPRulesFromHeadless(subRule, result)
-		}
-	}
-}
-
-func (s *LocalRuleSet) ExtractDomainRules() (*adapter.ExtractedDomainRules, error) {
-	s.access.RLock()
-	defer s.access.RUnlock()
-
-	result := &adapter.ExtractedDomainRules{
-		ExactDomains:   make([]string, 0),
-		DomainSuffixes: make([]string, 0),
-		DomainKeywords: make([]string, 0),
-		DomainRegex:    make([]string, 0),
-	}
-
-	for _, ruleOpt := range s.ruleOptions {
-		extractDomainRulesFromHeadless(ruleOpt, result)
-	}
-
-	return result, nil
-}
-
-func (s *LocalRuleSet) ExtractIPRules() (*adapter.ExtractedIPRules, error) {
-	s.access.RLock()
-	defer s.access.RUnlock()
-
-	result := &adapter.ExtractedIPRules{
-		IPCIDRs: make([]string, 0),
-	}
-
-	for _, ruleOpt := range s.ruleOptions {
-		extractIPRulesFromHeadless(ruleOpt, result)
-	}
-
-	return result, nil
 }

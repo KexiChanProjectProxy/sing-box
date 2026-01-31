@@ -33,7 +33,6 @@ type Listener struct {
 	setSystemProxy           bool
 	systemProxySOCKS         bool
 	tproxy                   bool
-	ipFilter                 *IPFilter
 
 	tcpListener          net.Listener
 	systemProxy          settings.SystemProxy
@@ -61,31 +60,7 @@ type Options struct {
 
 func New(
 	options Options,
-) (*Listener, error) {
-	// Build IP filter if configured
-	var ipFilter *IPFilter
-	whitelistCount := len(options.Listen.IPWhitelist)
-	blacklistCount := len(options.Listen.IPBlacklist)
-
-	if whitelistCount > 0 || blacklistCount > 0 {
-		var err error
-		ipFilter, err = NewIPFilter(options.Listen.IPWhitelist, options.Listen.IPBlacklist)
-		if err != nil {
-			return nil, E.Cause(err, "create IP filter")
-		}
-
-		// Log configuration
-		if whitelistCount > 0 {
-			options.Logger.Info("IP whitelist enabled with ", whitelistCount, " entries")
-		}
-		if blacklistCount > 0 {
-			options.Logger.Info("IP blacklist enabled with ", blacklistCount, " entries")
-		}
-		if whitelistCount > 0 && blacklistCount > 0 {
-			options.Logger.Warn("both IP whitelist and blacklist configured, using whitelist only")
-		}
-	}
-
+) *Listener {
 	return &Listener{
 		ctx:                      options.Context,
 		logger:                   options.Logger,
@@ -99,8 +74,7 @@ func New(
 		setSystemProxy:           options.SetSystemProxy,
 		systemProxySOCKS:         options.SystemProxySOCKS,
 		tproxy:                   options.TProxy,
-		ipFilter:                 ipFilter,
-	}, nil
+	}
 }
 
 func (l *Listener) Start() error {

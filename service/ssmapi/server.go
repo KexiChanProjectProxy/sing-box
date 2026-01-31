@@ -52,22 +52,18 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 		ctx:     ctx,
 		cancel:  cancel,
 		logger:  logger,
+		listener: listener.New(listener.Options{
+			Context: ctx,
+			Logger:  logger,
+			Network: []string{N.NetworkTCP},
+			Listen:  options.ListenOptions,
+		}),
 		httpServer: &http.Server{
 			Handler: chiRouter,
 		},
 		traffics:  make(map[string]*TrafficManager),
 		users:     make(map[string]*UserManager),
 		cachePath: options.CachePath,
-	}
-	var err error
-	s.listener, err = listener.New(listener.Options{
-			Context: ctx,
-			Logger:  logger,
-			Network: []string{N.NetworkTCP},
-			Listen:  options.ListenOptions,
-		})
-	if err != nil {
-		return nil, err
 	}
 	inboundManager := service.FromContext[adapter.InboundManager](ctx)
 	if options.Servers.Size() == 0 {

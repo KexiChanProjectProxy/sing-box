@@ -46,16 +46,12 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		Adapter: inbound.NewAdapter(C.TypeHysteria, tag),
 		router:  router,
 		logger:  logger,
-		tlsConfig: tlsConfig,
-	}
-	// err already declared
-	inbound.listener, err = listener.New(listener.Options{
+		listener: listener.New(listener.Options{
 			Context: ctx,
 			Logger:  logger,
 			Listen:  options.ListenOptions,
-		})
-	if err != nil {
-		return nil, err
+		}),
+		tlsConfig: tlsConfig,
 	}
 	var sendBps, receiveBps uint64
 	if options.Up.Value() > 0 {
@@ -123,7 +119,6 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, source M.S
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = h.listener.ListenOptions().InboundOptions
-	metadata.BindInterface = h.listener.ListenOptions().BindInterface
 	metadata.OriginDestination = h.listener.UDPAddr()
 	metadata.Source = source
 	metadata.Destination = destination
@@ -147,7 +142,6 @@ func (h *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
 	metadata.InboundOptions = h.listener.ListenOptions().InboundOptions
-	metadata.BindInterface = h.listener.ListenOptions().BindInterface
 	metadata.OriginDestination = h.listener.UDPAddr()
 	metadata.Source = source
 	metadata.Destination = destination

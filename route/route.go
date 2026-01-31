@@ -97,7 +97,6 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 	if err != nil {
 		return err
 	}
-	r.matchHashRuleSets(&metadata)
 	var selectedOutbound adapter.Outbound
 	if selectedRule != nil {
 		switch action := selectedRule.Action().(type) {
@@ -212,7 +211,6 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if err != nil {
 		return err
 	}
-	r.matchHashRuleSets(&metadata)
 	var selectedOutbound adapter.Outbound
 	var selectReturn bool
 	if selectedRule != nil {
@@ -345,7 +343,6 @@ func (r *Router) matchRule(
 	//nolint:staticcheck
 	if metadata.InboundOptions != common.DefaultValue[option.InboundOptions]() {
 		if !preMatch && metadata.InboundOptions.SniffEnabled {
-			r.logger.WarnContext(ctx, "inbound-level sniff options are deprecated; please migrate to route rule actions")
 			r.logger.DebugContext(ctx, "legacy sniff action triggered for inbound ", metadata.Inbound)
 			newBuffer, newPackerBuffers, newErr := r.actionSniff(ctx, metadata, &R.RuleActionSniff{
 				OverrideDestination: metadata.InboundOptions.SniffOverrideDestination,
@@ -492,228 +489,6 @@ match:
 	return
 }
 
-func (r *Router) matchHashRuleSets(metadata *adapter.InboundContext) bool {
-	if r.hashDomainMatcher == nil && r.hashIPMatcher == nil {
-		r.logger.Debug("matchHashRuleSets: matchers are nil, skipping")
-		return false
-	}
-
-	var bestMatch string
-	var bestSpecificity int
-	var domainHost string
-	var matchType string // For logging: "exact", "suffix", "keyword", "regex", "ip"
-
-	if r.hashDomainMatcher != nil {
-		domainHost = metadata.Domain
-		if domainHost == "" {
-			domainHost = metadata.Destination.Fqdn
-		}
-
-		if domainHost != "" {
-			domainHost = strings.ToLower(domainHost)
-			r.logger.Debug("matchHashRuleSets: checking domain=", domainHost, ", regex count=", len(r.hashDomainMatcher.domainRegex))
-
-			if cachedTag, found := r.getCachedDomainMatch(domainHost); found {
-				if cachedTag != "" {
-					metadata.MatchedRuleSet = cachedTag
-					r.logger.Debug("hash ruleset matched (cached): domain=", domainHost, " → ruleset=", cachedTag)
-					return true
-				}
-				goto ipMatching
-			}
-
-			if entry, exists := r.hashDomainMatcher.exactDomains[domainHost]; exists {
-				if entry.specificity > bestSpecificity {
-					bestSpecificity = entry.specificity
-					bestMatch = entry.rulesetTag
-					matchType = "exact"
-				}
-			}
-
-			if bestSpecificity < 100 {
-				parts := strings.Split(domainHost, ".")
-				for i := 0; i < len(parts); i++ {
-					suffix := strings.Join(parts[i:], ".")
-					if entry, exists := r.hashDomainMatcher.domainSuffixes[suffix]; exists {
-						if entry.specificity > bestSpecificity {
-							bestSpecificity = entry.specificity
-							bestMatch = entry.rulesetTag
-							matchType = "suffix"
-						}
-					}
-				}
-			}
-
-			if bestSpecificity < 10 {
-				for _, keywordEntry := range r.hashDomainMatcher.domainKeywords {
-					if strings.Contains(domainHost, keywordEntry.keyword) {
-						if keywordEntry.specificity > bestSpecificity {
-							bestSpecificity = keywordEntry.specificity
-							bestMatch = keywordEntry.rulesetTag
-							matchType = "keyword"
-						}
-					}
-				}
-			}
-
-			if bestSpecificity < 1 {
-				for _, regexEntry := range r.hashDomainMatcher.domainRegex {
-					if regexEntry.pattern.MatchString(domainHost) {
-						if regexEntry.specificity > bestSpecificity {
-							bestSpecificity = regexEntry.specificity
-							bestMatch = regexEntry.rulesetTag
-							matchType = "regex"
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if bestMatch != "" {
-		r.setCachedDomainMatch(domainHost, bestMatch)
-		metadata.MatchedRuleSet = bestMatch
-		r.logger.Info("hash ruleset matched (", matchType, "): domain=", domainHost, " → ruleset=", bestMatch)
-		return true
-	}
-
-	if domainHost != "" {
-		r.setCachedDomainMatch(domainHost, "")
-	}
-
-ipMatching:
-	if r.hashIPMatcher != nil {
-		destIP := metadata.Destination.Addr
-		if !destIP.IsValid() && len(metadata.DestinationAddresses) > 0 {
-			destIP = metadata.DestinationAddresses[0]
-		}
-
-		if destIP.IsValid() {
-			ipStr := destIP.String()
-
-			if cachedTag, found := r.getCachedIPMatch(ipStr); found {
-				if cachedTag != "" {
-					metadata.MatchedRuleSet = cachedTag
-					r.logger.Debug("hash ruleset matched (cached): ip=", ipStr, " → ruleset=", cachedTag)
-					return true
-				}
-				return false
-			}
-
-			var tree *ipIntervalTree
-			if destIP.Is4() {
-				tree = r.hashIPMatcher.ipv4Tree
-			} else {
-				tree = r.hashIPMatcher.ipv6Tree
-			}
-
-			if tree != nil {
-				for _, interval := range tree.intervals {
-					if ipInRange(ipStr, interval.start, interval.end) {
-						r.setCachedIPMatch(ipStr, interval.rulesetTag)
-						metadata.MatchedRuleSet = interval.rulesetTag
-						r.logger.Info("hash ruleset matched (ip): ip=", ipStr, " → ruleset=", interval.rulesetTag)
-						return true
-					}
-				}
-			}
-
-			r.setCachedIPMatch(ipStr, "")
-		}
-	}
-
-	r.logger.Debug("hash ruleset no match: domain=", domainHost, ", ip=", metadata.Destination.Addr)
-	return false
-}
-
-func ipInRange(ip, start, end string) bool {
-	ipAddr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return false
-	}
-	startAddr, err := netip.ParseAddr(start)
-	if err != nil {
-		return false
-	}
-	endAddr, err := netip.ParseAddr(end)
-	if err != nil {
-		return false
-	}
-
-	return !ipAddr.Less(startAddr) && !endAddr.Less(ipAddr)
-}
-
-func (r *Router) getCachedDomainMatch(domain string) (tag string, found bool) {
-	if r.hashMatchCache == nil {
-		return "", false
-	}
-	r.hashMatchCache.RLock()
-	tag, found = r.hashMatchCache.domainCache[domain]
-	r.hashMatchCache.RUnlock()
-	return
-}
-
-func (r *Router) setCachedDomainMatch(domain string, tag string) {
-	if r.hashMatchCache == nil {
-		return
-	}
-	r.hashMatchCache.Lock()
-	if len(r.hashMatchCache.domainCache) >= r.hashMatchCache.maxSize {
-		r.hashMatchCache.domainCache = make(map[string]string)
-	}
-	r.hashMatchCache.domainCache[domain] = tag
-	r.hashMatchCache.Unlock()
-}
-
-func (r *Router) getCachedIPMatch(ip string) (tag string, found bool) {
-	if r.hashMatchCache == nil {
-		return "", false
-	}
-	r.hashMatchCache.RLock()
-	tag, found = r.hashMatchCache.ipCache[ip]
-	r.hashMatchCache.RUnlock()
-	return
-}
-
-func (r *Router) setCachedIPMatch(ip string, tag string) {
-	if r.hashMatchCache == nil {
-		return
-	}
-	r.hashMatchCache.Lock()
-	if len(r.hashMatchCache.ipCache) >= r.hashMatchCache.maxSize {
-		r.hashMatchCache.ipCache = make(map[string]string)
-	}
-	r.hashMatchCache.ipCache[ip] = tag
-	r.hashMatchCache.Unlock()
-}
-
-// shouldSkipForDomain checks if a domain matches skip filters (static or ruleset)
-func (r *Router) shouldSkipForDomain(action *R.RuleActionSniff, metadata *adapter.InboundContext, domain string) bool {
-	if domain == "" {
-		return false
-	}
-
-	domainLower := strings.ToLower(domain)
-
-	// Check static domain matcher
-	if action.SkipDomainMatcher != nil {
-		if (*action.SkipDomainMatcher).Match(domainLower) {
-			return true
-		}
-	}
-
-	// Check ruleset matcher
-	if action.SkipDomainRuleSetItem != nil {
-		tempMetadata := *metadata
-		tempMetadata.Domain = domain
-		if action.SkipDomainRuleSetItem.Match(&tempMetadata) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (r *Router) actionSniff(
 	ctx context.Context, metadata *adapter.InboundContext, action *R.RuleActionSniff,
 	inputConn net.Conn, inputPacketConn N.PacketConn, inputBuffers []*buf.Buffer, inputPacketBuffers []*N.PacketBuffer,
@@ -721,30 +496,6 @@ func (r *Router) actionSniff(
 	r.logger.DebugContext(ctx, "actionSniff called: inputConn=", inputConn != nil, ", inputPacketConn=", inputPacketConn != nil,
 		", destination=", metadata.Destination, ", action.StreamSniffers=", len(action.StreamSniffers),
 		", action.PacketSniffers=", len(action.PacketSniffers))
-
-	// IP-based skip filtering (before any sniffing attempt)
-	if action.SkipSrcIPSet != nil && metadata.Source.Addr.IsValid() {
-		if action.SkipSrcIPSet.Contains(metadata.Source.Addr) {
-			r.logger.DebugContext(ctx, "sniff skipped: source IP ", metadata.Source.Addr, " in skip list")
-			return
-		}
-	}
-
-	if action.SkipDstIPSet != nil && metadata.Destination.Addr.IsValid() {
-		if action.SkipDstIPSet.Contains(metadata.Destination.Addr) {
-			r.logger.DebugContext(ctx, "sniff skipped: destination IP ", metadata.Destination.Addr, " in skip list")
-			return
-		}
-	}
-
-	// Domain-based skip filtering BEFORE sniffing (if skip_sniffing enabled)
-	if action.SkipSniffing && metadata.Domain != "" {
-		if r.shouldSkipForDomain(action, metadata, metadata.Domain) {
-			r.logger.DebugContext(ctx, "sniff skipped: pre-sniff domain ", metadata.Domain, " in skip list (skip_sniffing=true)")
-			return
-		}
-	}
-
 	if sniff.Skip(metadata) {
 		r.logger.DebugContext(ctx, "sniff skipped due to port considered as server-first")
 		return
@@ -760,27 +511,9 @@ func (r *Router) actionSniff(
 			return
 		}
 		var streamSniffers []sniff.StreamSniffer
-
-		if len(action.ProtocolConfigs) > 0 {
-			// Advanced mode: filter sniffers by port
-			for _, config := range action.ProtocolConfigs {
-				// Skip if port doesn't match
-				if config.PortMatcher != nil && !config.PortMatcher.Match(metadata) {
-					continue
-				}
-				// Add this protocol's sniffers
-				streamSniffers = append(streamSniffers, config.StreamSniffers...)
-			}
-
-			if len(streamSniffers) == 0 {
-				r.logger.DebugContext(ctx, "no stream sniffers match port filter for port ", metadata.Destination.Port)
-				return
-			}
-		} else if len(action.StreamSniffers) > 0 {
-			// Legacy mode: use pre-configured sniffers
+		if len(action.StreamSniffers) > 0 {
 			streamSniffers = action.StreamSniffers
 		} else {
-			// Default: all stream sniffers
 			streamSniffers = []sniff.StreamSniffer{
 				sniff.TLSClientHello,
 				sniff.HTTPHost,
@@ -804,29 +537,8 @@ func (r *Router) actionSniff(
 		metadata.SnifferNames = action.SnifferNames
 		metadata.SniffError = err
 		if err == nil {
-			// Determine if we should override destination
-			shouldOverride := action.OverrideDestination // Start with global default
-
-			// Check per-protocol override setting (advanced mode)
-			if len(action.ProtocolConfigs) > 0 && metadata.Protocol != "" {
-				if config, ok := action.ProtocolConfigs[metadata.Protocol]; ok {
-					if config.OverrideDestination != nil {
-						shouldOverride = *config.OverrideDestination
-					}
-				}
-			}
-
-			// Apply skip_domain filter (prevents override even if enabled)
-			if shouldOverride && metadata.Domain != "" {
-				if r.shouldSkipForDomain(action, metadata, metadata.Domain) {
-					shouldOverride = false
-					r.logger.DebugContext(ctx, "skip override for domain: ", metadata.Domain)
-				}
-			}
-
-			// Perform override if allowed
 			//goland:noinspection GoDeprecation
-			if shouldOverride && M.IsDomainName(metadata.Domain) {
+			if action.OverrideDestination && M.IsDomainName(metadata.Domain) {
 				metadata.Destination = M.Socksaddr{
 					Fqdn: metadata.Domain,
 					Port: metadata.Destination.Port,
@@ -858,27 +570,9 @@ func (r *Router) actionSniff(
 			return slices.Equal(metadata.SnifferNames, action.SnifferNames) && errors.Is(metadata.SniffError, sniff.ErrNeedMoreData)
 		}
 		var packetSniffers []sniff.PacketSniffer
-
-		if len(action.ProtocolConfigs) > 0 {
-			// Advanced mode: filter sniffers by port
-			for _, config := range action.ProtocolConfigs {
-				// Skip if port doesn't match
-				if config.PortMatcher != nil && !config.PortMatcher.Match(metadata) {
-					continue
-				}
-				// Add this protocol's sniffers
-				packetSniffers = append(packetSniffers, config.PacketSniffers...)
-			}
-
-			if len(packetSniffers) == 0 {
-				r.logger.DebugContext(ctx, "no packet sniffers match port filter for port ", metadata.Destination.Port)
-				return
-			}
-		} else if len(action.PacketSniffers) > 0 {
-			// Legacy mode: use pre-configured sniffers
+		if len(action.PacketSniffers) > 0 {
 			packetSniffers = action.PacketSniffers
 		} else {
-			// Default: all packet sniffers
 			packetSniffers = []sniff.PacketSniffer{
 				sniff.DomainNameQuery,
 				sniff.QUICClientHello,
@@ -977,29 +671,8 @@ func (r *Router) actionSniff(
 		}
 	finally:
 		if err == nil {
-			// Determine if we should override destination
-			shouldOverride := action.OverrideDestination // Start with global default
-
-			// Check per-protocol override setting (advanced mode)
-			if len(action.ProtocolConfigs) > 0 && metadata.Protocol != "" {
-				if config, ok := action.ProtocolConfigs[metadata.Protocol]; ok {
-					if config.OverrideDestination != nil {
-						shouldOverride = *config.OverrideDestination
-					}
-				}
-			}
-
-			// Apply skip_domain filter (prevents override even if enabled)
-			if shouldOverride && metadata.Domain != "" {
-				if r.shouldSkipForDomain(action, metadata, metadata.Domain) {
-					shouldOverride = false
-					r.logger.DebugContext(ctx, "skip override for domain: ", metadata.Domain)
-				}
-			}
-
-			// Perform override if allowed
 			//goland:noinspection GoDeprecation
-			if shouldOverride && M.IsDomainName(metadata.Domain) {
+			if action.OverrideDestination && M.IsDomainName(metadata.Domain) {
 				metadata.Destination = M.Socksaddr{
 					Fqdn: metadata.Domain,
 					Port: metadata.Destination.Port,

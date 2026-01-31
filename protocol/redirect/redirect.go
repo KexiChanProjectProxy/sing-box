@@ -32,17 +32,13 @@ func NewRedirect(ctx context.Context, router adapter.Router, logger log.ContextL
 		router:  router,
 		logger:  logger,
 	}
-	var err error
-	redirect.listener, err = listener.New(listener.Options{
+	redirect.listener = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
 		Network:           []string{N.NetworkTCP},
 		Listen:            options.ListenOptions,
 		ConnectionHandler: redirect,
 	})
-	if err != nil {
-		return nil, err
-	}
 	return redirect, nil
 }
 

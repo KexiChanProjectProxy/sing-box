@@ -291,33 +291,9 @@ func (r *RejectActionOptions) UnmarshalJSON(bytes []byte) error {
 	return nil
 }
 
-type SniffProtocolConfig struct {
-	Ports               badoption.Listable[uint16] `json:"ports,omitempty"`
-	PortRanges          badoption.Listable[string] `json:"port_ranges,omitempty"`
-	OverrideDestination *bool                      `json:"override_destination,omitempty"`
-}
-
 type RouteActionSniff struct {
-	// Existing fields (backward compatibility)
-	Sniffer             badoption.Listable[string] `json:"sniffer,omitempty"`
-	Timeout             badoption.Duration         `json:"timeout,omitempty"`
-	OverrideDestination bool                       `json:"override_destination,omitempty"`
-
-	// NEW: Advanced fields
-	Protocols          map[string]SniffProtocolConfig `json:"protocols,omitempty"`
-	SkipDomain         badoption.Listable[string]     `json:"skip_domain,omitempty"`
-	SkipDomainSuffix   badoption.Listable[string]     `json:"skip_domain_suffix,omitempty"`
-	SkipDomainRuleSet  badoption.Listable[string]     `json:"skip_domain_rule_set,omitempty"`
-	SkipSniffing       bool                           `json:"skip_sniffing,omitempty"`
-	SkipSrcAddress     badoption.Listable[string]     `json:"skip_src_address,omitempty"`
-	SkipDstAddress     badoption.Listable[string]     `json:"skip_dst_address,omitempty"`
-}
-
-func (r *RouteActionSniff) Validate() error {
-	if len(r.Protocols) > 0 && len(r.Sniffer) > 0 {
-		return E.New("'protocols' and 'sniffer' are mutually exclusive")
-	}
-	return nil
+	Sniffer badoption.Listable[string] `json:"sniffer,omitempty"`
+	Timeout badoption.Duration         `json:"timeout,omitempty"`
 }
 
 type RouteActionResolve struct {

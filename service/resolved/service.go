@@ -70,8 +70,7 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 		dnsRouter: service.FromContext[adapter.DNSRouter](ctx),
 		links:     make(map[int32]*TransportLink),
 	}
-	var err error
-	inbound.listener, err = listener.New(listener.Options{
+	inbound.listener = listener.New(listener.Options{
 		Context:                  ctx,
 		Logger:                   logger,
 		Network:                  []string{N.NetworkTCP, N.NetworkUDP},
@@ -80,9 +79,6 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 		OOBPacketHandler:         inbound,
 		ThreadUnsafePacketWriter: true,
 	})
-	if err != nil {
-		return nil, err
-	}
 	return inbound, nil
 }
 

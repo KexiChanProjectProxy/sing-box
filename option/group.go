@@ -97,33 +97,3 @@ type LoadBalanceHysteresisOptions struct {
 	PrimaryFailures uint32             `json:"primary_failures,omitempty"`
 	BackupHoldTime  badoption.Duration `json:"backup_hold_time,omitempty"`
 }
-
-type TieredLoadBalanceOutboundOptions struct {
-	Tiers                     []LoadBalanceTierOptions  `json:"tiers"`
-	Strategy                  string                    `json:"strategy,omitempty"`
-	Hash                      *LoadBalanceHashOptions   `json:"hash,omitempty"`
-	LatencyMonitoring         *LatencyMonitoringOptions `json:"latency_monitoring,omitempty"`
-	EmptyPoolAction           string                    `json:"empty_pool_action,omitempty"`
-	InterruptExistConnections bool                      `json:"interrupt_exist_connections,omitempty"`
-	URL                       string                    `json:"url,omitempty"`
-	Interval                  badoption.Duration        `json:"interval,omitempty"`
-	Timeout                   badoption.Duration        `json:"timeout,omitempty"`
-	IdleTimeout               badoption.Duration        `json:"idle_timeout,omitempty"`
-}
-
-type LoadBalanceTierOptions struct {
-	Level      int                `json:"level"`
-	Outbounds  []string           `json:"outbounds"`
-	TopN       int                `json:"top_n"`
-	Strategy   string             `json:"strategy,omitempty"`
-	MaxLatency badoption.Duration `json:"max_latency"`
-}
-
-type LatencyMonitoringOptions struct {
-	FailureThreshold   uint32             `json:"failure_threshold,omitempty"`
-	RecoveryThreshold  uint32             `json:"recovery_threshold,omitempty"`
-	SamplingRate       int                `json:"sampling_rate,omitempty"`
-	HistorySize        int                `json:"history_size,omitempty"`
-	FallbackHoldTime   badoption.Duration `json:"fallback_hold_time,omitempty"`
-	MeasurementTimeout badoption.Duration `json:"measurement_timeout,omitempty"`
-}

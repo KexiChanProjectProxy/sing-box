@@ -58,8 +58,6 @@ type RuleSet interface {
 	Cleanup()
 	RegisterCallback(callback RuleSetUpdateCallback) *list.Element[RuleSetUpdateCallback]
 	UnregisterCallback(element *list.Element[RuleSetUpdateCallback])
-	ExtractDomainRules() (*ExtractedDomainRules, error)
-	ExtractIPRules() (*ExtractedIPRules, error)
 	Close() error
 	HeadlessRule
 }
@@ -70,17 +68,6 @@ type RuleSetMetadata struct {
 	ContainsProcessRule bool
 	ContainsWIFIRule    bool
 	ContainsIPCIDRRule  bool
-}
-
-type ExtractedDomainRules struct {
-	ExactDomains   []string
-	DomainSuffixes []string
-	DomainKeywords []string
-	DomainRegex    []string
-}
-
-type ExtractedIPRules struct {
-	IPCIDRs []string
 }
 type HTTPStartContext struct {
 	ctx             context.Context

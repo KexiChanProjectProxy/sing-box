@@ -40,17 +40,13 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		logger:        logger,
 		authenticator: auth.NewAuthenticator(options.Users),
 	}
-	var err error
-	inbound.listener, err = listener.New(listener.Options{
+	inbound.listener = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
 		Network:           []string{N.NetworkTCP},
 		Listen:            options.ListenOptions,
 		ConnectionHandler: inbound,
 	})
-	if err != nil {
-		return nil, err
-	}
 	return inbound, nil
 }
 

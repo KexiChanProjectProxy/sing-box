@@ -49,8 +49,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		}
 		inbound.tlsConfig = tlsConfig
 	}
-	var err error
-	inbound.listener, err = listener.New(listener.Options{
+	inbound.listener = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
 		Network:           []string{N.NetworkTCP},
@@ -59,9 +58,6 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		SetSystemProxy:    options.SetSystemProxy,
 		SystemProxySOCKS:  false,
 	})
-	if err != nil {
-		return nil, err
-	}
 	return inbound, nil
 }
 

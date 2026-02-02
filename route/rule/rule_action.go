@@ -35,6 +35,7 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 			RuleActionRouteOptions: RuleActionRouteOptions{
 				OverrideAddress:           M.ParseSocksaddrHostPort(action.RouteOptions.OverrideAddress, 0),
 				OverridePort:              action.RouteOptions.OverridePort,
+				RevertOriginDst:           action.RouteOptions.RevertOriginDst,
 				NetworkStrategy:           (*C.NetworkStrategy)(action.RouteOptions.NetworkStrategy),
 				FallbackDelay:             time.Duration(action.RouteOptions.FallbackDelay),
 				UDPDisableDomainUnmapping: action.RouteOptions.UDPDisableDomainUnmapping,
@@ -48,6 +49,7 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 		return &RuleActionRouteOptions{
 			OverrideAddress:           M.ParseSocksaddrHostPort(action.RouteOptionsOptions.OverrideAddress, 0),
 			OverridePort:              action.RouteOptionsOptions.OverridePort,
+			RevertOriginDst:           action.RouteOptionsOptions.RevertOriginDst,
 			NetworkStrategy:           (*C.NetworkStrategy)(action.RouteOptionsOptions.NetworkStrategy),
 			FallbackDelay:             time.Duration(action.RouteOptionsOptions.FallbackDelay),
 			UDPDisableDomainUnmapping: action.RouteOptionsOptions.UDPDisableDomainUnmapping,
@@ -162,6 +164,7 @@ func (r *RuleActionRoute) String() string {
 type RuleActionRouteOptions struct {
 	OverrideAddress           M.Socksaddr
 	OverridePort              uint16
+	RevertOriginDst           bool
 	NetworkStrategy           *C.NetworkStrategy
 	NetworkType               []C.InterfaceType
 	FallbackNetworkType       []C.InterfaceType
@@ -189,6 +192,9 @@ func (r *RuleActionRouteOptions) Descriptions() []string {
 	}
 	if r.OverridePort > 0 {
 		descriptions = append(descriptions, F.ToString("override-port=", r.OverridePort))
+	}
+	if r.RevertOriginDst {
+		descriptions = append(descriptions, "revert-origin-dst")
 	}
 	if r.NetworkStrategy != nil {
 		descriptions = append(descriptions, F.ToString("network-strategy=", r.NetworkStrategy))

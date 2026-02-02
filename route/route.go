@@ -423,6 +423,15 @@ match:
 					Fqdn: metadata.Destination.Fqdn,
 				}
 			}
+			if routeOptions.RevertOriginDst {
+				if metadata.OriginDestination.IsValid() {
+					metadata.Destination = metadata.OriginDestination
+					metadata.DestinationAddresses = nil
+					r.logger.DebugContext(ctx, "reverted to origin destination: ", metadata.Destination)
+				} else {
+					r.logger.WarnContext(ctx, "revert_origin_dst enabled but origin destination unavailable")
+				}
+			}
 			if routeOptions.NetworkStrategy != nil {
 				metadata.NetworkStrategy = routeOptions.NetworkStrategy
 			}

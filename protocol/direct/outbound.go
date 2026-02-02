@@ -40,6 +40,7 @@ type Outbound struct {
 	overrideDestination M.Socksaddr
 	isEmpty             bool
 	xlat464Prefix       netip.Prefix
+	useOriginDst        bool
 	// loopBack *loopBackDetector
 }
 
@@ -136,8 +137,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		fallbackDelay:  time.Duration(options.FallbackDelay),
 		dialer:         finalDialer,
 		//nolint:staticcheck
-		isEmpty:       reflect.DeepEqual(options.DialerOptions, option.DialerOptions{UDPFragmentDefault: true}) && options.OverrideAddress == "" && options.OverridePort == 0,
+		isEmpty:       reflect.DeepEqual(options.DialerOptions, option.DialerOptions{UDPFragmentDefault: true}) && options.OverrideAddress == "" && options.OverridePort == 0 && !options.UseOriginDst,
 		xlat464Prefix: xlat464Prefix,
+		useOriginDst:  options.UseOriginDst,
 		// loopBack:       newLoopBackDetector(router),
 	}
 	//nolint:staticcheck
@@ -163,6 +165,8 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
 	originalDestination := destination
+
+	// Priority 1: Deprecated override options
 	switch h.overrideOption {
 	case 1:
 		destination = h.overrideDestination
@@ -172,7 +176,21 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 		destination = newDestination
 	case 3:
 		destination.Port = h.overrideDestination.Port
+	default:
+		// Priority 2: use_origin_dst option
+		if h.useOriginDst {
+			inboundMetadata := adapter.ContextFrom(ctx)
+			if inboundMetadata != nil && inboundMetadata.OriginDestination.IsValid() {
+				destination = inboundMetadata.OriginDestination
+				h.logger.DebugContext(ctx, "using origin destination: ", destination,
+					" (would be: ", originalDestination, ")")
+			} else {
+				h.logger.WarnContext(ctx, "use_origin_dst enabled but origin destination unavailable, using: ", destination)
+			}
+		}
+		// Priority 3: Use default destination (already set)
 	}
+
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
@@ -200,6 +218,8 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
 	originDestination := destination
+
+	// Priority 1: Deprecated override options
 	switch h.overrideOption {
 	case 1:
 		destination = h.overrideDestination
@@ -209,17 +229,33 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 		destination = newDestination
 	case 3:
 		destination.Port = h.overrideDestination.Port
+	default:
+		// Priority 2: use_origin_dst option
+		if h.useOriginDst {
+			inboundMetadata := adapter.ContextFrom(ctx)
+			if inboundMetadata != nil && inboundMetadata.OriginDestination.IsValid() {
+				originDestination = destination // Save for NAT
+				destination = inboundMetadata.OriginDestination
+				h.logger.DebugContext(ctx, "using origin destination: ", destination)
+			} else {
+				h.logger.WarnContext(ctx, "use_origin_dst enabled but origin destination unavailable")
+			}
+		}
 	}
-	if h.overrideOption == 0 {
+
+	if h.overrideOption == 0 && !h.useOriginDst {
 		h.logger.InfoContext(ctx, "outbound packet connection")
 	} else {
 		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
 	}
+
 	conn, err := h.dialer.ListenPacket(ctx, destination)
 	if err != nil {
 		return nil, err
 	}
 	// conn = h.loopBack.NewPacketConn(bufio.NewPacketConn(conn), destination)
+
+	// Apply NAT translation if destination was changed
 	if originDestination != destination {
 		conn = bufio.NewNATPacketConn(bufio.NewPacketConn(conn), destination, originDestination)
 	}
@@ -236,6 +272,15 @@ func (h *Outbound) DialParallel(ctx context.Context, network string, destination
 		return h.DialContext(ctx, network, destination)
 	case 3:
 		destination.Port = h.overrideDestination.Port
+	default:
+		// Check use_origin_dst
+		if h.useOriginDst {
+			inboundMetadata := adapter.ContextFrom(ctx)
+			if inboundMetadata != nil && inboundMetadata.OriginDestination.IsValid() {
+				// Fall back to DialContext since origin is already an IP
+				return h.DialContext(ctx, network, destination)
+			}
+		}
 	}
 	network = N.NetworkName(network)
 	switch network {
@@ -257,6 +302,15 @@ func (h *Outbound) DialParallelNetwork(ctx context.Context, network string, dest
 		return h.DialContext(ctx, network, destination)
 	case 3:
 		destination.Port = h.overrideDestination.Port
+	default:
+		// Check use_origin_dst
+		if h.useOriginDst {
+			inboundMetadata := adapter.ContextFrom(ctx)
+			if inboundMetadata != nil && inboundMetadata.OriginDestination.IsValid() {
+				// Fall back to DialContext since origin is already an IP
+				return h.DialContext(ctx, network, destination)
+			}
+		}
 	}
 	network = N.NetworkName(network)
 	switch network {

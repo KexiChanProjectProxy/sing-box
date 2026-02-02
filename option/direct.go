@@ -26,6 +26,7 @@ type _DirectOutboundOptions struct {
 	// Deprecated: removed
 	ProxyProtocol  uint8              `json:"proxy_protocol,omitempty"`
 	XLAT464Prefix *badoption.Prefix `json:"xlat464_prefix,omitempty"`
+	UseOriginDst   bool               `json:"use_origin_dst,omitempty"`
 }
 
 type DirectOutboundOptions _DirectOutboundOptions

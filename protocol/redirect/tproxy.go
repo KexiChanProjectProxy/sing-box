@@ -72,9 +72,16 @@ func (t *TProxy) Close() error {
 }
 
 func (t *TProxy) NewConnectionEx(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+	destination, err := redir.GetOriginalDestination(conn)
+	if err != nil {
+		conn.Close()
+		t.logger.ErrorContext(ctx, "process connection from ", conn.RemoteAddr(), ": get original destination: ", err)
+		return
+	}
 	metadata.Inbound = t.Tag()
 	metadata.InboundType = t.Type()
-	metadata.Destination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
+	metadata.Destination = M.SocksaddrFromNetIP(destination)
+	metadata.OriginDestination = metadata.Destination
 	t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -87,7 +94,7 @@ func (t *TProxy) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, s
 	metadata.InboundType = t.Type()
 	metadata.Source = source
 	metadata.Destination = destination
-	metadata.OriginDestination = t.listener.UDPAddr()
+	metadata.OriginDestination = destination
 	t.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
 

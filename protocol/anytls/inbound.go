@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -98,14 +99,17 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 			}
 		case C.AnyTLSMasqueradeTypeString:
 			masqueradeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if options.Masquerade.StringOptions.StatusCode != 0 {
-					w.WriteHeader(options.Masquerade.StringOptions.StatusCode)
-				}
+				// Set headers first (before WriteHeader)
 				for key, values := range options.Masquerade.StringOptions.Headers {
 					for _, value := range values {
 						w.Header().Add(key, value)
 					}
 				}
+				// Then set status code
+				if options.Masquerade.StringOptions.StatusCode != 0 {
+					w.WriteHeader(options.Masquerade.StringOptions.StatusCode)
+				}
+				// Finally write body
 				w.Write([]byte(options.Masquerade.StringOptions.Content))
 			})
 		case C.AnyTLSMasqueradeTypeRedirect:
@@ -124,13 +128,6 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 			}
 
 			masqueradeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Add custom headers first
-				for key, values := range customHeaders {
-					for _, value := range values {
-						w.Header().Add(key, value)
-					}
-				}
-
 				// Build redirect URL
 				redirectURL := baseURL
 				if appendRequestURI {
@@ -142,10 +139,26 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 					redirectURL = targetURL.String()
 				}
 
-				// Set Location header (required for redirects)
+				// Prepare response body
+				body := "<a href=\"" + redirectURL + "\">Moved</a>.\n"
+
+				// Add custom headers
+				for key, values := range customHeaders {
+					for _, value := range values {
+						w.Header().Add(key, value)
+					}
+				}
+
+				// Set required headers
 				w.Header().Set("Location", redirectURL)
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+
 				// Send redirect status
 				w.WriteHeader(statusCode)
+
+				// Write body
+				w.Write([]byte(body))
 			})
 		default:
 			return nil, E.New("unknown masquerade type: ", options.Masquerade.Type)
@@ -253,34 +266,52 @@ func (h *httpMasqueradeHandler) NewConnectionEx(ctx context.Context, conn net.Co
 
 	h.logger.DebugContext(ctx, "serving HTTP masquerade for connection from ", source)
 
-	server := &http.Server{
-		Handler: h.httpHandler,
+	// Handle HTTP connection directly instead of using http.Server.Serve()
+	// This avoids issues with singleConnListener
+	err := http.Serve(&oneShotListener{conn: conn}, h.httpHandler)
+	if err != nil && err != http.ErrServerClosed && err != io.EOF {
+		h.logger.DebugContext(ctx, "HTTP masquerade error: ", err)
+	}
+}
+
+// oneShotListener serves exactly one connection then returns EOF
+type oneShotListener struct {
+	conn   net.Conn
+	served bool
+	mu     sync.Mutex
+	done   chan struct{}
+}
+
+func (l *oneShotListener) Accept() (net.Conn, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.served {
+		// Already served, wait until closed
+		if l.done != nil {
+			<-l.done
+		}
+		return nil, io.EOF
 	}
 
-	listener := &singleConnListener{conn: conn}
-	server.Serve(listener)
-}
-
-type singleConnListener struct {
-	conn net.Conn
-	once sync.Once
-}
-
-func (l *singleConnListener) Accept() (net.Conn, error) {
-	var conn net.Conn
-	l.once.Do(func() {
-		conn = l.conn
-	})
-	if conn != nil {
-		return conn, nil
+	if l.done == nil {
+		l.done = make(chan struct{})
 	}
-	return nil, io.EOF
+
+	l.served = true
+	return l.conn, nil
 }
 
-func (l *singleConnListener) Close() error {
+func (l *oneShotListener) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.done != nil {
+		close(l.done)
+	}
 	return nil
 }
 
-func (l *singleConnListener) Addr() net.Addr {
+func (l *oneShotListener) Addr() net.Addr {
 	return l.conn.LocalAddr()
 }

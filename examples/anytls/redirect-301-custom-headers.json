@@ -1,0 +1,36 @@
+{
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-in",
+      "listen": "::",
+      "listen_port": 8443,
+      "users": [
+        {
+          "name": "user1",
+          "password": "your_secure_password_here"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "certificate_path": "/path/to/cert.pem",
+        "key_path": "/path/to/key.pem"
+      },
+      "masquerade": {
+        "type": "redirect",
+        "url": "https://example.com/new-location",
+        "status_code": 301,
+        "headers": {
+          "Cache-Control": ["public, max-age=31536000"],
+          "X-Redirect-Reason": ["Site moved permanently"]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

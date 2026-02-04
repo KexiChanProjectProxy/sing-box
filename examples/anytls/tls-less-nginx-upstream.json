@@ -1,0 +1,27 @@
+{
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-in",
+      "listen": "127.0.0.1",
+      "listen_port": 8080,
+      "users": [
+        {
+          "name": "user1",
+          "password": "your_secure_password_here"
+        }
+      ],
+      "masquerade": {
+        "type": "redirect",
+        "url": "https://example.com",
+        "append_request_uri": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-proxy-mode",
+      "listen": "::",
+      "listen_port": 8443,
+      "users": [
+        {
+          "name": "user1",
+          "password": "secretpassword123"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "certificate_path": "/path/to/cert.pem",
+        "key_path": "/path/to/key.pem"
+      },
+      "masquerade": {
+        "type": "proxy",
+        "url": "https://example.com",
+        "rewrite_host": true
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "anytls-file-mode",
+      "listen": "::",
+      "listen_port": 8444,
+      "users": [
+        {
+          "name": "user2",
+          "password": "anotherpassword456"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "certificate_path": "/path/to/cert.pem",
+        "key_path": "/path/to/key.pem"
+      },
+      "masquerade": {
+        "type": "file",
+        "directory": "/var/www/html"
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "anytls-string-mode",
+      "listen": "::",
+      "listen_port": 8445,
+      "users": [
+        {
+          "name": "user3",
+          "password": "yetanotherpass789"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "certificate_path": "/path/to/cert.pem",
+        "key_path": "/path/to/key.pem"
+      },
+      "masquerade": {
+        "type": "string",
+        "status_code": 200,
+        "headers": {
+          "Content-Type": ["text/html; charset=utf-8"],
+          "Server": ["nginx/1.20.0"]
+        },
+        "content": "<html><body><h1>Welcome to Our Website</h1></body></html>"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": []
+  }
+}

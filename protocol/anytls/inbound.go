@@ -2,8 +2,13 @@ package anytls
 
 import (
 	"context"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -57,13 +62,112 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		paddingScheme = []byte(strings.Join(options.PaddingScheme, "\n"))
 	}
 
+	var masqueradeHandler http.Handler
+	if options.Masquerade != nil && options.Masquerade.Type != "" {
+		switch options.Masquerade.Type {
+		case C.AnyTLSMasqueradeTypeFile:
+			masqueradeHandler = http.FileServer(http.Dir(options.Masquerade.FileOptions.Directory))
+		case C.AnyTLSMasqueradeTypeProxy:
+			masqueradeURL, err := url.Parse(options.Masquerade.ProxyOptions.URL)
+			if err != nil {
+				return nil, E.Cause(err, "parse masquerade URL")
+			}
+			masqueradeHandler = &httputil.ReverseProxy{
+				Rewrite: func(r *httputil.ProxyRequest) {
+					r.SetURL(masqueradeURL)
+					if !options.Masquerade.ProxyOptions.RewriteHost {
+						r.Out.Host = r.In.Host
+					}
+
+					// Add X-Forwarded-For header
+					if clientIP, _, err := net.SplitHostPort(r.In.RemoteAddr); err == nil {
+						if prior := r.In.Header.Get("X-Forwarded-For"); prior != "" {
+							clientIP = prior + ", " + clientIP
+						}
+						r.Out.Header.Set("X-Forwarded-For", clientIP)
+					}
+
+					// Add X-Real-IP header
+					if clientIP, _, err := net.SplitHostPort(r.In.RemoteAddr); err == nil {
+						r.Out.Header.Set("X-Real-IP", clientIP)
+					}
+				},
+				ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+					w.WriteHeader(http.StatusBadGateway)
+				},
+			}
+		case C.AnyTLSMasqueradeTypeString:
+			masqueradeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if options.Masquerade.StringOptions.StatusCode != 0 {
+					w.WriteHeader(options.Masquerade.StringOptions.StatusCode)
+				}
+				for key, values := range options.Masquerade.StringOptions.Headers {
+					for _, value := range values {
+						w.Header().Add(key, value)
+					}
+				}
+				w.Write([]byte(options.Masquerade.StringOptions.Content))
+			})
+		case C.AnyTLSMasqueradeTypeRedirect:
+			baseURL := options.Masquerade.RedirectOptions.URL
+			statusCode := options.Masquerade.RedirectOptions.StatusCode
+			if statusCode == 0 {
+				statusCode = http.StatusFound // Default to 302
+			}
+			customHeaders := options.Masquerade.RedirectOptions.Headers
+			appendRequestURI := options.Masquerade.RedirectOptions.AppendRequestURI
+
+			// Parse base URL once during initialization
+			redirectBaseURL, err := url.Parse(baseURL)
+			if err != nil {
+				return nil, E.Cause(err, "parse redirect URL")
+			}
+
+			masqueradeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Add custom headers first
+				for key, values := range customHeaders {
+					for _, value := range values {
+						w.Header().Add(key, value)
+					}
+				}
+
+				// Build redirect URL
+				redirectURL := baseURL
+				if appendRequestURI {
+					// Combine base URL with request URI
+					targetURL := *redirectBaseURL
+					targetURL.Path = strings.TrimRight(targetURL.Path, "/") + r.URL.Path
+					targetURL.RawQuery = r.URL.RawQuery
+					targetURL.Fragment = r.URL.Fragment
+					redirectURL = targetURL.String()
+				}
+
+				// Set Location header (required for redirects)
+				w.Header().Set("Location", redirectURL)
+				// Send redirect status
+				w.WriteHeader(statusCode)
+			})
+		default:
+			return nil, E.New("unknown masquerade type: ", options.Masquerade.Type)
+		}
+	}
+
+	var fallbackHandler N.TCPConnectionHandlerEx
+	if masqueradeHandler != nil {
+		fallbackHandler = &httpMasqueradeHandler{
+			httpHandler: masqueradeHandler,
+			logger:      logger,
+		}
+	}
+
 	service, err := anytls.NewService(anytls.ServiceConfig{
 		Users: common.Map(options.Users, func(it option.AnyTLSUser) anytls.User {
 			return (anytls.User)(it)
 		}),
-		PaddingScheme: paddingScheme,
-		Handler:       (*inboundHandler)(inbound),
-		Logger:        logger,
+		PaddingScheme:   paddingScheme,
+		Handler:         (*inboundHandler)(inbound),
+		FallbackHandler: fallbackHandler,
+		Logger:          logger,
 	})
 	if err != nil {
 		return nil, err
@@ -132,4 +236,51 @@ func (h *inboundHandler) NewConnectionEx(ctx context.Context, conn net.Conn, sou
 		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
 	}
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
+}
+
+type httpMasqueradeHandler struct {
+	httpHandler http.Handler
+	logger      logger.ContextLogger
+}
+
+func (h *httpMasqueradeHandler) NewConnectionEx(ctx context.Context, conn net.Conn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
+	defer func() {
+		conn.Close()
+		if onClose != nil {
+			onClose(nil)
+		}
+	}()
+
+	h.logger.DebugContext(ctx, "serving HTTP masquerade for connection from ", source)
+
+	server := &http.Server{
+		Handler: h.httpHandler,
+	}
+
+	listener := &singleConnListener{conn: conn}
+	server.Serve(listener)
+}
+
+type singleConnListener struct {
+	conn net.Conn
+	once sync.Once
+}
+
+func (l *singleConnListener) Accept() (net.Conn, error) {
+	var conn net.Conn
+	l.once.Do(func() {
+		conn = l.conn
+	})
+	if conn != nil {
+		return conn, nil
+	}
+	return nil, io.EOF
+}
+
+func (l *singleConnListener) Close() error {
+	return nil
+}
+
+func (l *singleConnListener) Addr() net.Addr {
+	return l.conn.LocalAddr()
 }

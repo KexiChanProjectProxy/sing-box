@@ -1,0 +1,59 @@
+{
+  "log": {
+    "level": "debug"
+  },
+  "inbounds": [
+    {
+      "type": "http",
+      "tag": "http-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10808,
+      "users": [
+        {
+          "username": "alice",
+          "password": "password123"
+        },
+        {
+          "username": "bob",
+          "password": "password456"
+        }
+      ]
+    },
+    {
+      "type": "socks",
+      "tag": "socks-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10809,
+      "users": [
+        {
+          "username": "alice",
+          "password": "password123"
+        },
+        {
+          "username": "bob",
+          "password": "password456"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct-per-user-ipv6",
+      "inet6_bind_prefix": "2001:db8:abcd::/48"
+    },
+    {
+      "type": "direct",
+      "tag": "direct-default"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "auth_user": ["alice", "bob"],
+        "outbound": "direct-per-user-ipv6"
+      }
+    ],
+    "final": "direct-default"
+  }
+}

@@ -1,6 +1,7 @@
 package dialer
 
 import (
+	"context"
 	"net/netip"
 	"testing"
 
@@ -172,7 +173,7 @@ func TestXLAT464Dialer_TranslateDestination(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inputSocksaddr := M.ParseSocksaddrHostPort(tt.inputAddr, tt.inputPort)
-			result := dialer.translateDestination(inputSocksaddr)
+			result := dialer.translateDestination(context.Background(), inputSocksaddr)
 
 			expectedAddr := netip.MustParseAddr(tt.expectedAddr)
 			if result.Addr != expectedAddr {
@@ -204,7 +205,7 @@ func TestXLAT464Dialer_DomainPassThrough(t *testing.T) {
 
 	// Domain names should not be translated (only IP addresses)
 	destination := M.ParseSocksaddrHostPortStr("example.com", "80")
-	result := dialer.translateDestination(destination)
+	result := dialer.translateDestination(context.Background(), destination)
 
 	if destination != result {
 		t.Errorf("Domain destination was modified:\n  original: %v\n  result:   %v", destination, result)

@@ -400,3 +400,23 @@ func trackPacketConn(conn net.PacketConn, err error) (net.PacketConn, error) {
 	}
 	return conntrack.NewPacketConn(conn)
 }
+
+func (d *DefaultDialer) TCPDialer6() net.Dialer {
+	return dialerFromTCPDialer(d.dialer6)
+}
+
+func (d *DefaultDialer) UDPDialer6() net.Dialer {
+	return d.udpDialer6
+}
+
+func (d *DefaultDialer) UDPListenerConfig() net.ListenConfig {
+	return d.udpListener
+}
+
+func (d *DefaultDialer) TCPFastOpen6() bool {
+	return !d.dialer6.DisableTFO
+}
+
+func (d *DefaultDialer) NetNs() string {
+	return d.netns
+}

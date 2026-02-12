@@ -38,10 +38,7 @@ func New(ctx context.Context, options option.DialerOptions, remoteIsDomain bool)
 
 func NewWithOptions(options Options) (N.Dialer, error) {
 	dialOptions := options.Options
-	var (
-		dialer N.Dialer
-		err    error
-	)
+	var dialer N.Dialer
 	if dialOptions.Detour != "" {
 		outboundManager := service.FromContext[adapter.OutboundManager](options.Context)
 		if outboundManager == nil {
@@ -49,9 +46,25 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 		}
 		dialer = NewDetour(outboundManager, dialOptions.Detour, options.LegacyDNSDialer)
 	} else {
-		dialer, err = NewDefault(options.Context, dialOptions)
+		defaultDialer, err := NewDefault(options.Context, dialOptions)
 		if err != nil {
 			return nil, err
+		}
+		if dialOptions.Inet6BindPrefix != nil {
+			// Validation: mutual exclusion with inet6_bind_address
+			if dialOptions.Inet6BindAddress != nil {
+				return nil, E.New("`inet6_bind_prefix` and `inet6_bind_address` are mutually exclusive")
+			}
+			prefix := dialOptions.Inet6BindPrefix.Build(netip.Prefix{})
+			if !prefix.Addr().Is6() {
+				return nil, E.New("`inet6_bind_prefix` must be an IPv6 prefix")
+			}
+			if prefix.Bits() >= 128 {
+				return nil, E.New("`inet6_bind_prefix` must have host bits (prefix length < 128)")
+			}
+			dialer = NewPerUserIPv6Dialer(defaultDialer, prefix)
+		} else {
+			dialer = defaultDialer
 		}
 	}
 	if options.RemoteIsDomain && (dialOptions.Detour == "" || options.ResolverOnDetour || dialOptions.DomainResolver != nil && dialOptions.DomainResolver.Server != "") {

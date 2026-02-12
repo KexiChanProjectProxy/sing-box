@@ -221,6 +221,9 @@ func (d DirectActionOptions) Descriptions() []string {
 	if d.Inet6BindAddress != nil {
 		descriptions = append(descriptions, "inet6_bind_address="+d.Inet6BindAddress.Build(netip.IPv6Unspecified()).String())
 	}
+	if d.Inet6BindPrefix != nil {
+		descriptions = append(descriptions, "inet6_bind_prefix="+d.Inet6BindPrefix.Build(netip.Prefix{}).String())
+	}
 	if d.RoutingMark != 0 {
 		descriptions = append(descriptions, "routing_mark="+fmt.Sprintf("0x%x", d.RoutingMark))
 	}

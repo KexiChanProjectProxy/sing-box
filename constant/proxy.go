@@ -27,6 +27,7 @@ const (
 	TypeHysteria2    = "hysteria2"
 	TypeTailscale    = "tailscale"
 	TypeDERP         = "derp"
+	TypeCloudflared  = "cloudflared"
 	TypeResolved     = "resolved"
 	TypeSSMAPI       = "ssm-api"
 )
@@ -87,6 +88,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "Hysteria2"
 	case TypeAnyTLS:
 		return "AnyTLS"
+	case TypeCloudflared:
+		return "Cloudflared"
 	case TypeSelector:
 		return "Selector"
 	case TypeURLTest:

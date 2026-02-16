@@ -538,3 +538,177 @@ func TestEmptyKeyHandling(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, selected)
 }
+
+// Test 10: Bootstrap mode stays on initial all-failed check
+func TestBootstrapModeOnInitialAllFailed(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2"},
+		backupTags:      []string{"b1"},
+		topNPrimary:     2,
+		topNBackup:      1,
+		interval:        time.Minute,
+		history:         history,
+		strategy:        strategyRandom,
+		hystPrimaryFailures: 1,
+		hystBackupHoldTime:  time.Second,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"b1": &mockOutbound{tag: "b1", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	// Initialize tier state
+	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
+
+	// No health check history - all nodes will fail
+	// Initial check should NOT update candidateState
+	lb.updateCandidates()
+
+	snapshot := lb.candidateState.Load()
+	assert.Nil(t, snapshot, "candidateState should stay nil when initial check finds all nodes failed")
+
+	// Mark initial check as done and try again - should update now
+	lb.initialCheckDone.Store(true)
+	lb.updateCandidates()
+
+	snapshot = lb.candidateState.Load()
+	assert.NotNil(t, snapshot, "candidateState should be stored on subsequent checks even if all fail")
+}
+
+// Test 11: Bootstrap mode exits on partial success
+func TestBootstrapModeExitsOnPartialSuccess(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Only one node succeeds
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2"},
+		backupTags:      []string{},
+		topNPrimary:     2,
+		topNBackup:      0,
+		interval:        time.Minute,
+		history:         history,
+		strategy:        strategyRandom,
+		hystPrimaryFailures: 1,
+		hystBackupHoldTime:  time.Second,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	// Initialize tier state
+	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
+
+	// Initial check with partial success should update candidateState
+	lb.updateCandidates()
+
+	snapshot := lb.candidateState.Load()
+	assert.NotNil(t, snapshot, "candidateState should be stored when at least one node succeeds")
+
+	cs := snapshot.(*candidateSnapshot)
+	assert.Len(t, cs.primaryCandidates, 1, "should have one successful primary candidate")
+	assert.Equal(t, "p1", cs.primaryCandidates[0].Tag())
+}
+
+// Test 12: Eager ticker start
+func TestEagerTickerStart(t *testing.T) {
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		interval:        100 * time.Millisecond,
+		idleTimeout:     time.Second,
+		close:           make(chan struct{}),
+	}
+
+	// Ticker should be nil initially
+	assert.Nil(t, lb.ticker, "ticker should be nil before startTicker")
+
+	// Start ticker
+	lb.startTicker()
+
+	// Ticker should be running
+	lb.tickerAccess.Lock()
+	assert.NotNil(t, lb.ticker, "ticker should be running after startTicker")
+	lb.tickerAccess.Unlock()
+
+	// Calling startTicker again should be no-op
+	lb.startTicker()
+	lb.tickerAccess.Lock()
+	assert.NotNil(t, lb.ticker, "ticker should still be running")
+	lb.tickerAccess.Unlock()
+
+	// Clean up
+	close(lb.close)
+	time.Sleep(50 * time.Millisecond) // Allow goroutine to exit
+}
+
+// Test 13: Idle timeout with eager start
+func TestIdleTimeoutWithEagerStart(t *testing.T) {
+	ctx := context.Background()
+	history := urltest.NewHistoryStorage()
+
+	lb := &LoadBalance{
+		ctx:             ctx,
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1"},
+		topNPrimary:     1,
+		interval:        50 * time.Millisecond,
+		idleTimeout:     200 * time.Millisecond,
+		history:         history,
+		link:            "https://www.gstatic.com/generate_204",
+		close:           make(chan struct{}),
+		hystPrimaryFailures: 1,
+		hystBackupHoldTime:  time.Second,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	// Initialize tier state
+	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
+
+	// Set checking flag to prevent actual health checks from running
+	lb.checking.Store(true)
+
+	// Start ticker
+	lb.startTicker()
+
+	// Ticker should be running
+	lb.tickerAccess.Lock()
+	assert.NotNil(t, lb.ticker, "ticker should be running after startTicker")
+	lb.tickerAccess.Unlock()
+
+	// Wait for idle timeout (200ms) without any Touch() calls
+	time.Sleep(300 * time.Millisecond)
+
+	// Ticker should have stopped
+	lb.tickerAccess.Lock()
+	isNil := lb.ticker == nil
+	lb.tickerAccess.Unlock()
+	assert.True(t, isNil, "ticker should have stopped after idle timeout")
+
+	// Touch should restart the ticker
+	lb.Touch()
+
+	lb.tickerAccess.Lock()
+	assert.NotNil(t, lb.ticker, "ticker should restart after Touch")
+	lb.tickerAccess.Unlock()
+
+	// Clean up
+	close(lb.close)
+	time.Sleep(50 * time.Millisecond)
+}
+

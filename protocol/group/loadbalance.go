@@ -95,12 +95,14 @@ type LoadBalance struct {
 	tierState      atomic.Value // *tierStateSnapshot
 
 	// Health check coordination
-	checking atomic.Bool
-	pauseManager pause.Manager
+	checking      atomic.Bool
+	pauseManager  pause.Manager
 	pauseCallback *list.Element[pause.Callback]
-	ticker       *time.Ticker
-	tickerAccess sync.Mutex
-	close        chan struct{}
+	ticker        *time.Ticker
+	tickerAccess  sync.Mutex
+	close         chan struct{}
+	lastActive    common.TypedValue[time.Time]  // NEW: tracks last connection for idle timeout
+	initialCheckDone atomic.Bool               // NEW: first health check completed?
 }
 
 // candidateSnapshot holds immutable snapshot of candidate pools
@@ -350,8 +352,7 @@ func (lb *LoadBalance) Start(stage adapter.StartStage) error {
 }
 
 func (lb *LoadBalance) PostStart() error {
-	// Perform initial health check asynchronously
-	// selectOutbound() will use all primary outbounds until health check completes
+	lb.startTicker()
 	go lb.performHealthCheck(lb.ctx)
 	return nil
 }
@@ -371,19 +372,14 @@ func (lb *LoadBalance) Close() error {
 	return nil
 }
 
-// Touch starts or resets the idle timeout for health checking
-func (lb *LoadBalance) Touch() {
-	if lb.idleTimeout == 0 {
-		return
-	}
-
+// startTicker starts the periodic health check ticker
+func (lb *LoadBalance) startTicker() {
 	lb.tickerAccess.Lock()
 	defer lb.tickerAccess.Unlock()
-
 	if lb.ticker != nil {
 		return
 	}
-
+	lb.lastActive.Store(time.Now())
 	lb.ticker = time.NewTicker(lb.interval)
 	if lb.pauseManager != nil {
 		lb.pauseCallback = pause.RegisterTicker(lb.pauseManager, lb.ticker, lb.interval, nil)
@@ -391,28 +387,43 @@ func (lb *LoadBalance) Touch() {
 	go lb.loopCheck()
 }
 
+// Touch starts or resets the idle timeout for health checking
+func (lb *LoadBalance) Touch() {
+	lb.lastActive.Store(time.Now())
+	if lb.idleTimeout == 0 {
+		return
+	}
+	lb.startTicker()  // no-op if already running
+}
+
 func (lb *LoadBalance) loopCheck() {
 	if lb.idleTimeout == 0 {
-		select {}
+		for {
+			select {
+			case <-lb.close:
+				return
+			case <-lb.ticker.C:
+				go lb.performHealthCheck(lb.ctx)
+			}
+		}
 	}
-
-	idleTimer := time.NewTimer(lb.idleTimeout)
-	defer idleTimer.Stop()
-
 	for {
 		select {
 		case <-lb.close:
 			return
-		case <-idleTimer.C:
-			lb.tickerAccess.Lock()
-			lb.ticker.Stop()
-			lb.ticker = nil
-			lb.tickerAccess.Unlock()
-			return
 		case <-lb.ticker.C:
-			// Perform health check
+			if time.Since(lb.lastActive.Load()) > lb.idleTimeout {
+				lb.tickerAccess.Lock()
+				lb.ticker.Stop()
+				lb.ticker = nil
+				if lb.pauseManager != nil && lb.pauseCallback != nil {
+					lb.pauseManager.UnregisterCallback(lb.pauseCallback)
+					lb.pauseCallback = nil
+				}
+				lb.tickerAccess.Unlock()
+				return
+			}
 			go lb.performHealthCheck(lb.ctx)
-			idleTimer.Reset(lb.idleTimeout)
 		}
 	}
 }
@@ -484,6 +495,8 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 
 	// Update candidate pools
 	lb.updateCandidates()
+
+	lb.initialCheckDone.Store(true)
 }
 
 // updateCandidates rebuilds candidate pools based on current health check results
@@ -541,6 +554,16 @@ func (lb *LoadBalance) updateCandidates() {
 				// Reuse existing ring
 				newSnapshot.hashRing = oldSnapshot.(*candidateSnapshot).hashRing
 			}
+		}
+	}
+
+	// Stay in bootstrap mode if initial check finds all nodes failed
+	if !lb.initialCheckDone.Load() {
+		if len(primaryCandidates) == 0 && len(backupCandidates) == 0 {
+			lb.logger.Warn(
+				"initial health check: all nodes failed, staying in bootstrap mode",
+			)
+			return
 		}
 	}
 

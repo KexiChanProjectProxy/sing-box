@@ -2,8 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0//),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+<!-- AGENT: Add new changes here before creating a release -->
+<!-- Use the following categories as needed: -->
+
+### Added
+<!-- New features -->
+
+### Changed
+<!-- Changes to existing functionality -->
+
+### Deprecated
+<!-- Soon-to-be removed features -->
+
+### Removed
+<!-- Removed features -->
+
+### Fixed
+<!-- Bug fixes -->
+
+### Security
+<!-- Security vulnerability fixes -->
+
+---
 
 ## [1.12.14.29] - 2026-02-18
 
@@ -39,25 +66,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Features
 
 - **DNS**: HAProxy-style DNS resolver implementation
-
-## Template for Future Releases
-
-## [X.Y.Z] - YYYY-MM-DD
-
-### Added
-- **Feature Area**: Brief description of new feature
-
-### Changed
-- **Component**: Brief description of what changed
-
-### Deprecated
-- **Feature**: Brief description of deprecation (if applicable)
-
-### Removed
-- **Feature**: Brief description of what was removed
-
-### Fixed
-- **Bug**: Brief description of fix
-
-### Security
-- **Issue**: Brief description of security fix

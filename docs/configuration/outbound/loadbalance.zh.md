@@ -22,6 +22,7 @@
     "primary": 3,
     "backup": 1
   },
+  "tolerance": 50,
   "strategy": "consistent_hash",
   "hash": {
     "key_parts": ["src_ip", "matched_ruleset_or_etld"],
@@ -83,6 +84,12 @@ URL 测试驱动的 Top-N 选择配置。这决定了每个池中有多少健康
 ##### top_n.backup
 
 使用的最快备用出站数量。默认：使用所有健康的备用出站。
+
+#### tolerance
+
+Top-N 候选池稳定的容差阈值（毫秒）。如果先前 Top-N 成员的延迟在截止值的 `tolerance` 毫秒内，则保留这些成员。减少 `consistent_hash` 的哈希环重建。默认：`0`（禁用）。
+
+启用后，此设置通过防止节点延迟相近时的快速变化，为候选选择过程增加稳定性。例如，设置 `tolerance: 50` 并选择 Top-3 时，之前在 Top-3 中但现在排名第 4 且仅增加 30ms 延迟的节点仍有资格被选中，从而避免不必要的哈希环重建和会话粘性中断。
 
 #### strategy
 

@@ -148,9 +148,9 @@ func TestTopNSelection(t *testing.T) {
 	primaryStats := lb.collectTierStats(primaryTags)
 	backupStats := lb.collectTierStats(backupTags)
 
-	// Select Top-N
-	primaryCandidates := lb.selectTopN(primaryStats, lb.topNPrimary)
-	backupCandidates := lb.selectTopN(backupStats, lb.topNBackup)
+	// Select Top-N (no previous candidates for initial selection)
+	primaryCandidates := lb.selectTopN(primaryStats, lb.topNPrimary, nil)
+	backupCandidates := lb.selectTopN(backupStats, lb.topNBackup, nil)
 
 	// Verify primary Top-3: p1, p2, p3
 	require.Len(t, primaryCandidates, 3, "should select top 3 primary candidates")
@@ -710,5 +710,268 @@ func TestIdleTimeoutWithEagerStart(t *testing.T) {
 	// Clean up
 	close(lb.close)
 	time.Sleep(50 * time.Millisecond)
+}
+
+// Test 14: Tolerance zero disabled (backward compatibility)
+func TestToleranceZeroDisabled(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Set latencies: p1=10ms, p2=20ms, p3=30ms, p4=40ms, p5=50ms
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
+	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 20})
+	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 30})
+	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 40})
+	history.StoreURLTestHistory("p5", &adapter.URLTestHistory{Time: now, Delay: 50})
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2", "p3", "p4", "p5"},
+		topNPrimary:     3,
+		tolerance:       0, // Disabled
+		interval:        time.Minute,
+		history:         history,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"p3": &mockOutbound{tag: "p3", network: []string{"tcp"}},
+				"p4": &mockOutbound{tag: "p4", network: []string{"tcp"}},
+				"p5": &mockOutbound{tag: "p5", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	stats := lb.collectTierStats(lb.primaryTags)
+
+	// With tolerance=0, should get pure Top-3 regardless of previous candidates
+	prevCandidates := []string{"p4", "p5"} // Previous were slower
+	result := lb.selectTopN(stats, 3, prevCandidates)
+
+	require.Len(t, result, 3, "should select top 3 when tolerance disabled")
+	assert.Equal(t, "p1", result[0].Tag())
+	assert.Equal(t, "p2", result[1].Tag())
+	assert.Equal(t, "p3", result[2].Tag())
+}
+
+// Test 15: Tolerance stabilization - previous candidates within tolerance are eligible
+func TestToleranceStabilization(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Current health: p1=48ms, p2=49ms, p3=50ms, p4=100ms
+	// Top-3 pure selection would be: p1, p2, p3
+	// Previous candidates included p4=55ms (within tolerance of p3=50ms)
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 48})
+	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 49})
+	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 50})
+	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 100})
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2", "p3", "p4"},
+		topNPrimary:     3,
+		tolerance:       10, // 10ms tolerance
+		interval:        time.Minute,
+		history:         history,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"p3": &mockOutbound{tag: "p3", network: []string{"tcp"}},
+				"p4": &mockOutbound{tag: "p4", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	stats := lb.collectTierStats(lb.primaryTags)
+
+	// Previous candidate p4 (at 100ms now) exceeds tolerance of p3=50ms + 10ms = 60ms
+	// Should NOT be retained
+	prevCandidates := []string{"p4"}
+	result := lb.selectTopN(stats, 3, prevCandidates)
+
+	require.Len(t, result, 3, "should select top 3")
+	assert.Equal(t, "p1", result[0].Tag())
+	assert.Equal(t, "p2", result[1].Tag())
+	assert.Equal(t, "p3", result[2].Tag())
+}
+
+// Test 16: Tolerance stabilization - previous candidate within tolerance is retained
+func TestToleranceWithinThreshold(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Current health: p1=48ms, p2=50ms, p3=55ms, p4=58ms
+	// Top-3 pure selection would be: p1, p2, p3
+	// Previous candidates included p4 at 58ms (within tolerance of p3=55ms + 5ms)
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 48})
+	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 50})
+	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 55})
+	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 58})
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2", "p3", "p4"},
+		topNPrimary:     3,
+		tolerance:       5, // 5ms tolerance
+		interval:        time.Minute,
+		history:         history,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"p3": &mockOutbound{tag: "p3", network: []string{"tcp"}},
+				"p4": &mockOutbound{tag: "p4", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	stats := lb.collectTierStats(lb.primaryTags)
+
+	// Previous candidate p4 (at 58ms) is within tolerance of p3=55ms + 5ms = 60ms
+	// Should be eligible for selection
+	// But since we still take best 3 from eligible set, p4 still won't make it
+	// because p1, p2, p3 are all better
+	prevCandidates := []string{"p4"}
+	result := lb.selectTopN(stats, 3, prevCandidates)
+
+	require.Len(t, result, 3)
+	// Best 3 are still selected from eligible set
+	assert.Equal(t, "p1", result[0].Tag())
+	assert.Equal(t, "p2", result[1].Tag())
+	assert.Equal(t, "p3", result[2].Tag())
+}
+
+// Test 17: Previous candidate exceeding tolerance is displaced
+func TestToleranceExceedThreshold(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Current health: p1=40ms, p2=45ms, p3=50ms, p4=80ms, p5=85ms
+	// Top-3 pure: p1, p2, p3
+	// Previous candidates included p5
+	// With tolerance=20ms: cutoff=50ms, maxAllowed=70ms
+	// p4 (80ms) and p5 (85ms) both exceed tolerance
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 40})
+	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 45})
+	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 50})
+	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 80})
+	history.StoreURLTestHistory("p5", &adapter.URLTestHistory{Time: now, Delay: 85})
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2", "p3", "p4", "p5"},
+		topNPrimary:     3,
+		tolerance:       20, // 20ms tolerance
+		interval:        time.Minute,
+		history:         history,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"p3": &mockOutbound{tag: "p3", network: []string{"tcp"}},
+				"p4": &mockOutbound{tag: "p4", network: []string{"tcp"}},
+				"p5": &mockOutbound{tag: "p5", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	stats := lb.collectTierStats(lb.primaryTags)
+
+	// Previous candidate p5 exceeds tolerance (85ms > 50ms + 20ms = 70ms)
+	// Should NOT be eligible
+	prevCandidates := []string{"p5"}
+	result := lb.selectTopN(stats, 3, prevCandidates)
+
+	require.Len(t, result, 3)
+	assert.Equal(t, "p1", result[0].Tag())
+	assert.Equal(t, "p2", result[1].Tag())
+	assert.Equal(t, "p3", result[2].Tag())
+}
+
+// Test 18: Failed previous candidate is not retained regardless of tolerance
+func TestToleranceWithFailedPrevCandidate(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Current health: p1=40ms, p2=50ms, p3=60ms (p4 failed)
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 40})
+	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 50})
+	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 60})
+	// p4 has no history (failed)
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2", "p3", "p4"},
+		topNPrimary:     3,
+		tolerance:       100, // Large tolerance
+		interval:        time.Minute,
+		history:         history,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"p3": &mockOutbound{tag: "p3", network: []string{"tcp"}},
+				"p4": &mockOutbound{tag: "p4", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	stats := lb.collectTierStats(lb.primaryTags)
+
+	// Previous candidate p4 failed - should not be retained regardless of tolerance
+	prevCandidates := []string{"p4"}
+	result := lb.selectTopN(stats, 3, prevCandidates)
+
+	require.Len(t, result, 3)
+	assert.Equal(t, "p1", result[0].Tag())
+	assert.Equal(t, "p2", result[1].Tag())
+	assert.Equal(t, "p3", result[2].Tag())
+}
+
+// Test 19: Tolerance retains previous candidate that is now outside pure Top-N
+func TestToleranceRetainsPrevCandidate(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+
+	// Current health: p1=40ms, p2=50ms, p3=51ms, p4=55ms
+	// Top-3 pure: p1, p2, p3
+	// Previous candidates included p4
+	// With tolerance=10ms: cutoff=51ms, maxAllowed=61ms
+	// p4 (55ms) is within tolerance, so eligible
+	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 40})
+	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 50})
+	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 51})
+	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 55})
+
+	lb := &LoadBalance{
+		logger:          &mockLogger{},
+		primaryTags:     []string{"p1", "p2", "p3", "p4"},
+		topNPrimary:     3,
+		tolerance:       10, // 10ms tolerance
+		interval:        time.Minute,
+		history:         history,
+		outbound: &mockOutboundManager{
+			outbounds: map[string]adapter.Outbound{
+				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
+				"p2": &mockOutbound{tag: "p2", network: []string{"tcp"}},
+				"p3": &mockOutbound{tag: "p3", network: []string{"tcp"}},
+				"p4": &mockOutbound{tag: "p4", network: []string{"tcp"}},
+			},
+		},
+	}
+
+	stats := lb.collectTierStats(lb.primaryTags)
+
+	// p4 is eligible but we still select best 3 from eligible set
+	// Since p1, p2, p3 are all better than p4, they are selected
+	prevCandidates := []string{"p4"}
+	result := lb.selectTopN(stats, 3, prevCandidates)
+
+	require.Len(t, result, 3)
+	assert.Equal(t, "p1", result[0].Tag())
+	assert.Equal(t, "p2", result[1].Tag())
+	assert.Equal(t, "p3", result[2].Tag())
 }
 

@@ -25,6 +25,7 @@ type LoadBalanceOutboundOptions struct {
 	Timeout                   badoption.Duration               `json:"timeout,omitempty"`
 	IdleTimeout               badoption.Duration               `json:"idle_timeout,omitempty"`
 	TopN                      LoadBalanceTopNOptions           `json:"top_n"`
+	Tolerance                 uint16                           `json:"tolerance,omitempty"`
 	Strategy                  string                           `json:"strategy"`
 	Hash                      *LoadBalanceHashOptions          `json:"hash,omitempty"`
 	Hysteresis                *LoadBalanceHysteresisOptions    `json:"hysteresis,omitempty"`

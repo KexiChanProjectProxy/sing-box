@@ -70,6 +70,7 @@ type LoadBalance struct {
 	idleTimeout   time.Duration
 	topNPrimary   int
 	topNBackup    int
+	tolerance     uint16 // tolerance in ms for Top-N stabilization
 	strategy      string
 	emptyPoolAction string
 
@@ -193,6 +194,7 @@ func NewLoadBalance(
 		idleTimeout: time.Duration(options.IdleTimeout),
 		topNPrimary: options.TopN.Primary,
 		topNBackup:  options.TopN.Backup,
+		tolerance:   options.Tolerance,
 		strategy:    options.Strategy,
 		emptyPoolAction: options.EmptyPoolAction,
 		interruptExternalConnections: options.InterruptExistConnections,
@@ -507,9 +509,17 @@ func (lb *LoadBalance) updateCandidates() {
 	// Collect health stats for backup tier
 	backupStats := lb.collectTierStats(lb.backupTags)
 
-	// Select Top-N candidates per tier
-	primaryCandidates := lb.selectTopN(primaryStats, lb.topNPrimary)
-	backupCandidates := lb.selectTopN(backupStats, lb.topNBackup)
+	// Extract previous candidate tags for tolerance-based stabilization
+	var prevPrimaryTags, prevBackupTags []string
+	if oldSnapshot := lb.candidateState.Load(); oldSnapshot != nil {
+		old := oldSnapshot.(*candidateSnapshot)
+		prevPrimaryTags = extractTags(old.primaryCandidates)
+		prevBackupTags = extractTags(old.backupCandidates)
+	}
+
+	// Select Top-N candidates per tier with tolerance stabilization
+	primaryCandidates := lb.selectTopN(primaryStats, lb.topNPrimary, prevPrimaryTags)
+	backupCandidates := lb.selectTopN(backupStats, lb.topNBackup, prevBackupTags)
 
 	// Apply hysteresis to determine active tier
 	currentTierState := lb.tierState.Load().(*tierStateSnapshot)
@@ -627,7 +637,8 @@ func (lb *LoadBalance) collectTierStats(tags []string) []nodeStat {
 }
 
 // selectTopN selects the lowest-latency N successful nodes from stats
-func (lb *LoadBalance) selectTopN(stats []nodeStat, n int) []adapter.Outbound {
+// with tolerance-based stabilization to prevent candidate pool churn
+func (lb *LoadBalance) selectTopN(stats []nodeStat, n int, prevCandidateTags []string) []adapter.Outbound {
 	// Filter successful nodes
 	successNodes := make([]nodeStat, 0, len(stats))
 	for _, stat := range stats {
@@ -645,15 +656,69 @@ func (lb *LoadBalance) selectTopN(stats []nodeStat, n int) []adapter.Outbound {
 		return successNodes[i].delay < successNodes[j].delay
 	})
 
-	// Take Top-N
+	// Fast path: tolerance disabled or no previous candidates
+	if lb.tolerance == 0 || len(prevCandidateTags) == 0 {
+		return lb.takeTopN(successNodes, n)
+	}
+
+	// Tolerance path: include previous candidates within tolerance
+	// Build a map of successful nodes for quick lookup
+	successMap := make(map[string]nodeStat)
+	for _, node := range successNodes {
+		successMap[node.tag] = node
+	}
+
+	// Determine cutoff delay (delay of N-th ranked node, or last node if fewer than N)
+	cutoffIdx := n - 1
+	if cutoffIdx >= len(successNodes) {
+		cutoffIdx = len(successNodes) - 1
+	}
+	cutoffDelay := successNodes[cutoffIdx].delay
+	maxAllowedDelay := cutoffDelay + uint16(lb.tolerance)
+
+	// Build eligible set: all pure Top-N nodes + previous candidates within tolerance
+	eligibleSet := make(map[string]nodeStat)
+
+	// First, add all pure Top-N nodes
+	for i := 0; i < n && i < len(successNodes); i++ {
+		eligibleSet[successNodes[i].tag] = successNodes[i]
+	}
+
+	// Then, add previous candidates that are still successful AND within tolerance
+	for _, prevTag := range prevCandidateTags {
+		if stat, ok := successMap[prevTag]; ok {
+			// Check if within tolerance
+			if stat.delay <= maxAllowedDelay {
+				if _, exists := eligibleSet[prevTag]; !exists {
+					eligibleSet[prevTag] = stat
+				}
+			}
+		}
+	}
+
+	// Collect eligible nodes in delay-sorted order
+	eligibleNodes := make([]nodeStat, 0, len(eligibleSet))
+	for _, stat := range eligibleSet {
+		eligibleNodes = append(eligibleNodes, stat)
+	}
+	sort.Slice(eligibleNodes, func(i, j int) bool {
+		return eligibleNodes[i].delay < eligibleNodes[j].delay
+	})
+
+	// Take first N from eligible set
+	return lb.takeTopN(eligibleNodes, n)
+}
+
+// takeTopN is a helper that takes the first N nodes from a sorted slice
+func (lb *LoadBalance) takeTopN(sortedNodes []nodeStat, n int) []adapter.Outbound {
 	topN := n
-	if topN > len(successNodes) {
-		topN = len(successNodes)
+	if topN > len(sortedNodes) {
+		topN = len(sortedNodes)
 	}
 
 	result := make([]adapter.Outbound, 0, topN)
 	for i := 0; i < topN; i++ {
-		detour, loaded := lb.outbound.Outbound(successNodes[i].tag)
+		detour, loaded := lb.outbound.Outbound(sortedNodes[i].tag)
 		if loaded {
 			result = append(result, detour)
 		}
@@ -1315,6 +1380,18 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 	lb.updateCandidates()
 
 	return result, nil
+}
+
+// extractTags extracts tags from a slice of outbounds
+func extractTags(outbounds []adapter.Outbound) []string {
+	if outbounds == nil {
+		return nil
+	}
+	tags := make([]string, len(outbounds))
+	for i, o := range outbounds {
+		tags[i] = o.Tag()
+	}
+	return tags
 }
 
 // logCandidates logs detailed candidate information

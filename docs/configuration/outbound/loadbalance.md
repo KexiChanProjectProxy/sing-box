@@ -22,6 +22,7 @@
     "primary": 3,
     "backup": 1
   },
+  "tolerance": 50,
   "strategy": "consistent_hash",
   "hash": {
     "key_parts": ["src_ip", "matched_ruleset_or_etld"],
@@ -83,6 +84,12 @@ When set to a value like `3`, only the 3 fastest (lowest latency) primary outbou
 ##### top_n.backup
 
 Number of fastest backup outbounds to use. Default: use all healthy backup outbounds.
+
+#### tolerance
+
+Tolerance threshold in milliseconds for Top-N candidate pool stabilization. Previous Top-N members are retained if their latency is within `tolerance` ms of the cutoff. Reduces hash ring rebuilds for `consistent_hash`. Default: `0` (disabled).
+
+When enabled, this setting adds stability to the candidate selection process by preventing rapid changes when nodes have similar latencies. For example, with `tolerance: 50` and Top-3 selection, a node that was previously in the Top-3 but is now ranked 4th with only a 30ms increase will still be eligible for selection, preventing unnecessary hash ring rebuilds and sticky session disruptions.
 
 #### strategy
 

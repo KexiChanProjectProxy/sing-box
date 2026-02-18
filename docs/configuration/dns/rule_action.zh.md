@@ -18,7 +18,14 @@ icon: material/new-box
   "strategy": "",
   "disable_cache": false,
   "rewrite_ttl": null,
-  "client_subnet": null
+  "client_subnet": null,
+  "resolve_retries": 0,
+  "resolve_timeout": "",
+  "hold_valid": "",
+  "hold_nx": "",
+  "hold_refused": "",
+  "hold_other": "",
+  "hold_timeout": ""
 }
 ```
 
@@ -53,6 +60,50 @@ icon: material/new-box
 如果值是 IP 地址而不是前缀，则会自动附加 `/32` 或 `/128`。
 
 将覆盖 `dns.client_subnet`.
+
+#### resolve_retries
+
+DNS 查询重试次数。
+
+#### resolve_timeout
+
+每次 DNS 查询重试的超时时间。
+
+#### hold_valid
+
+!!! question "HAProxy 风格解析器"
+
+成功 DNS 回应（包含答案）的 advertised TTL。
+
+在此持续时间后，响应将立即返回（stale-while-revalidate），同时触发后台刷新。
+
+缓存生命周期为 `hold_valid * 2`（至少 `hold_valid + 30s`）。
+
+#### hold_nx
+
+!!! question "HAProxy 风格解析器"
+
+NXDOMAIN（域名不存在）响应的 advertised TTL。
+
+#### hold_refused
+
+!!! question "HAProxy 风格解析器"
+
+REFUSED DNS 响应的 advertised TTL。
+
+#### hold_other
+
+!!! question "HAProxy 风格解析器"
+
+其他 DNS 错误响应（例如 SERVFAIL）的 advertised TTL。
+
+#### hold_timeout
+
+!!! question "HAProxy 风格解析器"
+
+当 DNS 查询超时时，回退到过时的缓存响应。
+
+如果设置，将在超时时返回最后成功的缓存响应，而不是直接失败。
 
 ### route-options
 

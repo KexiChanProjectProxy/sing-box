@@ -18,7 +18,14 @@ icon: material/new-box
   "strategy": "",
   "disable_cache": false,
   "rewrite_ttl": null,
-  "client_subnet": null
+  "client_subnet": null,
+  "resolve_retries": 0,
+  "resolve_timeout": "",
+  "hold_valid": "",
+  "hold_nx": "",
+  "hold_refused": "",
+  "hold_other": "",
+  "hold_timeout": ""
 }
 ```
 
@@ -53,6 +60,50 @@ Append a `edns0-subnet` OPT extra record with the specified IP prefix to every q
 If value is an IP address instead of prefix, `/32` or `/128` will be appended automatically.
 
 Will overrides `dns.client_subnet`.
+
+#### resolve_retries
+
+Number of DNS query retry attempts.
+
+#### resolve_timeout
+
+Timeout for each DNS query retry attempt.
+
+#### hold_valid
+
+!!! question "HAProxy-style resolver"
+
+Advertised TTL for successful DNS responses with answers.
+
+The response will be returned immediately (stale-while-revalidate) after this duration, with a background refresh triggered.
+
+Cache lifetime is `hold_valid * 2` (minimum `hold_valid + 30s`).
+
+#### hold_nx
+
+!!! question "HAProxy-style resolver"
+
+Advertised TTL for NXDOMAIN (non-existent domain) responses.
+
+#### hold_refused
+
+!!! question "HAProxy-style resolver"
+
+Advertised TTL for REFUSED DNS responses.
+
+#### hold_other
+
+!!! question "HAProxy-style resolver"
+
+Advertised TTL for other DNS error responses (e.g., SERVFAIL).
+
+#### hold_timeout
+
+!!! question "HAProxy-style resolver"
+
+Fallback to stale cached response when DNS queries time out.
+
+If set, the last successful cached response will be returned instead of failing on timeout.
 
 ### route-options
 

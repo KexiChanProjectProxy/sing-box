@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"net/netip"
+	"time"
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -37,6 +38,15 @@ type DNSQueryOptions struct {
 	DisableCache   bool
 	RewriteTTL     *uint32
 	ClientSubnet   netip.Prefix
+
+	// HAProxy-style resolver options
+	ResolveRetries int
+	ResolveTimeout time.Duration
+	HoldValid      time.Duration
+	HoldNX         time.Duration
+	HoldRefused    time.Duration
+	HoldTimeout    time.Duration
+	HoldOther      time.Duration
 }
 
 func DNSQueryOptionsFrom(ctx context.Context, options *option.DomainResolveOptions) (*DNSQueryOptions, error) {
@@ -49,11 +59,18 @@ func DNSQueryOptionsFrom(ctx context.Context, options *option.DomainResolveOptio
 		return nil, E.New("domain resolver not found: " + options.Server)
 	}
 	return &DNSQueryOptions{
-		Transport:    transport,
-		Strategy:     C.DomainStrategy(options.Strategy),
-		DisableCache: options.DisableCache,
-		RewriteTTL:   options.RewriteTTL,
-		ClientSubnet: options.ClientSubnet.Build(netip.Prefix{}),
+		Transport:      transport,
+		Strategy:       C.DomainStrategy(options.Strategy),
+		DisableCache:   options.DisableCache,
+		RewriteTTL:     options.RewriteTTL,
+		ClientSubnet:   options.ClientSubnet.Build(netip.Prefix{}),
+		ResolveRetries: options.ResolveRetries,
+		ResolveTimeout: time.Duration(options.ResolveTimeout),
+		HoldValid:      time.Duration(options.HoldValid),
+		HoldNX:         time.Duration(options.HoldNX),
+		HoldRefused:    time.Duration(options.HoldRefused),
+		HoldTimeout:    time.Duration(options.HoldTimeout),
+		HoldOther:      time.Duration(options.HoldOther),
 	}, nil
 }
 

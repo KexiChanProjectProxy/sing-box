@@ -98,6 +98,15 @@ type _DomainResolveOptions struct {
 	DisableCache bool                  `json:"disable_cache,omitempty"`
 	RewriteTTL   *uint32               `json:"rewrite_ttl,omitempty"`
 	ClientSubnet *badoption.Prefixable `json:"client_subnet,omitempty"`
+
+	// HAProxy-style resolver options for fast re-resolution
+	ResolveRetries int                `json:"resolve_retries,omitempty"`  // retry count per query (default: 1 = no retry)
+	ResolveTimeout badoption.Duration `json:"resolve_timeout,omitempty"` // per-attempt timeout
+	HoldValid      badoption.Duration `json:"hold_valid,omitempty"`      // lazy cache TTL for successful responses (non-blocking refresh)
+	HoldNX         badoption.Duration `json:"hold_nx,omitempty"`         // cache TTL for NXDOMAIN
+	HoldRefused    badoption.Duration `json:"hold_refused,omitempty"`    // cache TTL for REFUSED
+	HoldTimeout    badoption.Duration `json:"hold_timeout,omitempty"`    // cache TTL for timeout errors
+	HoldOther      badoption.Duration `json:"hold_other,omitempty"`      // cache TTL for other errors (SERVFAIL, etc.)
 }
 
 type DomainResolveOptions _DomainResolveOptions
@@ -108,7 +117,14 @@ func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 	} else if o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
 		!o.DisableCache &&
 		o.RewriteTTL == nil &&
-		o.ClientSubnet == nil {
+		o.ClientSubnet == nil &&
+		o.ResolveRetries == 0 &&
+		o.ResolveTimeout == 0 &&
+		o.HoldValid == 0 &&
+		o.HoldNX == 0 &&
+		o.HoldRefused == 0 &&
+		o.HoldTimeout == 0 &&
+		o.HoldOther == 0 {
 		return json.Marshal(o.Server)
 	} else {
 		return json.Marshal((_DomainResolveOptions)(o))

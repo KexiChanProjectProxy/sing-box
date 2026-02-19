@@ -406,9 +406,11 @@ Notice each session has a different `maxLife` value due to jitter.
 
 #### tls
 
-==Required==
-
 TLS configuration, see [TLS](/configuration/shared/tls/#outbound).
+
+TLS is optional. When not configured, AnyTLS operates in plain TCP mode,
+which is useful when connecting over a trusted tunnel or to a server behind
+a reverse proxy that handles TLS termination.
 
 ### Dial Fields
 

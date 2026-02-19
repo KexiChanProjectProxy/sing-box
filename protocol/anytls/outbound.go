@@ -41,9 +41,6 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		server:  options.ServerOptions.Build(),
 		logger:  logger,
 	}
-	if options.TLS == nil || !options.TLS.Enabled {
-		return nil, C.ErrTLSRequired
-	}
 	// TCP Fast Open is incompatible with anytls because TFO creates a lazy connection
 	// that only establishes on first write. The lazy connection returns an empty address
 	// before establishment, but anytls SOCKS wrapper tries to access the remote address
@@ -52,11 +49,13 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		return nil, E.New("tcp_fast_open is not supported with anytls outbound")
 	}
 
-	tlsConfig, err := tls.NewClient(ctx, options.Server, common.PtrValueOrDefault(options.TLS))
-	if err != nil {
-		return nil, err
+	if options.TLS != nil && options.TLS.Enabled {
+		tlsConfig, err := tls.NewClient(ctx, options.Server, common.PtrValueOrDefault(options.TLS))
+		if err != nil {
+			return nil, err
+		}
+		outbound.tlsConfig = tlsConfig
 	}
-	outbound.tlsConfig = tlsConfig
 
 	outboundDialer, err := dialer.NewWithOptions(dialer.Options{
 		Context:        ctx,
@@ -109,12 +108,15 @@ func (h *Outbound) dialOut(ctx context.Context) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsConn, err := tls.ClientHandshake(ctx, conn, h.tlsConfig)
-	if err != nil {
-		common.Close(tlsConn, conn)
-		return nil, err
+	if h.tlsConfig != nil {
+		tlsConn, err := tls.ClientHandshake(ctx, conn, h.tlsConfig)
+		if err != nil {
+			common.Close(tlsConn, conn)
+			return nil, err
+		}
+		conn = tlsConn
 	}
-	return tlsConn, nil
+	return conn, nil
 }
 
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {

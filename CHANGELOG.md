@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.12.14.31] - 2026-02-20
+
+
 <!-- AGENT: Add new changes here before creating a release -->
 <!-- Use the following categories as needed: -->
 

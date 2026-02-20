@@ -2,9 +2,11 @@ package cloudflared
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -16,7 +18,11 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
-	"github.com/coder/websocket"
+	"github.com/gorilla/websocket"
+)
+
+const (
+	defaultCloudflaredVersion = "2026.2.0"
 )
 
 func RegisterOutbound(registry *outbound.Registry) {
@@ -25,11 +31,12 @@ func RegisterOutbound(registry *outbound.Registry) {
 
 type Outbound struct {
 	outbound.Adapter
-	ctx      context.Context
-	logger   log.ContextLogger
-	dialer   N.Dialer // the underlying dialer (detour-aware if detour is configured)
-	hostname string    // Cloudflare Access hostname
-	wsURL    string    // "wss://<hostname>" — WebSocket URL to connect to
+	ctx     context.Context
+	logger  log.ContextLogger
+	dialer  N.Dialer
+	version string
+	hostname string
+	wsURL    string
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.CloudflaredOutboundOptions) (adapter.Outbound, error) {
@@ -37,7 +44,12 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		return nil, E.New("missing required field: hostname")
 	}
 
-	outboundDialer, err := dialer.New(ctx, options.DialerOptions, true) // true = hostname is domain
+	version := options.CloudflaredVersion
+	if version == "" {
+		version = defaultCloudflaredVersion
+	}
+
+	outboundDialer, err := dialer.New(ctx, options.DialerOptions, true)
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +59,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		ctx:      ctx,
 		logger:   logger,
 		dialer:   outboundDialer,
+		version:  version,
 		hostname: options.Hostname,
 		wsURL:    "wss://" + options.Hostname,
 	}, nil
@@ -61,28 +74,22 @@ func (o *Outbound) DialContext(ctx context.Context, network string, destination 
 
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		// Create a custom HTTP client that uses our dialer (which may be a detour dialer)
-		httpTransport := &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				// Parse the addr to M.Socksaddr and route through our dialer
+		gorillaDialer := &websocket.Dialer{
+			NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				return o.dialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
 			},
-			ForceAttemptHTTP2: false,
+			HandshakeTimeout: 45 * time.Second,
 		}
-		httpClient := &http.Client{Transport: httpTransport}
 
-		// Dial WebSocket to the Cloudflare edge
-		wsConn, _, err := websocket.Dial(ctx, o.wsURL, &websocket.DialOptions{
-			HTTPClient: httpClient,
-		})
+		headers := http.Header{}
+		headers.Set("User-Agent", "cloudflared/"+o.version)
+
+		wsConn, _, err := gorillaDialer.DialContext(ctx, o.wsURL, headers)
 		if err != nil {
 			return nil, E.Cause(err, "dial cloudflared websocket to ", o.hostname)
 		}
 
-		// Convert WebSocket to net.Conn using binary message framing
-		// Use a background context so the connection lives beyond this function
-		netConn := websocket.NetConn(context.Background(), wsConn, websocket.MessageBinary)
-		return netConn, nil
+		return newCloudflaredConn(wsConn), nil
 
 	default:
 		return nil, E.New("cloudflared only supports TCP")
@@ -91,4 +98,78 @@ func (o *Outbound) DialContext(ctx context.Context, network string, destination 
 
 func (o *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	return nil, os.ErrInvalid
+}
+
+// cloudflaredConn wraps a gorilla/websocket connection to implement net.Conn
+// with binary message framing, matching the official cloudflared client's behavior.
+type cloudflaredConn struct {
+	conn   *websocket.Conn
+	reader io.Reader
+}
+
+// newCloudflaredConn creates a new cloudflaredConn from a gorilla websocket connection.
+func newCloudflaredConn(ws *websocket.Conn) *cloudflaredConn {
+	return &cloudflaredConn{conn: ws}
+}
+
+// Read reads from the WebSocket connection using binary message framing.
+// It uses NextReader to get the message reader, exactly like the official client.
+func (c *cloudflaredConn) Read(p []byte) (n int, err error) {
+	if c.reader == nil {
+		var messageType int
+		messageType, c.reader, err = c.conn.NextReader()
+		if err != nil {
+			return 0, err
+		}
+		if messageType != websocket.BinaryMessage {
+			return 0, net.ErrClosed
+		}
+	}
+	n, err = c.reader.Read(p)
+	if err != nil {
+		// Reader is exhausted, reset for next message
+		c.reader = nil
+	}
+	return n, err
+}
+
+// Write writes to the WebSocket connection using binary message framing.
+// It uses WriteMessage with BinaryMessage type, exactly like the official client.
+func (c *cloudflaredConn) Write(p []byte) (n int, err error) {
+	err = c.conn.WriteMessage(websocket.BinaryMessage, p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// Close closes the WebSocket connection.
+func (c *cloudflaredConn) Close() error {
+	return c.conn.Close()
+}
+
+// SetDeadline sets both read and write deadlines.
+func (c *cloudflaredConn) SetDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+// SetReadDeadline sets the read deadline.
+func (c *cloudflaredConn) SetReadDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+// SetWriteDeadline sets the write deadline.
+func (c *cloudflaredConn) SetWriteDeadline(t time.Time) error {
+	// gorilla/websocket doesn't have a separate write deadline
+	return nil
+}
+
+// LocalAddr returns the local network address.
+func (c *cloudflaredConn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+// RemoteAddr returns the remote network address.
+func (c *cloudflaredConn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }

@@ -74,6 +74,8 @@ func (o *Outbound) DialContext(ctx context.Context, network string, destination 
 
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
+		o.logger.DebugContext(ctx, "dialing cloudflared websocket to ", o.hostname)
+
 		gorillaDialer := &websocket.Dialer{
 			NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				return o.dialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
@@ -86,10 +88,13 @@ func (o *Outbound) DialContext(ctx context.Context, network string, destination 
 
 		wsConn, _, err := gorillaDialer.DialContext(ctx, o.wsURL, headers)
 		if err != nil {
+			o.logger.ErrorContext(ctx, "failed to dial cloudflared websocket to ", o.hostname, ": ", err)
 			return nil, E.Cause(err, "dial cloudflared websocket to ", o.hostname)
 		}
 
-		return newCloudflaredConn(wsConn), nil
+		o.logger.InfoContext(ctx, "cloudflared websocket connected to ", o.hostname)
+
+		return newCloudflaredConn(wsConn, o.logger), nil
 
 	default:
 		return nil, E.New("cloudflared only supports TCP")
@@ -105,39 +110,57 @@ func (o *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 type cloudflaredConn struct {
 	conn   *websocket.Conn
 	reader io.Reader
+	logger log.ContextLogger
 }
 
 // newCloudflaredConn creates a new cloudflaredConn from a gorilla websocket connection.
-func newCloudflaredConn(ws *websocket.Conn) *cloudflaredConn {
-	return &cloudflaredConn{conn: ws}
+func newCloudflaredConn(ws *websocket.Conn, logger log.ContextLogger) *cloudflaredConn {
+	return &cloudflaredConn{conn: ws, logger: logger}
 }
 
 // Read reads from the WebSocket connection using binary message framing.
 // It uses NextReader to get the message reader, exactly like the official client.
 func (c *cloudflaredConn) Read(p []byte) (n int, err error) {
-	if c.reader == nil {
-		var messageType int
-		messageType, c.reader, err = c.conn.NextReader()
+	for {
+		if c.reader == nil {
+			c.logger.Trace("waiting for next websocket message")
+			var messageType int
+			messageType, c.reader, err = c.conn.NextReader()
+			if err != nil {
+				c.logger.Debug("websocket read error: ", err)
+				return 0, err
+			}
+			c.logger.Trace("received websocket message, type=", messageType)
+			if messageType != websocket.BinaryMessage {
+				return 0, net.ErrClosed
+			}
+		}
+		n, err = c.reader.Read(p)
+		if err == io.EOF {
+			c.logger.Trace("websocket message fully consumed, waiting for next")
+			c.reader = nil
+			if n > 0 {
+				return n, nil // return data, swallow EOF
+			}
+			continue // no data, get next message
+		}
+		if n > 0 {
+			c.logger.Trace("read ", n, " bytes from websocket")
+		}
 		if err != nil {
-			return 0, err
+			c.logger.Debug("websocket read error: ", err)
 		}
-		if messageType != websocket.BinaryMessage {
-			return 0, net.ErrClosed
-		}
+		return n, err
 	}
-	n, err = c.reader.Read(p)
-	if err != nil {
-		// Reader is exhausted, reset for next message
-		c.reader = nil
-	}
-	return n, err
 }
 
 // Write writes to the WebSocket connection using binary message framing.
 // It uses WriteMessage with BinaryMessage type, exactly like the official client.
 func (c *cloudflaredConn) Write(p []byte) (n int, err error) {
+	c.logger.Trace("writing ", len(p), " bytes to websocket")
 	err = c.conn.WriteMessage(websocket.BinaryMessage, p)
 	if err != nil {
+		c.logger.Debug("websocket write error: ", err)
 		return 0, err
 	}
 	return len(p), nil
@@ -145,12 +168,16 @@ func (c *cloudflaredConn) Write(p []byte) (n int, err error) {
 
 // Close closes the WebSocket connection.
 func (c *cloudflaredConn) Close() error {
+	c.logger.Debug("closing cloudflared websocket connection")
 	return c.conn.Close()
 }
 
 // SetDeadline sets both read and write deadlines.
 func (c *cloudflaredConn) SetDeadline(t time.Time) error {
-	return c.conn.SetReadDeadline(t)
+	if err := c.conn.SetReadDeadline(t); err != nil {
+		return err
+	}
+	return c.conn.SetWriteDeadline(t)
 }
 
 // SetReadDeadline sets the read deadline.
@@ -160,8 +187,7 @@ func (c *cloudflaredConn) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets the write deadline.
 func (c *cloudflaredConn) SetWriteDeadline(t time.Time) error {
-	// gorilla/websocket doesn't have a separate write deadline
-	return nil
+	return c.conn.SetWriteDeadline(t)
 }
 
 // LocalAddr returns the local network address.

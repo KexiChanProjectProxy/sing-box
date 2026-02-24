@@ -116,6 +116,23 @@ func (s *Selector) Now() string {
 	return selected.Tag()
 }
 
+// PreferDomainConfig implements adapter.PreferDomainOverrider.
+// If the selector itself has prefer_domain configured, use that.
+// Otherwise, delegate to the currently selected child outbound.
+func (s *Selector) PreferDomainConfig() *adapter.PreferDomainConfig {
+	if config := s.Adapter.PreferDomainConfig(); config != nil {
+		return config
+	}
+	selected := s.selected.Load()
+	if selected == nil {
+		return nil
+	}
+	if overrider, ok := selected.(adapter.PreferDomainOverrider); ok {
+		return overrider.PreferDomainConfig()
+	}
+	return nil
+}
+
 func (s *Selector) All() []string {
 	return s.tags
 }

@@ -283,6 +283,8 @@ func NewLoadBalance(
 		lb.geositeReader = router.GeositeReader()
 	}
 
+	lb.ApplyPreferDomain(options.PreferDomain)
+
 	return lb, nil
 }
 

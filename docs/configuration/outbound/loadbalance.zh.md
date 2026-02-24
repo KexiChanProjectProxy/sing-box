@@ -35,7 +35,8 @@
     "backup_hold_time": "5m"
   },
   "empty_pool_action": "error",
-  "interrupt_exist_connections": false
+  "interrupt_exist_connections": false,
+  "prefer_domain": true
 }
 ```
 
@@ -174,6 +175,12 @@ Top-N 候选池稳定的容差阈值（毫秒）。如果先前 Top-N 成员的�
 当活动出站池改变时中断现有连接。
 
 只有入站连接受此设置影响，内部连接总是会被中断。
+
+#### prefer_domain
+
+与 dial 字段中的 [prefer_domain](/zh/configuration/shared/dial/#prefer_domain) 选项相同。
+
+在组出站上启用时，IP 目标会被嗅探的域名覆盖，然后将连接传递给选定的子出站。
 
 ---
 

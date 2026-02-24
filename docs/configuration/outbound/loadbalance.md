@@ -35,7 +35,8 @@
     "backup_hold_time": "5m"
   },
   "empty_pool_action": "error",
-  "interrupt_exist_connections": false
+  "interrupt_exist_connections": false,
+  "prefer_domain": true
 }
 ```
 
@@ -178,6 +179,13 @@ Action to take when all outbounds are unavailable. Available values:
 Interrupt existing connections when the active outbound pool changes.
 
 Only inbound connections are affected by this setting, internal connections will always be interrupted.
+
+#### prefer_domain
+
+Same as the [prefer_domain](/configuration/shared/dial/#prefer_domain) option in dial fields.
+
+When enabled on a group outbound, the IP destination is overridden with the sniffed domain name
+before the connection is handed to the selected child outbound.
 
 ---
 

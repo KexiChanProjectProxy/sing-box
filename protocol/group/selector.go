@@ -57,6 +57,7 @@ func NewSelector(ctx context.Context, router adapter.Router, logger log.ContextL
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: options.InterruptExistConnections,
 	}
+	outbound.ApplyPreferDomain(options.PreferDomain)
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
 	}

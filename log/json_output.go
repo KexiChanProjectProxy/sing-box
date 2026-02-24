@@ -189,15 +189,15 @@ func (o *JSONOutput) buildJSONDocument(entry LogEntry) map[string]interface{} {
 	}
 
 	// DNS
-	dns := make(map[string]interface{})
+	dnsDoc := make(map[string]interface{})
 	if queryType, ok := entry.Metadata["dns_query_type"]; ok {
-		dns["query_type"] = queryType
+		dnsDoc["query_type"] = queryType
 	}
 	if fakeIP, ok := entry.Metadata["fake_ip"].(bool); ok && fakeIP {
-		dns["fake_ip"] = true
+		dnsDoc["fake_ip"] = true
 	}
-	if len(dns) > 0 {
-		doc["dns"] = dns
+	if len(dnsDoc) > 0 {
+		doc["dns"] = dnsDoc
 	}
 
 	// Process

@@ -2,7 +2,6 @@ package route
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net"
 	"net/netip"
@@ -102,6 +101,12 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 		m.connections.Remove(element)
 	})
 	var done atomic.Bool
+	if m.kickWriteHandshake(ctx, conn, remoteConn, false, &done, onClose) {
+		return
+	}
+	if m.kickWriteHandshake(ctx, remoteConn, conn, true, &done, onClose) {
+		return
+	}
 	go m.connectionCopy(ctx, conn, remoteConn, false, &done, onClose)
 	go m.connectionCopy(ctx, remoteConn, conn, true, &done, onClose)
 }
@@ -225,59 +230,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 }
 
 func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn, destination net.Conn, direction bool, done *atomic.Bool, onClose N.CloseHandlerFunc) {
-	var (
-		sourceReader      io.Reader = source
-		destinationWriter io.Writer = destination
-	)
-	var readCounters, writeCounters []N.CountFunc
-	for {
-		sourceReader, readCounters = N.UnwrapCountReader(sourceReader, readCounters)
-		destinationWriter, writeCounters = N.UnwrapCountWriter(destinationWriter, writeCounters)
-		if cachedSrc, isCached := sourceReader.(N.CachedReader); isCached {
-			cachedBuffer := cachedSrc.ReadCached()
-			if cachedBuffer != nil {
-				dataLen := cachedBuffer.Len()
-				_, err := destination.Write(cachedBuffer.Bytes())
-				cachedBuffer.Release()
-				if err != nil {
-					if done.Swap(true) {
-						onClose(err)
-					}
-					common.Close(source, destination)
-					if !direction {
-						m.logger.ErrorContext(ctx, "connection upload payload: ", err)
-					} else {
-						m.logger.ErrorContext(ctx, "connection download payload: ", err)
-					}
-					return
-				}
-				for _, counter := range readCounters {
-					counter(int64(dataLen))
-				}
-				for _, counter := range writeCounters {
-					counter(int64(dataLen))
-				}
-			}
-			continue
-		}
-		break
-	}
-	if earlyConn, isEarlyConn := common.Cast[N.EarlyConn](destinationWriter); isEarlyConn && earlyConn.NeedHandshake() {
-		err := m.connectionCopyEarly(source, destination)
-		if err != nil {
-			if done.Swap(true) {
-				onClose(err)
-			}
-			common.Close(source, destination)
-			if !direction {
-				m.logger.ErrorContext(ctx, "connection upload handshake: ", err)
-			} else {
-				m.logger.ErrorContext(ctx, "connection download handshake: ", err)
-			}
-			return
-		}
-	}
-	_, err := bufio.CopyWithCounters(destinationWriter, sourceReader, source, readCounters, writeCounters, bufio.DefaultIncreaseBufferAfter, bufio.DefaultBatchSize)
+	_, err := bufio.CopyWithIncreateBuffer(destination, source, bufio.DefaultIncreaseBufferAfter, bufio.DefaultBatchSize)
 	if err != nil {
 		common.Close(source, destination)
 	} else if duplexDst, isDuplex := destination.(N.WriteCloser); isDuplex {
@@ -311,26 +264,54 @@ func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn,
 	}
 }
 
-func (m *ConnectionManager) connectionCopyEarly(source net.Conn, destination io.Writer) error {
-	payload := buf.NewPacket()
-	defer payload.Release()
-	err := source.SetReadDeadline(time.Now().Add(C.ReadPayloadTimeout))
-	if err != nil {
-		if err == os.ErrInvalid {
-			return common.Error(destination.Write(nil))
+func (m *ConnectionManager) kickWriteHandshake(ctx context.Context, source net.Conn, destination net.Conn, direction bool, done *atomic.Bool, onClose N.CloseHandlerFunc) bool {
+	if !N.NeedHandshakeForWrite(destination) {
+		return false
+	}
+	var (
+		cachedBuffer *buf.Buffer
+		wrotePayload bool
+	)
+	sourceReader, readCounters := N.UnwrapCountReader(source, nil)
+	destinationWriter, writeCounters := N.UnwrapCountWriter(destination, nil)
+	if cachedReader, ok := sourceReader.(N.CachedReader); ok {
+		cachedBuffer = cachedReader.ReadCached()
+	}
+	var err error
+	if cachedBuffer != nil {
+		wrotePayload = true
+		dataLen := cachedBuffer.Len()
+		_, err = destinationWriter.Write(cachedBuffer.Bytes())
+		cachedBuffer.Release()
+		if err == nil {
+			for _, counter := range readCounters {
+				counter(int64(dataLen))
+			}
+			for _, counter := range writeCounters {
+				counter(int64(dataLen))
+			}
 		}
-		return err
+	} else {
+		_ = destination.SetWriteDeadline(time.Now().Add(C.ReadPayloadTimeout))
+		_, err = destinationWriter.Write(nil)
+		_ = destination.SetWriteDeadline(time.Time{})
 	}
-	_, err = payload.ReadOnceFrom(source)
-	if err != nil && !(E.IsTimeout(err) || errors.Is(err, io.EOF)) {
-		return E.Cause(err, "read payload")
+	if err == nil {
+		return false
 	}
-	_ = source.SetReadDeadline(time.Time{})
-	_, err = destination.Write(payload.Bytes())
-	if err != nil {
-		return E.Cause(err, "write payload")
+	if !wrotePayload && (E.IsMulti(err, os.ErrInvalid, context.DeadlineExceeded, io.EOF) || E.IsTimeout(err)) {
+		return false
 	}
-	return nil
+	if !done.Swap(true) {
+		onClose(err)
+	}
+	common.Close(source, destination)
+	if !direction {
+		m.logger.ErrorContext(ctx, "connection upload handshake: ", err)
+	} else {
+		m.logger.ErrorContext(ctx, "connection download handshake: ", err)
+	}
+	return true
 }
 
 func (m *ConnectionManager) packetConnectionCopy(ctx context.Context, source N.PacketReader, destination N.PacketWriter, direction bool, done *atomic.Bool, onClose N.CloseHandlerFunc) {

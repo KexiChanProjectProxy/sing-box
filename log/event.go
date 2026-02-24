@@ -9,11 +9,11 @@ import (
 type EventType string
 
 const (
-	EventTypeConnection    EventType = "connection"
-	EventTypeDNS           EventType = "dns"
-	EventTypeRouterMatch   EventType = "router_match"
-	EventTypeProcessInfo   EventType = "process_info"
-	EventTypeTransfer      EventType = "transfer"
+	EventTypeConnection  EventType = "connection"
+	EventTypeDNS         EventType = "dns"
+	EventTypeRouterMatch EventType = "router_match"
+	EventTypeProcessInfo EventType = "process_info"
+	EventTypeTransfer    EventType = "transfer"
 )
 
 // StructuredEvent represents structured log data
@@ -24,49 +24,49 @@ type StructuredEvent struct {
 
 // ConnectionEvent represents a connection event
 type ConnectionEvent struct {
-	Direction      string   `json:"direction"` // "inbound" or "outbound"
-	Action         string   `json:"action"`    // "start", "success", "error", "close"
-	Source         string   `json:"source,omitempty"`
-	SourcePort     uint16   `json:"source_port,omitempty"`
-	Destination    string   `json:"destination,omitempty"`
-	DestPort       uint16   `json:"dest_port,omitempty"`
-	Domain         string   `json:"domain,omitempty"`
-	Network        string   `json:"network,omitempty"` // "tcp" or "udp"
-	Inbound        string   `json:"inbound,omitempty"`
-	InboundType    string   `json:"inbound_type,omitempty"`
-	Outbound       string   `json:"outbound,omitempty"`
-	OutboundType   string   `json:"outbound_type,omitempty"`
-	User           string   `json:"user,omitempty"`
-	Protocol       string   `json:"protocol,omitempty"`
-	Client         string   `json:"client,omitempty"`
-	Error          string   `json:"error,omitempty"`
-	UploadBytes    int64    `json:"upload_bytes,omitempty"`
-	DownloadBytes  int64    `json:"download_bytes,omitempty"`
-	DestAddresses  []string `json:"dest_addresses,omitempty"`
+	Direction     string   `json:"direction"` // "inbound" or "outbound"
+	Action        string   `json:"action"`    // "start", "success", "error", "close"
+	Source        string   `json:"source,omitempty"`
+	SourcePort    uint16   `json:"source_port,omitempty"`
+	Destination   string   `json:"destination,omitempty"`
+	DestPort      uint16   `json:"dest_port,omitempty"`
+	Domain        string   `json:"domain,omitempty"`
+	Network       string   `json:"network,omitempty"` // "tcp" or "udp"
+	Inbound       string   `json:"inbound,omitempty"`
+	InboundType   string   `json:"inbound_type,omitempty"`
+	Outbound      string   `json:"outbound,omitempty"`
+	OutboundType  string   `json:"outbound_type,omitempty"`
+	User          string   `json:"user,omitempty"`
+	Protocol      string   `json:"protocol,omitempty"`
+	Client        string   `json:"client,omitempty"`
+	Error         string   `json:"error,omitempty"`
+	UploadBytes   int64    `json:"upload_bytes,omitempty"`
+	DownloadBytes int64    `json:"download_bytes,omitempty"`
+	DestAddresses []string `json:"dest_addresses,omitempty"`
 }
 
 // DNSEvent represents a DNS query/response event
 type DNSEvent struct {
-	Action      string   `json:"action"` // "query", "exchange", "cached", "rejected"
-	Domain      string   `json:"domain"`
-	QueryType   string   `json:"query_type,omitempty"`
-	Transport   string   `json:"transport,omitempty"`
-	Rcode       string   `json:"rcode,omitempty"`
-	RcodeNum    int      `json:"rcode_num,omitempty"`
-	TTL         uint32   `json:"ttl,omitempty"`
-	Cached      bool     `json:"cached"`
-	Rejected    bool     `json:"rejected"`
-	Answers     []string `json:"answers,omitempty"`
-	Error       string   `json:"error,omitempty"`
+	Action    string   `json:"action"` // "query", "exchange", "cached", "rejected"
+	Domain    string   `json:"domain"`
+	QueryType string   `json:"query_type,omitempty"`
+	Transport string   `json:"transport,omitempty"`
+	Rcode     string   `json:"rcode,omitempty"`
+	RcodeNum  int      `json:"rcode_num,omitempty"`
+	TTL       uint32   `json:"ttl,omitempty"`
+	Cached    bool     `json:"cached"`
+	Rejected  bool     `json:"rejected"`
+	Answers   []string `json:"answers,omitempty"`
+	Error     string   `json:"error,omitempty"`
 }
 
 // RouterMatchEvent represents a router rule matching event
 type RouterMatchEvent struct {
-	RuleIndex   int    `json:"rule_index"`
-	Rule        string `json:"rule"`
-	Action      string `json:"action"`
-	Outbound    string `json:"outbound,omitempty"`
-	Matched     bool   `json:"matched"`
+	RuleIndex int    `json:"rule_index"`
+	Rule      string `json:"rule"`
+	Action    string `json:"action"`
+	Outbound  string `json:"outbound,omitempty"`
+	Matched   bool   `json:"matched"`
 }
 
 // TransferEvent represents data transfer progress

@@ -11,7 +11,6 @@ import (
 	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/taskmonitor"
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/experimental/libbox/platform"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	R "github.com/sagernet/sing-box/route/rule"
@@ -39,43 +38,39 @@ type Router struct {
 	processSearcher   process.Searcher
 	pauseManager      pause.Manager
 	trackers          []adapter.ConnectionTracker
-	platformInterface platform.Interface
-	needWIFIState     bool
+	platformInterface adapter.PlatformInterface
 	started           bool
-	asnReader         adapter.ASNReader
-	asnPath           string
-	geositeReader     adapter.GeositeReader
-	geositePath       string
+	// Custom fork extensions
+	asnReader              adapter.ASNReader
+	asnPath                string
+	geositeReader          adapter.GeositeReader
+	geositePath            string
+	sniffOverrideDestination bool
 }
 
 func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions) *Router {
 	router := &Router{
-		ctx:               ctx,
-		logger:            logFactory.NewLogger("router"),
-		inbound:           service.FromContext[adapter.InboundManager](ctx),
-		outbound:          service.FromContext[adapter.OutboundManager](ctx),
-		dns:               service.FromContext[adapter.DNSRouter](ctx),
-		dnsTransport:      service.FromContext[adapter.DNSTransportManager](ctx),
-		connection:        service.FromContext[adapter.ConnectionManager](ctx),
-		network:           service.FromContext[adapter.NetworkManager](ctx),
-		rules:             make([]adapter.Rule, 0, len(options.Rules)),
-		ruleSetMap:        make(map[string]adapter.RuleSet),
-		needFindProcess:   hasRule(options.Rules, isProcessRule) || hasDNSRule(dnsOptions.Rules, isProcessDNSRule) || options.FindProcess,
-		pauseManager:      service.FromContext[pause.Manager](ctx),
-		platformInterface: service.FromContext[platform.Interface](ctx),
-		needWIFIState:     hasRule(options.Rules, isWIFIRule) || hasDNSRule(dnsOptions.Rules, isWIFIDNSRule),
+		ctx:                      ctx,
+		logger:                   logFactory.NewLogger("router"),
+		inbound:                  service.FromContext[adapter.InboundManager](ctx),
+		outbound:                 service.FromContext[adapter.OutboundManager](ctx),
+		dns:                      service.FromContext[adapter.DNSRouter](ctx),
+		dnsTransport:             service.FromContext[adapter.DNSTransportManager](ctx),
+		connection:               service.FromContext[adapter.ConnectionManager](ctx),
+		network:                  service.FromContext[adapter.NetworkManager](ctx),
+		rules:                    make([]adapter.Rule, 0, len(options.Rules)),
+		ruleSetMap:               make(map[string]adapter.RuleSet),
+		needFindProcess:          hasRule(options.Rules, isProcessRule) || hasDNSRule(dnsOptions.Rules, isProcessDNSRule) || options.FindProcess,
+		pauseManager:             service.FromContext[pause.Manager](ctx),
+		platformInterface:        service.FromContext[adapter.PlatformInterface](ctx),
+		sniffOverrideDestination: options.SniffOverrideDestination,
 	}
-
-	// Initialize ASN database path if configured
 	if options.ASN != nil && options.ASN.Path != "" {
 		router.asnPath = options.ASN.Path
 	}
-
-	// Initialize Geosite database path if configured
 	if options.Geosite != nil && options.Geosite.Path != "" {
 		router.geositePath = options.Geosite.Path
 	}
-
 	return router
 }
 
@@ -105,6 +100,41 @@ func (r *Router) Start(stage adapter.StartStage) error {
 	monitor := taskmonitor.New(r.logger, C.StartTimeout)
 	switch stage {
 	case adapter.StartStateStart:
+		if r.asnPath != "" {
+			monitor.Start("initialize ASN database")
+			asnReader, err := asn.Open(r.asnPath)
+			monitor.Finish()
+			if err != nil {
+				if os.IsNotExist(err) {
+					r.logger.Debug("ASN database not found: ", r.asnPath)
+				} else {
+					r.logger.Warn(E.Cause(err, "open ASN database"))
+				}
+			} else {
+				r.asnReader = asnReader
+				r.logger.Info("ASN database loaded from ", r.asnPath)
+			}
+		}
+		if r.geositePath != "" {
+			monitor.Start("initialize geosite database")
+			gsReader, gsCodes, err := geosite.Open(r.geositePath)
+			monitor.Finish()
+			if err != nil {
+				if os.IsNotExist(err) {
+					r.logger.Debug("geosite database not found: ", r.geositePath)
+				} else {
+					r.logger.Warn(E.Cause(err, "open geosite database"))
+				}
+			} else {
+				matcher, err := geosite.NewMatcher(gsReader, gsCodes)
+				if err != nil {
+					r.logger.Warn(E.Cause(err, "create geosite matcher"))
+				} else {
+					r.geositeReader = matcher
+					r.logger.Info("geosite database loaded from ", r.geositePath, " with ", len(gsCodes), " codes")
+				}
+			}
+		}
 		var cacheContext *adapter.HTTPStartContext
 		if len(r.ruleSets) > 0 {
 			monitor.Start("initialize rule-set")
@@ -131,57 +161,21 @@ func (r *Router) Start(stage adapter.StartStage) error {
 		if cacheContext != nil {
 			cacheContext.Close()
 		}
-		// Initialize ASN reader if path is configured
-		if r.asnPath != "" {
-			monitor.Start("initialize ASN database")
-			asnReader, err := asn.Open(r.asnPath)
-			monitor.Finish()
-			if err != nil {
-				if !os.IsNotExist(err) {
-					r.logger.Warn(E.Cause(err, "open ASN database"))
-				} else {
-					r.logger.Debug("ASN database not found: ", r.asnPath)
-				}
-			} else {
-				r.asnReader = asnReader
-				r.logger.Info("ASN database loaded from ", r.asnPath)
-			}
-		}
-		// Initialize Geosite reader if path is configured
-		if r.geositePath != "" {
-			monitor.Start("initialize geosite database")
-			geositeReader, codes, err := geosite.Open(r.geositePath)
-			monitor.Finish()
-			if err != nil {
-				if !os.IsNotExist(err) {
-					r.logger.Warn(E.Cause(err, "open geosite database"))
-				} else {
-					r.logger.Debug("geosite database not found: ", r.geositePath)
-				}
-			} else {
-				// Build matcher for domain lookup
-				matcher, err := geosite.NewMatcher(geositeReader, codes)
-				if err != nil {
-					r.logger.Warn(E.Cause(err, "create geosite matcher"))
-				} else {
-					r.geositeReader = matcher
-					r.logger.Info("geosite database loaded from ", r.geositePath, " with ", len(codes), " codes")
-				}
-			}
-		}
+		r.network.Initialize(r.ruleSets)
 		needFindProcess := r.needFindProcess
 		for _, ruleSet := range r.ruleSets {
 			metadata := ruleSet.Metadata()
 			if metadata.ContainsProcessRule {
 				needFindProcess = true
 			}
-			if metadata.ContainsWIFIRule {
-				r.needWIFIState = true
-			}
 		}
+		if C.IsAndroid && r.platformInterface != nil {
+			needFindProcess = true
+		}
+		r.needFindProcess = needFindProcess
 		if needFindProcess {
-			if r.platformInterface != nil {
-				r.processSearcher = r.platformInterface
+			if r.platformInterface != nil && r.platformInterface.UsePlatformConnectionOwnerFinder() {
+				r.processSearcher = newPlatformSearcher(r.platformInterface)
 			} else {
 				monitor.Start("initialize process searcher")
 				searcher, err := process.NewSearcher(process.Config{
@@ -243,22 +237,18 @@ func (r *Router) Close() error {
 		})
 		monitor.Finish()
 	}
-	if r.asnReader != nil {
+	if asnCloser, ok := r.asnReader.(interface{ Close() error }); ok {
 		monitor.Start("close ASN database")
-		if asnCloser, ok := r.asnReader.(interface{ Close() error }); ok {
-			err = E.Append(err, asnCloser.Close(), func(err error) error {
-				return E.Cause(err, "close ASN database")
-			})
-		}
+		err = E.Append(err, asnCloser.Close(), func(err error) error {
+			return E.Cause(err, "close ASN database")
+		})
 		monitor.Finish()
 	}
-	if r.geositeReader != nil {
+	if geositeCloser, ok := r.geositeReader.(interface{ Close() error }); ok {
 		monitor.Start("close geosite database")
-		if geositeCloser, ok := r.geositeReader.(interface{ Close() error }); ok {
-			err = E.Append(err, geositeCloser.Close(), func(err error) error {
-				return E.Cause(err, "close geosite database")
-			})
-		}
+		err = E.Append(err, geositeCloser.Close(), func(err error) error {
+			return E.Cause(err, "close geosite database")
+		})
 		monitor.Finish()
 	}
 	return err
@@ -269,16 +259,16 @@ func (r *Router) RuleSet(tag string) (adapter.RuleSet, bool) {
 	return ruleSet, loaded
 }
 
-func (r *Router) NeedWIFIState() bool {
-	return r.needWIFIState
-}
-
 func (r *Router) Rules() []adapter.Rule {
 	return r.rules
 }
 
 func (r *Router) AppendTracker(tracker adapter.ConnectionTracker) {
 	r.trackers = append(r.trackers, tracker)
+}
+
+func (r *Router) NeedFindProcess() bool {
+	return r.needFindProcess
 }
 
 func (r *Router) ResetNetwork() {
@@ -292,4 +282,8 @@ func (r *Router) ASNReader() adapter.ASNReader {
 
 func (r *Router) GeositeReader() adapter.GeositeReader {
 	return r.geositeReader
+}
+
+func (r *Router) SniffOverrideDestination() bool {
+	return r.sniffOverrideDestination
 }

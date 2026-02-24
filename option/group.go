@@ -18,19 +18,19 @@ type URLTestOutboundOptions struct {
 }
 
 type LoadBalanceOutboundOptions struct {
-	PrimaryOutbounds          []string                         `json:"primary_outbounds"`
-	BackupOutbounds           []string                         `json:"backup_outbounds,omitempty"`
-	URL                       string                           `json:"url,omitempty"`
-	Interval                  badoption.Duration               `json:"interval,omitempty"`
-	Timeout                   badoption.Duration               `json:"timeout,omitempty"`
-	IdleTimeout               badoption.Duration               `json:"idle_timeout,omitempty"`
-	TopN                      LoadBalanceTopNOptions           `json:"top_n"`
-	Tolerance                 uint16                           `json:"tolerance,omitempty"`
-	Strategy                  string                           `json:"strategy"`
-	Hash                      *LoadBalanceHashOptions          `json:"hash,omitempty"`
-	Hysteresis                *LoadBalanceHysteresisOptions    `json:"hysteresis,omitempty"`
-	EmptyPoolAction           string                           `json:"empty_pool_action,omitempty"`
-	InterruptExistConnections bool                             `json:"interrupt_exist_connections,omitempty"`
+	PrimaryOutbounds          []string                      `json:"primary_outbounds"`
+	BackupOutbounds           []string                      `json:"backup_outbounds,omitempty"`
+	URL                       string                        `json:"url,omitempty"`
+	Interval                  badoption.Duration            `json:"interval,omitempty"`
+	Timeout                   badoption.Duration            `json:"timeout,omitempty"`
+	IdleTimeout               badoption.Duration            `json:"idle_timeout,omitempty"`
+	TopN                      LoadBalanceTopNOptions        `json:"top_n"`
+	Tolerance                 uint16                        `json:"tolerance,omitempty"`
+	Strategy                  string                        `json:"strategy"`
+	Hash                      *LoadBalanceHashOptions       `json:"hash,omitempty"`
+	Hysteresis                *LoadBalanceHysteresisOptions `json:"hysteresis,omitempty"`
+	EmptyPoolAction           string                        `json:"empty_pool_action,omitempty"`
+	InterruptExistConnections bool                          `json:"interrupt_exist_connections,omitempty"`
 }
 
 type LoadBalanceTopNOptions struct {
@@ -49,44 +49,10 @@ type LoadBalanceTopNOptions struct {
 //   - "domain": Full destination domain name
 //   - "inbound_tag": Tag of the inbound that accepted the connection
 //   - "matched_ruleset": Tag of the ruleset that matched this connection (if any)
-//                        Enables SRC_IP+RULESET hash mode
 //   - "etld_plus_one": eTLD+1 of the destination domain (e.g., example.com from a.b.example.com)
-//                      Uses Public Suffix List for accurate extraction
-//                      Enables SRC_IP+TOP_DOMAIN hash mode (domain suffix grouping)
 //   - "matched_ruleset_or_etld": Smart fallback - use matched ruleset if available, otherwise eTLD+1
-//                                Priority: ruleset > eTLD+1
-//                                Enables unified hashing for both rule-based and direct connections
-//                                Use case: route by content category (ruleset) or domain grouping
 //   - "dst_asn": Destination IP's Autonomous System Number (requires ASN database)
-//                Groups connections by ISP/CDN/cloud provider network
-//                Example: AS16509 (Amazon), AS13335 (Cloudflare), AS15169 (Google)
-//                Enables same-ISP routing for CDN optimization
-//                Requires route.asn configuration with path to GeoLite2-ASN MMDB
 //   - "dst_geosite": Destination domain's geosite category (requires geosite database)
-//                    Groups connections by geosite code (e.g., "google", "netflix", "openai")
-//                    All domains in the same geosite category use the same hash key
-//                    Example: youtube.com, googlevideo.com → "geosite:google"
-//                    Enables category-based routing and service isolation
-//                    Requires route.geosite configuration with path to geosite.db
-//
-// Example configurations:
-//   - ["src_ip", "matched_ruleset"] - Same source IP hitting same ruleset → same outbound
-//   - ["src_ip", "etld_plus_one"] - Same source IP accessing same top domain → same outbound
-//   - ["src_ip", "matched_ruleset_or_etld"] - Smart mode with ruleset priority
-//   - ["src_ip", "dst_ip", "dst_port"] - Traditional 5-tuple hashing
-//   - ["src_ip", "dst_asn"] - Same source IP accessing same ASN → same outbound (CDN optimization)
-//   - ["src_ip", "dst_geosite"] - Same source accessing same geosite → same outbound (service grouping)
-//
-// Hash key construction:
-//   - Parts are joined with "|" separator
-//   - Missing values use "-" placeholder
-//   - Optional salt prefix for namespace isolation
-//
-// Domain normalization for etld_plus_one:
-//   - Lowercased
-//   - Trailing dots stripped
-//   - Port numbers stripped (example.com:443 → example.com)
-//   - IP addresses return "-" (not applicable)
 type LoadBalanceHashOptions struct {
 	KeyParts     []string `json:"key_parts,omitempty"`
 	VirtualNodes int      `json:"virtual_nodes,omitempty"`

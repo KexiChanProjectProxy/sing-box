@@ -40,11 +40,11 @@ const (
 	onEmptyKeyRandom    = "random"
 	onEmptyKeyHashEmpty = "hash_empty"
 
-	defaultInterval      = 3 * time.Minute
-	defaultTimeout       = 5 * time.Second
-	defaultIdleTimeout   = 30 * time.Minute
-	defaultVirtualNodes  = 100
-	defaultOnEmptyKey    = onEmptyKeyRandom
+	defaultInterval        = 3 * time.Minute
+	defaultTimeout         = 5 * time.Second
+	defaultIdleTimeout     = 30 * time.Minute
+	defaultVirtualNodes    = 100
+	defaultOnEmptyKey      = onEmptyKeyRandom
 	defaultEmptyPoolAction = emptyPoolActionError
 
 	// Hysteresis defaults
@@ -62,16 +62,16 @@ type LoadBalance struct {
 	logger     log.ContextLogger
 
 	// Configuration
-	primaryTags   []string
-	backupTags    []string
-	link          string
-	interval      time.Duration
-	timeout       time.Duration
-	idleTimeout   time.Duration
-	topNPrimary   int
-	topNBackup    int
-	tolerance     uint16 // tolerance in ms for Top-N stabilization
-	strategy      string
+	primaryTags     []string
+	backupTags      []string
+	link            string
+	interval        time.Duration
+	timeout         time.Duration
+	idleTimeout     time.Duration
+	topNPrimary     int
+	topNBackup      int
+	tolerance       uint16 // tolerance in ms for Top-N stabilization
+	strategy        string
 	emptyPoolAction string
 
 	// Hash configuration
@@ -96,21 +96,21 @@ type LoadBalance struct {
 	tierState      atomic.Value // *tierStateSnapshot
 
 	// Health check coordination
-	checking      atomic.Bool
-	pauseManager  pause.Manager
-	pauseCallback *list.Element[pause.Callback]
-	ticker        *time.Ticker
-	tickerAccess  sync.Mutex
-	close         chan struct{}
-	lastActive    common.TypedValue[time.Time]  // NEW: tracks last connection for idle timeout
-	initialCheckDone atomic.Bool               // NEW: first health check completed?
+	checking         atomic.Bool
+	pauseManager     pause.Manager
+	pauseCallback    *list.Element[pause.Callback]
+	ticker           *time.Ticker
+	tickerAccess     sync.Mutex
+	close            chan struct{}
+	lastActive       common.TypedValue[time.Time] // tracks last connection for idle timeout
+	initialCheckDone atomic.Bool                  // first health check completed?
 }
 
 // candidateSnapshot holds immutable snapshot of candidate pools
 type candidateSnapshot struct {
 	primaryCandidates []adapter.Outbound // Top-N primary nodes
 	backupCandidates  []adapter.Outbound // Top-N backup nodes
-	activeTier        string              // "primary" or "backup"
+	activeTier        string             // "primary" or "backup"
 
 	// Consistent hash ring (only for consistent_hash strategy)
 	hashRing *consistentHashRing
@@ -125,10 +125,10 @@ type tierStateSnapshot struct {
 
 // consistentHashRing implements NGINX-style consistent hashing
 type consistentHashRing struct {
-	points       []uint64           // Sorted hash points
-	nodeMap      map[uint64]string  // Point -> node tag
-	members      []string           // Current member tags (for rebuilding detection)
-	virtualNodes int                // Virtual nodes per real node
+	points       []uint64          // Sorted hash points
+	nodeMap      map[uint64]string // Point -> node tag
+	members      []string          // Current member tags (for rebuilding detection)
+	virtualNodes int               // Virtual nodes per real node
 }
 
 // nodeStat holds health check result for a node
@@ -171,8 +171,8 @@ func NewLoadBalance(
 	}
 
 	if options.EmptyPoolAction != "" &&
-	   options.EmptyPoolAction != emptyPoolActionError &&
-	   options.EmptyPoolAction != emptyPoolActionFallbackAll {
+		options.EmptyPoolAction != emptyPoolActionError &&
+		options.EmptyPoolAction != emptyPoolActionFallbackAll {
 		return nil, E.New("empty_pool_action must be 'error' or 'fallback_all'")
 	}
 
@@ -181,24 +181,24 @@ func NewLoadBalance(
 	allTags = append(allTags, options.BackupOutbounds...)
 
 	lb := &LoadBalance{
-		Adapter:    outbound.NewAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, allTags),
-		ctx:        ctx,
-		router:     router,
-		outbound:   outboundManager,
-		logger:     logger,
-		primaryTags: options.PrimaryOutbounds,
-		backupTags:  options.BackupOutbounds,
-		link:        options.URL,
-		interval:    time.Duration(options.Interval),
-		timeout:     time.Duration(options.Timeout),
-		idleTimeout: time.Duration(options.IdleTimeout),
-		topNPrimary: options.TopN.Primary,
-		topNBackup:  options.TopN.Backup,
-		tolerance:   options.Tolerance,
-		strategy:    options.Strategy,
+		Adapter:         outbound.NewAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, allTags),
+		ctx:             ctx,
+		router:          router,
+		outbound:        outboundManager,
+		logger:          logger,
+		primaryTags:     options.PrimaryOutbounds,
+		backupTags:      options.BackupOutbounds,
+		link:            options.URL,
+		interval:        time.Duration(options.Interval),
+		timeout:         time.Duration(options.Timeout),
+		idleTimeout:     time.Duration(options.IdleTimeout),
+		topNPrimary:     options.TopN.Primary,
+		topNBackup:      options.TopN.Backup,
+		tolerance:       options.Tolerance,
+		strategy:        options.Strategy,
 		emptyPoolAction: options.EmptyPoolAction,
 		interruptExternalConnections: options.InterruptExistConnections,
-		close:       make(chan struct{}),
+		close: make(chan struct{}),
 	}
 
 	// Set defaults
@@ -261,11 +261,11 @@ func NewLoadBalance(
 
 	// Check for duplicates
 	tagSet := make(map[string]bool)
-	for _, tag := range allTags {
-		if tagSet[tag] {
-			return nil, E.New("duplicate outbound tag: ", tag)
+	for _, t := range allTags {
+		if tagSet[t] {
+			return nil, E.New("duplicate outbound tag: ", t)
 		}
-		tagSet[tag] = true
+		tagSet[t] = true
 	}
 
 	if lb.interruptExternalConnections {
@@ -395,7 +395,7 @@ func (lb *LoadBalance) Touch() {
 	if lb.idleTimeout == 0 {
 		return
 	}
-	lb.startTicker()  // no-op if already running
+	lb.startTicker() // no-op if already running
 }
 
 func (lb *LoadBalance) loopCheck() {
@@ -446,10 +446,10 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 
 	// Collect outbounds
 	outbounds := make([]adapter.Outbound, 0, len(allTags))
-	for _, tag := range allTags {
-		detour, loaded := lb.outbound.Outbound(tag)
+	for _, t := range allTags {
+		detour, loaded := lb.outbound.Outbound(t)
 		if !loaded {
-			lb.logger.Error("outbound not found: ", tag)
+			lb.logger.Error("outbound not found: ", t)
 			continue
 		}
 		outbounds = append(outbounds, detour)
@@ -460,7 +460,6 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 	}
 
 	// Perform health checks with controlled concurrency
-	// Use semaphore to limit concurrent checks while allowing full parallelism
 	maxConcurrent := 10
 	semaphore := make(chan struct{}, maxConcurrent)
 	resultChan := make(chan nodeStat, len(outbounds))
@@ -611,8 +610,8 @@ func (lb *LoadBalance) updateCandidates() {
 func (lb *LoadBalance) collectTierStats(tags []string) []nodeStat {
 	stats := make([]nodeStat, 0, len(tags))
 
-	for _, tag := range tags {
-		detour, loaded := lb.outbound.Outbound(tag)
+	for _, t := range tags {
+		detour, loaded := lb.outbound.Outbound(t)
 		if !loaded {
 			continue
 		}
@@ -620,17 +619,17 @@ func (lb *LoadBalance) collectTierStats(tags []string) []nodeStat {
 		history := lb.history.LoadURLTestHistory(RealTag(detour))
 		if history == nil {
 			// No history = not yet probed, treat as failure
-			stats = append(stats, nodeStat{tag: tag, failure: true})
+			stats = append(stats, nodeStat{tag: t, failure: true})
 			continue
 		}
 
 		// Check if history is stale (older than interval * 2)
 		if time.Since(history.Time) > lb.interval*2 {
-			stats = append(stats, nodeStat{tag: tag, failure: true})
+			stats = append(stats, nodeStat{tag: t, failure: true})
 			continue
 		}
 
-		stats = append(stats, nodeStat{tag: tag, delay: history.Delay})
+		stats = append(stats, nodeStat{tag: t, delay: history.Delay})
 	}
 
 	return stats
@@ -795,12 +794,12 @@ func (lb *LoadBalance) sameMembership(oldMembers []string, newMembers []adapter.
 	}
 
 	oldSet := make(map[string]bool)
-	for _, tag := range oldMembers {
-		oldSet[tag] = true
+	for _, t := range oldMembers {
+		oldSet[t] = true
 	}
 
-	for _, outbound := range newMembers {
-		if !oldSet[outbound.Tag()] {
+	for _, o := range newMembers {
+		if !oldSet[o.Tag()] {
 			return false
 		}
 	}
@@ -919,7 +918,6 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 			}
 		case "etld_plus_one":
 			// Extract eTLD+1 (effective TLD + 1) from the domain
-			// e.g., a.b.example.com -> example.com, a.b.example.co.uk -> example.co.uk
 			var rawDomain string
 			if metadata.Destination.IsFqdn() {
 				rawDomain = metadata.Destination.Fqdn
@@ -930,14 +928,9 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 			parts = append(parts, etldPlusOne)
 		case "matched_ruleset_or_etld":
 			// Priority: use matched ruleset if available, otherwise fall back to eTLD+1
-			// This enables unified hashing for both ruleset-matched and direct domain connections
-			// Use case: route by content category (ruleset) or domain grouping (eTLD+1)
 			if metadata.MatchedRuleSet != "" {
-				// Ruleset matched - use it for hashing (same behavior as matched_ruleset)
 				parts = append(parts, metadata.MatchedRuleSet)
 			} else {
-				// No ruleset match - fall back to domain-based hashing
-				// Extract eTLD+1 from domain (same behavior as etld_plus_one)
 				var rawDomain string
 				if metadata.Destination.IsFqdn() {
 					rawDomain = metadata.Destination.Fqdn
@@ -949,8 +942,6 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 			}
 		case "dst_asn":
 			// Lookup ASN for destination IP address
-			// Groups connections by Autonomous System Number (ISP/CDN/cloud provider)
-			// Requires ASN database to be configured in route.asn options
 			if lb.asnReader != nil && metadata.Destination.IsValid() && !metadata.Destination.IsFqdn() {
 				asn := lb.asnReader.Lookup(metadata.Destination.Addr)
 				if asn != 0 {
@@ -963,9 +954,6 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 			}
 		case "dst_geosite":
 			// Lookup geosite code for destination domain
-			// Groups connections by geosite category (e.g., "google", "netflix", "openai")
-			// Requires geosite database to be configured in route.geosite options
-			// All domains in the same geosite category will use the same hash key
 			if lb.geositeReader != nil {
 				var lookupDomain string
 				if metadata.Destination.IsFqdn() {
@@ -1003,8 +991,8 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 func (lb *LoadBalance) selectOutboundBootstrap(network string, metadata *adapter.InboundContext) (adapter.Outbound, error) {
 	// Collect all primary outbounds
 	candidates := make([]adapter.Outbound, 0, len(lb.primaryTags))
-	for _, tag := range lb.primaryTags {
-		detour, loaded := lb.outbound.Outbound(tag)
+	for _, t := range lb.primaryTags {
+		detour, loaded := lb.outbound.Outbound(t)
 		if loaded && common.Contains(detour.Network(), network) {
 			candidates = append(candidates, detour)
 		}
@@ -1116,8 +1104,8 @@ func (lb *LoadBalance) selectOutbound(network string, metadata *adapter.InboundC
 			allTags := append([]string{}, lb.primaryTags...)
 			allTags = append(allTags, lb.backupTags...)
 
-			for _, tag := range allTags {
-				detour, loaded := lb.outbound.Outbound(tag)
+			for _, t := range allTags {
+				detour, loaded := lb.outbound.Outbound(t)
 				if loaded && common.Contains(detour.Network(), network) {
 					candidates = append(candidates, detour)
 				}
@@ -1270,6 +1258,34 @@ func (lb *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr
 	return conn, nil
 }
 
+func (lb *LoadBalance) NewConnectionEx(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+	ctx = interrupt.ContextWithIsExternalConnection(ctx)
+	selected, err := lb.selectOutbound(N.NetworkTCP, &metadata)
+	if err != nil {
+		conn.Close()
+		return
+	}
+	if outboundHandler, isHandler := selected.(adapter.ConnectionHandlerEx); isHandler {
+		outboundHandler.NewConnectionEx(ctx, conn, metadata, onClose)
+	} else {
+		lb.connection.NewConnection(ctx, selected, conn, metadata, onClose)
+	}
+}
+
+func (lb *LoadBalance) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+	ctx = interrupt.ContextWithIsExternalConnection(ctx)
+	selected, err := lb.selectOutbound(N.NetworkUDP, &metadata)
+	if err != nil {
+		conn.Close()
+		return
+	}
+	if outboundHandler, isHandler := selected.(adapter.PacketConnectionHandlerEx); isHandler {
+		outboundHandler.NewPacketConnectionEx(ctx, conn, metadata, onClose)
+	} else {
+		lb.connection.NewPacketConnection(ctx, selected, conn, metadata, onClose)
+	}
+}
+
 // OutboundGroup interface implementation
 func (lb *LoadBalance) Now() string {
 	snapshot := lb.candidateState.Load()
@@ -1320,10 +1336,10 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 
 	// Collect outbounds to test
 	outbounds := make([]adapter.Outbound, 0, len(allTags))
-	for _, tag := range allTags {
-		detour, loaded := lb.outbound.Outbound(tag)
+	for _, t := range allTags {
+		detour, loaded := lb.outbound.Outbound(t)
 		if !loaded {
-			lb.logger.Error("outbound not found: ", tag)
+			lb.logger.Error("outbound not found: ", t)
 			continue
 		}
 		outbounds = append(outbounds, detour)
@@ -1334,7 +1350,6 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 	}
 
 	// Perform health checks with controlled concurrency
-	// Use semaphore to limit concurrent checks while allowing full parallelism
 	maxConcurrent := 10
 	semaphore := make(chan struct{}, maxConcurrent)
 	resultChan := make(chan nodeStat, len(outbounds))

@@ -60,17 +60,17 @@ func (f *multiOutputFactory) Start() error {
 
 // Close closes all outputs
 func (f *multiOutputFactory) Close() error {
-	var errors []error
+	var errs []error
 	for _, output := range f.outputs {
 		if err := output.Close(); err != nil {
-			errors = append(errors, err)
+			errs = append(errs, err)
 		}
 	}
 	if err := f.subscriber.Close(); err != nil {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
-	if len(errors) > 0 {
-		return errors[0]
+	if len(errs) > 0 {
+		return errs[0]
 	}
 	return nil
 }

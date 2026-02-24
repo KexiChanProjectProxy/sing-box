@@ -27,7 +27,6 @@ import (
 	"github.com/sagernet/sing-box/protocol/mixed"
 	"github.com/sagernet/sing-box/protocol/naive"
 	"github.com/sagernet/sing-box/protocol/redirect"
-	"github.com/sagernet/sing-box/protocol/router"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/shadowtls"
 	"github.com/sagernet/sing-box/protocol/socks"
@@ -57,7 +56,6 @@ func InboundRegistry() *inbound.Registry {
 	socks.RegisterInbound(registry)
 	http.RegisterInbound(registry)
 	mixed.RegisterInbound(registry)
-	router.RegisterInbound(registry)
 
 	shadowsocks.RegisterInbound(registry)
 	vmess.RegisterInbound(registry)
@@ -90,6 +88,7 @@ func OutboundRegistry() *outbound.Registry {
 	shadowsocks.RegisterOutbound(registry)
 	vmess.RegisterOutbound(registry)
 	trojan.RegisterOutbound(registry)
+	registerNaiveOutbound(registry)
 	tor.RegisterOutbound(registry)
 	ssh.RegisterOutbound(registry)
 	shadowtls.RegisterOutbound(registry)
@@ -139,6 +138,8 @@ func ServiceRegistry() *service.Registry {
 	ssmapi.RegisterService(registry)
 
 	registerDERPService(registry)
+	registerCCMService(registry)
+	registerOCMService(registry)
 
 	return registry
 }

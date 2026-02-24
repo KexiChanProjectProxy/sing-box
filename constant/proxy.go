@@ -10,7 +10,6 @@ const (
 	TypeSOCKS        = "socks"
 	TypeHTTP         = "http"
 	TypeMixed        = "mixed"
-	TypeRouter       = "router"
 	TypeShadowsocks  = "shadowsocks"
 	TypeVMess        = "vmess"
 	TypeTrojan       = "trojan"
@@ -27,15 +26,20 @@ const (
 	TypeHysteria2    = "hysteria2"
 	TypeTailscale    = "tailscale"
 	TypeDERP         = "derp"
-	TypeCloudflared  = "cloudflared"
 	TypeResolved     = "resolved"
 	TypeSSMAPI       = "ssm-api"
+	TypeCCM          = "ccm"
+	TypeOCM          = "ocm"
 )
 
 const (
 	TypeSelector    = "selector"
 	TypeURLTest     = "urltest"
 	TypeLoadBalance = "loadbalance"
+)
+
+const (
+	TypeCloudflared = "cloudflared"
 )
 
 func ProxyDisplayName(proxyType string) string {
@@ -58,8 +62,6 @@ func ProxyDisplayName(proxyType string) string {
 		return "HTTP"
 	case TypeMixed:
 		return "Mixed"
-	case TypeRouter:
-		return "Router"
 	case TypeShadowsocks:
 		return "Shadowsocks"
 	case TypeVMess:
@@ -88,14 +90,14 @@ func ProxyDisplayName(proxyType string) string {
 		return "Hysteria2"
 	case TypeAnyTLS:
 		return "AnyTLS"
-	case TypeCloudflared:
-		return "Cloudflared"
 	case TypeSelector:
 		return "Selector"
 	case TypeURLTest:
 		return "URLTest"
 	case TypeLoadBalance:
 		return "LoadBalance"
+	case TypeCloudflared:
+		return "Cloudflared"
 	default:
 		return "Unknown"
 	}

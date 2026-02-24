@@ -19,15 +19,15 @@ var _ Output = (*HTTPBatchOutput)(nil)
 
 // HTTPBatchOutput sends logs to an HTTP endpoint in batches
 type HTTPBatchOutput struct {
-	config        HTTPBatchConfig
-	jsonOutput    *JSONOutput
-	buffer        []LogEntry
-	bufferMutex   sync.Mutex
-	httpClient    *http.Client
-	flushTicker   *time.Ticker
-	closeChan     chan struct{}
-	wg            sync.WaitGroup
-	errorLogger   ContextLogger
+	config      HTTPBatchConfig
+	jsonOutput  *JSONOutput
+	buffer      []LogEntry
+	bufferMutex sync.Mutex
+	httpClient  *http.Client
+	flushTicker *time.Ticker
+	closeChan   chan struct{}
+	wg          sync.WaitGroup
+	errorLogger ContextLogger
 }
 
 // HTTPBatchConfig holds configuration for HTTP batch output

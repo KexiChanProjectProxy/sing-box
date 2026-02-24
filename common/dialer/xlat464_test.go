@@ -141,11 +141,11 @@ func TestXLAT464Dialer_TranslateDestination(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		inputAddr        string
-		inputPort        uint16
-		expectedAddr     string
-		shouldTranslate  bool
+		name            string
+		inputAddr       string
+		inputPort       uint16
+		expectedAddr    string
+		shouldTranslate bool
 	}{
 		{
 			name:            "IPv4 address should be translated",

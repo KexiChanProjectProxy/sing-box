@@ -46,7 +46,7 @@ type Client struct {
 	transportCacheLock compatible.Map[dns.Question, chan struct{}]
 
 	// Track in-flight background refreshes to prevent duplicate refresh goroutines
-	refreshing         compatible.Map[dns.Question, struct{}]
+	refreshing          compatible.Map[dns.Question, struct{}]
 	refreshingTransport compatible.Map[transportCacheKey, struct{}]
 }
 
@@ -159,7 +159,7 @@ func (c *Client) triggerBackgroundRefresh(question dns.Question, transport adapt
 
 		// Build a fresh DNS query
 		message := &dns.Msg{
-			MsgHdr: dns.MsgHdr{RecursionDesired: true},
+			MsgHdr:   dns.MsgHdr{RecursionDesired: true},
 			Question: []dns.Question{question},
 		}
 
@@ -208,9 +208,9 @@ func (c *Client) storeCacheWithHold(transport adapter.DNSTransport, question dns
 func (c *Client) loadResponseWithHold(question dns.Question, transport adapter.DNSTransport,
 	options adapter.DNSQueryOptions) (*dns.Msg, int) {
 	var (
-		response  *dns.Msg
+		response *dns.Msg
 		expireAt time.Time
-		loaded    bool
+		loaded   bool
 	)
 
 	if !c.independentCache {
@@ -298,20 +298,6 @@ func (c *Client) loadResponseWithHold(question dns.Question, transport adapter.D
 	return response, nowTTL
 }
 
-func extractNegativeTTL(response *dns.Msg) (uint32, bool) {
-	for _, record := range response.Ns {
-		if soa, isSOA := record.(*dns.SOA); isSOA {
-			soaTTL := soa.Header().Ttl
-			soaMinimum := soa.Minttl
-			if soaTTL < soaMinimum {
-				return soaTTL, true
-			}
-			return soaMinimum, true
-		}
-	}
-	return 0, false
-}
-
 func hasHoldOptions(options adapter.DNSQueryOptions) bool {
 	return options.HoldValid > 0 || options.HoldNX > 0 ||
 		options.HoldRefused > 0 || options.HoldOther > 0 ||
@@ -389,6 +375,20 @@ func extractMinTTL(response *dns.Msg) uint32 {
 	return timeToLive
 }
 
+func extractNegativeTTL(response *dns.Msg) (uint32, bool) {
+	for _, record := range response.Ns {
+		if soa, isSOA := record.(*dns.SOA); isSOA {
+			soaTTL := soa.Header().Ttl
+			soaMinimum := soa.Minttl
+			if soaTTL < soaMinimum {
+				return soaTTL, true
+			}
+			return soaMinimum, true
+		}
+	}
+	return 0, false
+}
+
 func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, message *dns.Msg, options adapter.DNSQueryOptions, responseChecker func(responseAddrs []netip.Addr) bool) (*dns.Msg, error) {
 	if len(message.Question) == 0 {
 		if c.logger != nil {
@@ -424,7 +424,11 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 		if c.cache != nil {
 			cond, loaded := c.cacheLock.LoadOrStore(question, make(chan struct{}))
 			if loaded {
-				<-cond
+				select {
+				case <-cond:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 			} else {
 				defer func() {
 					c.cacheLock.Delete(question)
@@ -434,7 +438,11 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 		} else if c.transportCache != nil {
 			cond, loaded := c.transportCacheLock.LoadOrStore(question, make(chan struct{}))
 			if loaded {
-				<-cond
+				select {
+				case <-cond:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 			} else {
 				defer func() {
 					c.transportCacheLock.Delete(question)

@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e
 
-VERSION="1.12.14.29"
+# Read version from constant/version.go
+VERSION=$(grep -oP 'var Version = "\K[^"]+' constant/version.go)
 RELEASE_DIR="releases"
 # Full feature build tags for desktop platforms
-TAGS="with_acme,with_clash_api,with_dhcp,with_embedded_tor,with_grpc,with_gvisor,with_low_memory,with_quic,with_shadowsocksr,with_utls,with_wireguard,with_tailscale"
+TAGS="with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_embedded_tor,with_grpc,with_shadowsocksr"
+
+# Clean and create release directory
+rm -rf "$RELEASE_DIR"
+mkdir -p "$RELEASE_DIR"
 
 # Build function
 build_binary() {
@@ -18,12 +23,13 @@ build_binary() {
 
     echo "Building $OUTPUT_NAME with full features..."
     CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+        -v \
         -tags "$TAGS" \
         -trimpath \
-        -ldflags "-s -w -buildid=" \
+        -ldflags "-s -w -buildid= -X github.com/sagernet/sing-box/constant.Version=${VERSION}" \
         -o "$RELEASE_DIR/$OUTPUT_NAME" \
         ./cmd/sing-box
-    
+
     if [ $? -eq 0 ]; then
         echo "✓ Built $OUTPUT_NAME ($(du -h "$RELEASE_DIR/$OUTPUT_NAME" | cut -f1))"
     else
@@ -41,6 +47,12 @@ build_binary windows amd64
 build_binary windows arm64
 build_binary darwin amd64
 build_binary darwin arm64
+
+echo
+echo "Generating checksums..."
+cd "$RELEASE_DIR"
+sha256sum * | tee checksums.txt
+cd ..
 
 echo
 echo "Build complete! Binaries in $RELEASE_DIR/"

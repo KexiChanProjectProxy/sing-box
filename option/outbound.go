@@ -65,28 +65,29 @@ type DialerOptionsWrapper interface {
 }
 
 type DialerOptions struct {
-	Detour              string                            `json:"detour,omitempty"`
-	BindInterface       string                            `json:"bind_interface,omitempty"`
-	Inet4BindAddress    *badoption.Addr                   `json:"inet4_bind_address,omitempty"`
-	Inet6BindAddress    *badoption.Addr                   `json:"inet6_bind_address,omitempty"`
-	Inet6BindPrefix     *badoption.Prefix                 `json:"inet6_bind_prefix,omitempty"`
-	ProtectPath         string                            `json:"protect_path,omitempty"`
-	RoutingMark         FwMark                            `json:"routing_mark,omitempty"`
-	ReuseAddr           bool                              `json:"reuse_addr,omitempty"`
-	NetNs               string                            `json:"netns,omitempty"`
-	ConnectTimeout      badoption.Duration                `json:"connect_timeout,omitempty"`
-	TCPFastOpen         bool                              `json:"tcp_fast_open,omitempty"`
-	TCPMultiPath        bool                              `json:"tcp_multi_path,omitempty"`
-	DisableTCPKeepAlive bool                              `json:"disable_tcp_keep_alive,omitempty"`
-	TCPKeepAlive        badoption.Duration                `json:"tcp_keep_alive,omitempty"`
-	TCPKeepAliveInterval badoption.Duration               `json:"tcp_keep_alive_interval,omitempty"`
-	UDPFragment         *bool                             `json:"udp_fragment,omitempty"`
-	UDPFragmentDefault  bool                              `json:"-"`
-	DomainResolver      *DomainResolveOptions             `json:"domain_resolver,omitempty"`
-	NetworkStrategy     *NetworkStrategy                  `json:"network_strategy,omitempty"`
-	NetworkType         badoption.Listable[InterfaceType] `json:"network_type,omitempty"`
-	FallbackNetworkType badoption.Listable[InterfaceType] `json:"fallback_network_type,omitempty"`
-	FallbackDelay       badoption.Duration                `json:"fallback_delay,omitempty"`
+	Detour               string                            `json:"detour,omitempty"`
+	BindInterface        string                            `json:"bind_interface,omitempty"`
+	Inet4BindAddress     *badoption.Addr                   `json:"inet4_bind_address,omitempty"`
+	Inet6BindAddress     *badoption.Addr                   `json:"inet6_bind_address,omitempty"`
+	Inet6BindPrefix      *badoption.Prefix                 `json:"inet6_bind_prefix,omitempty"`
+	BindAddressNoPort    bool                              `json:"bind_address_no_port,omitempty"`
+	ProtectPath          string                            `json:"protect_path,omitempty"`
+	RoutingMark          FwMark                            `json:"routing_mark,omitempty"`
+	ReuseAddr            bool                              `json:"reuse_addr,omitempty"`
+	NetNs                string                            `json:"netns,omitempty"`
+	ConnectTimeout       badoption.Duration                `json:"connect_timeout,omitempty"`
+	TCPFastOpen          bool                              `json:"tcp_fast_open,omitempty"`
+	TCPMultiPath         bool                              `json:"tcp_multi_path,omitempty"`
+	DisableTCPKeepAlive  bool                              `json:"disable_tcp_keep_alive,omitempty"`
+	TCPKeepAlive         badoption.Duration                `json:"tcp_keep_alive,omitempty"`
+	TCPKeepAliveInterval badoption.Duration                `json:"tcp_keep_alive_interval,omitempty"`
+	UDPFragment          *bool                             `json:"udp_fragment,omitempty"`
+	UDPFragmentDefault   bool                              `json:"-"`
+	DomainResolver       *DomainResolveOptions             `json:"domain_resolver,omitempty"`
+	NetworkStrategy      *NetworkStrategy                  `json:"network_strategy,omitempty"`
+	NetworkType          badoption.Listable[InterfaceType] `json:"network_type,omitempty"`
+	FallbackNetworkType  badoption.Listable[InterfaceType] `json:"fallback_network_type,omitempty"`
+	FallbackDelay        badoption.Duration                `json:"fallback_delay,omitempty"`
 
 	// Deprecated: migrated to domain resolver
 	DomainStrategy DomainStrategy `json:"domain_strategy,omitempty"`
@@ -100,13 +101,13 @@ type _DomainResolveOptions struct {
 	ClientSubnet *badoption.Prefixable `json:"client_subnet,omitempty"`
 
 	// HAProxy-style resolver options for fast re-resolution
-	ResolveRetries int                `json:"resolve_retries,omitempty"`  // retry count per query (default: 1 = no retry)
-	ResolveTimeout badoption.Duration `json:"resolve_timeout,omitempty"` // per-attempt timeout
-	HoldValid      badoption.Duration `json:"hold_valid,omitempty"`      // lazy cache TTL for successful responses (non-blocking refresh)
-	HoldNX         badoption.Duration `json:"hold_nx,omitempty"`         // cache TTL for NXDOMAIN
-	HoldRefused    badoption.Duration `json:"hold_refused,omitempty"`    // cache TTL for REFUSED
-	HoldTimeout    badoption.Duration `json:"hold_timeout,omitempty"`    // cache TTL for timeout errors
-	HoldOther      badoption.Duration `json:"hold_other,omitempty"`      // cache TTL for other errors (SERVFAIL, etc.)
+	ResolveRetries int                `json:"resolve_retries,omitempty"`
+	ResolveTimeout badoption.Duration `json:"resolve_timeout,omitempty"`
+	HoldValid      badoption.Duration `json:"hold_valid,omitempty"`
+	HoldNX         badoption.Duration `json:"hold_nx,omitempty"`
+	HoldRefused    badoption.Duration `json:"hold_refused,omitempty"`
+	HoldTimeout    badoption.Duration `json:"hold_timeout,omitempty"`
+	HoldOther      badoption.Duration `json:"hold_other,omitempty"`
 }
 
 type DomainResolveOptions _DomainResolveOptions

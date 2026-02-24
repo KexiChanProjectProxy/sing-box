@@ -106,6 +106,26 @@ func (s *URLTest) Now() string {
 	return ""
 }
 
+// PreferDomainConfig implements adapter.PreferDomainOverrider.
+// If URLTest itself has prefer_domain configured, use that.
+// Otherwise, delegate to the currently selected child outbound.
+func (s *URLTest) PreferDomainConfig() *adapter.PreferDomainConfig {
+	if config := s.Adapter.PreferDomainConfig(); config != nil {
+		return config
+	}
+	selected := s.group.selectedOutboundTCP
+	if selected == nil {
+		selected = s.group.selectedOutboundUDP
+	}
+	if selected == nil {
+		return nil
+	}
+	if overrider, ok := selected.(adapter.PreferDomainOverrider); ok {
+		return overrider.PreferDomainConfig()
+	}
+	return nil
+}
+
 func (s *URLTest) All() []string {
 	return s.tags
 }

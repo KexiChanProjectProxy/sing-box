@@ -1318,7 +1318,34 @@ func (lb *LoadBalance) All() []string {
 	return allTags
 }
 
-// URLTest performs on-demand health checks and returns latency results
+// PreferDomainConfig implements adapter.PreferDomainOverrider.
+// If the loadbalance itself has prefer_domain configured, use that.
+// Otherwise, check if any candidate outbound has it configured.
+func (lb *LoadBalance) PreferDomainConfig() *adapter.PreferDomainConfig {
+	if config := lb.Adapter.PreferDomainConfig(); config != nil {
+		return config
+	}
+	snapshot := lb.candidateState.Load()
+	if snapshot == nil {
+		return nil
+	}
+	cs := snapshot.(*candidateSnapshot)
+	var candidates []adapter.Outbound
+	if cs.activeTier == "primary" && len(cs.primaryCandidates) > 0 {
+		candidates = cs.primaryCandidates
+	} else if len(cs.backupCandidates) > 0 {
+		candidates = cs.backupCandidates
+	}
+	for _, candidate := range candidates {
+		if overrider, ok := candidate.(adapter.PreferDomainOverrider); ok {
+			if config := overrider.PreferDomainConfig(); config != nil && config.Enabled {
+				return config
+			}
+		}
+	}
+	return nil
+}
+
 func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 	result := make(map[string]uint16)
 

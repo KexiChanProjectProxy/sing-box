@@ -79,14 +79,16 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	if err != nil {
 		return nil, err
 	}
-	return &Outbound{
+	ob := &Outbound{
 		Adapter:   outbound.NewAdapterWithDialerOptions(C.TypeTor, tag, []string{N.NetworkTCP}, options.DialerOptions),
 		ctx:       ctx,
 		logger:    logger,
 		proxy:     NewProxyListener(ctx, logger, outboundDialer),
 		startConf: &startConf,
 		options:   options.Options,
-	}, nil
+	}
+	ob.ApplyPreferDomain(options.DialerOptions.PreferDomain)
+	return ob, nil
 }
 
 func (t *Outbound) Start() error {

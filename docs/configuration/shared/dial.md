@@ -2,11 +2,15 @@
 icon: material/new-box
 ---
 
+!!! quote "Fork additions"
+
+    :material-plus: [prefer_domain](#prefer_domain)
+
 !!! quote "Changes in sing-box 1.13.0"
 
-    :material-plus: [disable_tcp_keep_alive](#disable_tcp_keep_alive)  
-    :material-plus: [tcp_keep_alive](#tcp_keep_alive)  
-    :material-plus: [tcp_keep_alive_interval](#tcp_keep_alive_interval)  
+    :material-plus: [disable_tcp_keep_alive](#disable_tcp_keep_alive)
+    :material-plus: [tcp_keep_alive](#tcp_keep_alive)
+    :material-plus: [tcp_keep_alive_interval](#tcp_keep_alive_interval)
     :material-plus: [bind_address_no_port](#bind_address_no_port)
 
 !!! quote "Changes in sing-box 1.12.0"
@@ -47,9 +51,10 @@ icon: material/new-box
   "network_type": [],
   "fallback_network_type": [],
   "fallback_delay": "",
+  "prefer_domain": true,
 
   // Deprecated
-  
+
   "domain_strategy": ""
 }
 ```
@@ -252,6 +257,65 @@ back to other interfaces.
 Only take effect when `domain_strategy` or `network_strategy` is set.
 
 `300ms` is used by default.
+
+#### prefer_domain
+
+When enabled, overrides the connection's IP destination with the sniffed domain name before connecting to the outbound.
+
+For proxy outbounds (vmess, trojan, vless, etc.), the domain name is forwarded to the remote server, enabling remote DNS resolution. For direct/WireGuard outbounds, it is resolved locally.
+
+If no prior `sniff` rule action was executed for the connection, a best-effort sniff (TLS SNI / HTTP Host for TCP, QUIC for UDP) is automatically attempted at the outbound level.
+
+Two forms are accepted:
+
+- **Boolean**: `true` — always apply the override when a domain is available.
+- **Object** `{"mark": "0x1"}` — apply the override only when the connection's route mark matches. Accepts the same format as the [`mark`](/configuration/route/rule/#mark) rule condition (integer, hex, or bitmask).
+
+The override only applies when:
+1. The connection destination is currently an IP address (not already a domain), and
+2. A domain name was successfully sniffed from the connection data.
+
+Example — always prefer domain:
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy",
+      "prefer_domain": true
+    }
+  ]
+}
+```
+
+Example — only prefer domain when route mark `0x1` is set:
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy",
+      "prefer_domain": {"mark": "0x1"}
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "protocol": "tls",
+        "action": "route-options",
+        "mark": "0x1"
+      },
+      {
+        "mark": "0x1",
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
+}
+```
 
 #### domain_strategy
 

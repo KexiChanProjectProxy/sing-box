@@ -54,7 +54,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		return nil, err
 	}
 
-	return &Outbound{
+	ob := &Outbound{
 		Adapter:  outbound.NewAdapterWithDialerOptions(C.TypeCloudflared, tag, []string{N.NetworkTCP}, options.DialerOptions),
 		ctx:      ctx,
 		logger:   logger,
@@ -62,7 +62,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		version:  version,
 		hostname: options.Hostname,
 		wsURL:    "wss://" + options.Hostname,
-	}, nil
+	}
+	ob.ApplyPreferDomain(options.DialerOptions.PreferDomain)
+	return ob, nil
 }
 
 func (o *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {

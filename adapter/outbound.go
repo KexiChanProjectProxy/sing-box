@@ -11,6 +11,18 @@ import (
 	N "github.com/sagernet/sing/common/network"
 )
 
+// PreferDomainConfig holds the resolved prefer_domain configuration for an outbound.
+type PreferDomainConfig struct {
+	Enabled   bool
+	MarkValue uint32
+	MarkMask  uint32
+}
+
+// PreferDomainOverrider is implemented by outbounds that support the prefer_domain option.
+type PreferDomainOverrider interface {
+	PreferDomainConfig() *PreferDomainConfig
+}
+
 // Note: for proxy protocols, outbound creates early connections by default.
 
 type Outbound interface {

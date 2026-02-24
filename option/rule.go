@@ -106,6 +106,7 @@ type RawDefaultRule struct {
 	PreferredBy              badoption.Listable[string]                                                  `json:"preferred_by,omitempty"`
 	RuleSet                  badoption.Listable[string]                                                  `json:"rule_set,omitempty"`
 	RuleSetIPCIDRMatchSource bool                                                                        `json:"rule_set_ip_cidr_match_source,omitempty"`
+	Mark                     *MarkMatch                                                                  `json:"mark,omitempty"`
 	Invert                   bool                                                                        `json:"invert,omitempty"`
 
 	// Deprecated: renamed to rule_set_ip_cidr_match_source

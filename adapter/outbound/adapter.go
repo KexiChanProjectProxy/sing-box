@@ -1,14 +1,16 @@
 package outbound
 
 import (
+	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/option"
 )
 
 type Adapter struct {
-	outboundType string
-	outboundTag  string
-	network      []string
-	dependencies []string
+	outboundType       string
+	outboundTag        string
+	network            []string
+	dependencies       []string
+	preferDomainConfig *adapter.PreferDomainConfig
 }
 
 func NewAdapter(outboundType string, outboundTag string, network []string, dependencies []string) Adapter {
@@ -42,4 +44,22 @@ func (a *Adapter) Network() []string {
 
 func (a *Adapter) Dependencies() []string {
 	return a.dependencies
+}
+
+// PreferDomainConfig implements adapter.PreferDomainOverrider.
+func (a *Adapter) PreferDomainConfig() *adapter.PreferDomainConfig {
+	return a.preferDomainConfig
+}
+
+// ApplyPreferDomain configures the prefer_domain option from the given options.
+func (a *Adapter) ApplyPreferDomain(opts *option.PreferDomainOptions) {
+	if opts == nil || !opts.Enabled {
+		return
+	}
+	config := &adapter.PreferDomainConfig{Enabled: true}
+	if opts.Mark != nil {
+		config.MarkValue = opts.Mark.Value
+		config.MarkMask = opts.Mark.Mask
+	}
+	a.preferDomainConfig = config
 }

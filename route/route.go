@@ -150,6 +150,32 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		selectedOutbound = defaultOutbound
 	}
 
+	// prefer_domain: override IP destination with sniffed domain name before connecting
+	if overrider, ok := selectedOutbound.(adapter.PreferDomainOverrider); ok {
+		if config := overrider.PreferDomainConfig(); config != nil && config.Enabled {
+			markMatch := config.MarkMask == 0 || (metadata.Mark&config.MarkMask == config.MarkValue)
+			if markMatch {
+				if metadata.Domain == "" && metadata.Destination.IsIP() && metadata.Protocol == "" {
+					sniffAction := &R.RuleActionSniff{
+						StreamSniffers: []sniff.StreamSniffer{sniff.TLSClientHello, sniff.HTTPHost},
+					}
+					newBuffer, _, _ := r.actionSniff(ctx, &metadata, sniffAction, conn, nil, buffers, nil)
+					if newBuffer != nil {
+						buffers = append(buffers, newBuffer)
+					}
+				}
+				if metadata.Domain != "" && metadata.Destination.IsIP() {
+					r.logger.DebugContext(ctx, "prefer_domain: overriding destination to domain ", metadata.Domain)
+					metadata.Destination = M.Socksaddr{
+						Fqdn: metadata.Domain,
+						Port: metadata.Destination.Port,
+					}
+					metadata.DestinationAddresses = nil
+				}
+			}
+		}
+	}
+
 	for _, buffer := range buffers {
 		conn = bufio.NewCachedConn(conn, buffer)
 	}
@@ -277,6 +303,31 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		}
 		selectedOutbound = defaultOutbound
 	}
+
+	// prefer_domain: override IP destination with sniffed domain name before connecting
+	if overrider, ok := selectedOutbound.(adapter.PreferDomainOverrider); ok {
+		if config := overrider.PreferDomainConfig(); config != nil && config.Enabled {
+			markMatch := config.MarkMask == 0 || (metadata.Mark&config.MarkMask == config.MarkValue)
+			if markMatch {
+				if metadata.Domain == "" && metadata.Destination.IsIP() && metadata.Protocol == "" {
+					for _, pb := range packetBuffers {
+						if sniff.PeekPacket(ctx, &metadata, pb.Buffer.Bytes(), sniff.QUICClientHello) == nil {
+							break
+						}
+					}
+				}
+				if metadata.Domain != "" && metadata.Destination.IsIP() {
+					r.logger.DebugContext(ctx, "prefer_domain: overriding destination to domain ", metadata.Domain)
+					metadata.Destination = M.Socksaddr{
+						Fqdn: metadata.Domain,
+						Port: metadata.Destination.Port,
+					}
+					metadata.DestinationAddresses = nil
+				}
+			}
+		}
+	}
+
 	for _, buffer := range packetBuffers {
 		conn = bufio.NewCachedPacketConn(conn, buffer.Buffer, buffer.Destination)
 		N.PutPacketBuffer(buffer)
@@ -590,6 +641,9 @@ match:
 			}
 			if routeOptions.TLSRecordFragment {
 				metadata.TLSRecordFragment = true
+			}
+			if routeOptions.Mark != nil {
+				metadata.Mark = *routeOptions.Mark
 			}
 		}
 		switch action := currentRule.Action().(type) {

@@ -2,12 +2,16 @@
 icon: material/new-box
 ---
 
+!!! quote "Fork 新增"
+
+    :material-plus: [mark](#mark)
+
 !!! quote "sing-box 1.13.0 中的更改"
 
-    :material-plus: [interface_address](#interface_address)  
-    :material-plus: [network_interface_address](#network_interface_address)  
-    :material-plus: [default_interface_address](#default_interface_address)  
-    :material-plus: [preferred_by](#preferred_by)  
+    :material-plus: [interface_address](#interface_address)
+    :material-plus: [network_interface_address](#network_interface_address)
+    :material-plus: [default_interface_address](#default_interface_address)
+    :material-plus: [preferred_by](#preferred_by)
     :material-alert: [network](#network)
 
 !!! quote "sing-box 1.11.0 中的更改"
@@ -163,6 +167,7 @@ icon: material/new-box
         // 已弃用
         "rule_set_ipcidr_match_source": false,
         "rule_set_ip_cidr_match_source": false,
+        "mark": "0x1",
         "invert": false,
         "action": "route",
         "outbound": "direct"
@@ -467,6 +472,18 @@ icon: material/new-box
 !!! question "自 sing-box 1.10.0 起"
 
 使规则集中的 `ip_cidr` 规则匹配源 IP。
+
+#### mark
+
+匹配连接上的虚拟路由标记。
+
+标记是由 `route-options` 规则动作中的 [`mark`](/zh/configuration/route/rule_action/#mark) 字段设置的 uint32 值。
+
+支持三种格式：
+
+- 整数：`1` — 精确匹配（等同于 `"0x1"`）
+- 十六进制字符串：`"0x1"` — 精确匹配
+- 位掩码：`"0x1/0xff"` — 匹配条件为 `(mark & 0xff) == 0x1`
 
 #### invert
 

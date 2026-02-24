@@ -169,6 +169,7 @@ type RawRouteOptionsActionOptions struct {
 	TLSFragment              bool               `json:"tls_fragment,omitempty"`
 	TLSFragmentFallbackDelay badoption.Duration `json:"tls_fragment_fallback_delay,omitempty"`
 	TLSRecordFragment        bool               `json:"tls_record_fragment,omitempty"`
+	Mark                     *FwMark            `json:"mark,omitempty"`
 }
 
 type RouteOptionsActionOptions RawRouteOptionsActionOptions
@@ -306,8 +307,9 @@ func (r *RejectActionOptions) UnmarshalJSON(bytes []byte) error {
 }
 
 type RouteActionSniff struct {
-	Sniffer badoption.Listable[string] `json:"sniffer,omitempty"`
-	Timeout badoption.Duration         `json:"timeout,omitempty"`
+	Sniffer             badoption.Listable[string] `json:"sniffer,omitempty"`
+	Timeout             badoption.Duration         `json:"timeout,omitempty"`
+	OverrideDestination bool                       `json:"override_destination,omitempty"`
 }
 
 type RouteActionResolve struct {

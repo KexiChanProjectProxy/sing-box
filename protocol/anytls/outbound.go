@@ -41,6 +41,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		server:  options.ServerOptions.Build(),
 		logger:  logger,
 	}
+	outbound.ApplyPreferDomain(options.DialerOptions.PreferDomain)
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, C.ErrTLSRequired
 	}

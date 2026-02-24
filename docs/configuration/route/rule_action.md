@@ -2,9 +2,13 @@
 icon: material/new-box
 ---
 
+!!! quote "Fork additions"
+
+    :material-plus: [mark](#mark) in route-options
+
 !!! quote "Changes in sing-box 1.13.0"
 
-    :material-plus: [bypass](#bypass)  
+    :material-plus: [bypass](#bypass)
     :material-alert: [reject](#reject)
 
 !!! quote "Changes in sing-box 1.12.0"
@@ -145,7 +149,8 @@ Not available when `method` is set to drop.
   "udp_timeout": "",
   "tls_fragment": false,
   "tls_fragment_fallback_delay": "",
-  "tls_record_fragment": ""
+  "tls_record_fragment": "",
+  "mark": "0x1"
 }
 ```
 
@@ -250,13 +255,45 @@ The fallback value used when TLS segmentation cannot automatically determine the
 
 Fragment TLS handshake into multiple TLS records to bypass firewalls.
 
+#### mark
+
+Set a virtual route mark on the connection.
+
+The mark is an internal uint32 tag that persists for the lifetime of the connection. Later rules can match on it using the [`mark`](/configuration/route/rule/#mark) rule condition.
+
+Accepts an integer (`1`) or a hex string (`"0x1"`).
+
+This enables multi-stage routing chains: an early rule tags a connection, and a later rule acts on that tag.
+
+Example — tag TLS traffic and route it to a proxy:
+
+```json
+{
+  "route": {
+    "rules": [
+      {
+        "protocol": "tls",
+        "action": "route-options",
+        "mark": "0x1"
+      },
+      {
+        "mark": "0x1",
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
+}
+```
+
 ### sniff
 
 ```json
 {
   "action": "sniff",
   "sniffer": [],
-  "timeout": ""
+  "timeout": "",
+  "override_destination": false
 }
 ```
 
@@ -277,6 +314,35 @@ Available protocol values an be found on in [Protocol Sniff](../sniff/)
 Timeout for sniffing.
 
 `300ms` is used by default.
+
+#### override_destination
+
+When enabled and a domain name is successfully sniffed from the connection (e.g. TLS SNI, HTTP `Host` header), replace the connection's IP destination with the sniffed domain name, keeping the same port.
+
+This allows per-rule control over destination override, without requiring the global `route.sniff_override_destination` toggle.
+
+When both this field and `route.sniff_override_destination` are set, this field takes precedence for connections matched by this rule.
+
+Example — override destination only for specific traffic:
+
+```json
+{
+  "route": {
+    "rules": [
+      {
+        "action": "sniff",
+        "override_destination": true
+      },
+      {
+        "network": "tcp",
+        "port": 443,
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
+}
+```
 
 ### resolve
 

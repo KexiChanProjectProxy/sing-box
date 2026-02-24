@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,14 @@ import (
 	"github.com/miekg/dns"
 )
 
+func fwMarkToUint32Ptr(m *option.FwMark) *uint32 {
+	if m == nil {
+		return nil
+	}
+	v := uint32(*m)
+	return &v
+}
+
 func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action option.RuleAction) (adapter.RuleAction, error) {
 	switch action.Action {
 	case "":
@@ -42,6 +51,7 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 				TLSFragment:               action.RouteOptions.TLSFragment,
 				TLSFragmentFallbackDelay:  time.Duration(action.RouteOptions.TLSFragmentFallbackDelay),
 				TLSRecordFragment:         action.RouteOptions.TLSRecordFragment,
+				Mark:                      fwMarkToUint32Ptr(action.RouteOptions.Mark),
 			},
 		}, nil
 	case C.RuleActionTypeRouteOptions:
@@ -57,6 +67,7 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 			TLSFragment:               action.RouteOptionsOptions.TLSFragment,
 			TLSFragmentFallbackDelay:  time.Duration(action.RouteOptionsOptions.TLSFragmentFallbackDelay),
 			TLSRecordFragment:         action.RouteOptionsOptions.TLSRecordFragment,
+			Mark:                      fwMarkToUint32Ptr(action.RouteOptionsOptions.Mark),
 		}, nil
 	case C.RuleActionTypeBypass:
 		return &RuleActionBypass{
@@ -71,6 +82,7 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 				TLSFragment:               action.BypassOptions.TLSFragment,
 				TLSFragmentFallbackDelay:  time.Duration(action.BypassOptions.TLSFragmentFallbackDelay),
 				TLSRecordFragment:         action.BypassOptions.TLSRecordFragment,
+				Mark:                      fwMarkToUint32Ptr(action.BypassOptions.Mark),
 			},
 		}, nil
 	case C.RuleActionTypeDirect:
@@ -103,8 +115,9 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 		return &RuleActionHijackDNS{}, nil
 	case C.RuleActionTypeSniff:
 		sniffAction := &RuleActionSniff{
-			SnifferNames: action.SniffOptions.Sniffer,
-			Timeout:      time.Duration(action.SniffOptions.Timeout),
+			SnifferNames:        action.SniffOptions.Sniffer,
+			Timeout:             time.Duration(action.SniffOptions.Timeout),
+			OverrideDestination: action.SniffOptions.OverrideDestination,
 		}
 		return sniffAction, sniffAction.build()
 	case C.RuleActionTypeResolve:
@@ -208,6 +221,7 @@ type RuleActionRouteOptions struct {
 	TLSFragment               bool
 	TLSFragmentFallbackDelay  time.Duration
 	TLSRecordFragment         bool
+	Mark                      *uint32
 }
 
 func (r *RuleActionRouteOptions) Type() string {
@@ -258,6 +272,9 @@ func (r *RuleActionRouteOptions) Descriptions() []string {
 	}
 	if r.TLSRecordFragment {
 		descriptions = append(descriptions, "tls-record-fragment")
+	}
+	if r.Mark != nil {
+		descriptions = append(descriptions, F.ToString("mark=0x", strconv.FormatUint(uint64(*r.Mark), 16)))
 	}
 	return descriptions
 }

@@ -34,7 +34,7 @@
     "primary_failures": 3,
     "backup_hold_time": "5m"
   },
-  "empty_pool_action": "reject",
+  "empty_pool_action": "error",
   "interrupt_exist_connections": false
 }
 ```
@@ -156,18 +156,18 @@ Top-N 候选池稳定的容差阈值（毫秒）。如果先前 Top-N 成员的�
 
 ##### hysteresis.primary_failures
 
-故障转移到备用池前的连续主池失败次数。默认：`1`（立即故障转移）。
+故障转移到备用池前的连续主池失败次数。默认：`3`。
 
 ##### hysteresis.backup_hold_time
 
-返回主池前在备用池上停留的最短时间。默认：`0s`（主池恢复后立即返回）。
+返回主池前在备用池上停留的最短时间。默认：`30s`。
 
 #### empty_pool_action
 
 所有出站不可用时采取的操作。可用值：
 
-- `reject`：拒绝连接（默认）
-- `direct`：使用直连
+- `error`：返回连接错误（默认）
+- `fallback_all`：无论健康状态如何，尝试所有出站
 
 #### interrupt_exist_connections
 
@@ -451,7 +451,7 @@ Top-N 候选池稳定的容差阈值（毫秒）。如果先前 Top-N 成员的�
 ### 故障转移策略
 
 - **有备用**：使用 `top_n` 保持最佳主要活跃，需要时回退到备用
-- **无备用**：使用 `empty_pool_action: "direct"` 实现优雅降级
+- **无备用**：使用 `empty_pool_action: "fallback_all"` 实现优雅降级
 - **高可用**：结合 `top_n`、`hysteresis` 和备用池
 
 ---
@@ -534,9 +534,9 @@ Top-N 选择只考虑健康的出站，按响应延迟排序。
 
 ### 主要出站失败时没有流量
 
-**原因**：没有配置备用出站且 `empty_pool_action` 为 `reject`
+**原因**：没有配置备用出站且 `empty_pool_action` 为 `error`
 
-**解决方案**：添加 `backup_outbounds` 或设置 `empty_pool_action: "direct"`
+**解决方案**：添加 `backup_outbounds` 或设置 `empty_pool_action: "fallback_all"`
 
 ### 哈希结果与预期不同
 

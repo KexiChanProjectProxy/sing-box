@@ -168,11 +168,13 @@ nav:
           - TUIC: configuration/outbound/tuic.md
           - Hysteria2: configuration/outbound/hysteria2.md
           - AnyTLS: configuration/outbound/anytls.md
+          - Cloudflared: configuration/outbound/cloudflared.md
           - Tor: configuration/outbound/tor.md
           - SSH: configuration/outbound/ssh.md
           - DNS: configuration/outbound/dns.md
           - Selector: configuration/outbound/selector.md
           - URLTest: configuration/outbound/urltest.md
+          - LoadBalance: configuration/outbound/loadbalance.md
       - Service:
           - configuration/service/index.md
           - DERP: configuration/service/derp.md

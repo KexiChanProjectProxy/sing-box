@@ -31,11 +31,13 @@
 | `tuic`         | [TUIC](./tuic/)                 |
 | `hysteria2`    | [Hysteria2](./hysteria2/)       |
 | `anytls`       | [AnyTLS](./anytls/)             |
+| `cloudflared`  | [Cloudflared](./cloudflared/)   |
 | `tor`          | [Tor](./tor/)                   |
 | `ssh`          | [SSH](./ssh/)                   |
 | `dns`          | [DNS](./dns/)                   |
 | `selector`     | [Selector](./selector/)         |
 | `urltest`      | [URLTest](./urltest/)           |
+| `loadbalance`  | [LoadBalance](./loadbalance/)   |
 | `naive`        | [NaiveProxy](./naive/)          |
 
 #### tag

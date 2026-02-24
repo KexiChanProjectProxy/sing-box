@@ -163,9 +163,33 @@ Can be overridden by `outbound` dial settings.
 
 #### sniff_override_destination
 
-Override the connection destination address with the sniffed domain name.
+When a `sniff` rule action successfully detects a domain name from the connection (e.g. TLS SNI, HTTP `Host` header), replace the connection's IP destination with the sniffed domain name, keeping the same port.
 
-Can be overridden per-inbound via `inbound.sniff_override_destination`.
+This causes subsequent DNS resolution and routing decisions to use the domain name rather than the original IP address, which is useful for:
+
+- Accurate domain-based routing after receiving an IP connection (e.g. from a transparent proxy)
+- Enabling remote DNS resolution by the outbound instead of relying on the client's resolved IP
+
+**How to enable sniffing:**
+
+Sniffing must be performed before the override takes effect. Use a `sniff` action in your route rules:
+
+```json
+{
+  "route": {
+    "sniff_override_destination": true,
+    "rules": [
+      {
+        "action": "sniff"
+      }
+    ]
+  }
+}
+```
+
+The override only applies when a domain name is successfully sniffed. If sniffing fails or the connection carries no recognisable domain (e.g. raw IP traffic), the destination is left unchanged.
+
+Can also be set per-inbound via the deprecated `inbound.sniff_override_destination` option.
 
 #### asn
 

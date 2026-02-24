@@ -149,13 +149,27 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		dialer.Timeout = C.TCPConnectTimeout
 	}
 	if !options.DisableTCPKeepAlive {
+		var defaultKeepAlive, defaultKeepAliveInterval time.Duration
+		if networkManager != nil {
+			defaultOpts := networkManager.DefaultOptions()
+			defaultKeepAlive = defaultOpts.TCPKeepAlive
+			defaultKeepAliveInterval = defaultOpts.TCPKeepAliveInterval
+		}
 		keepIdle := time.Duration(options.TCPKeepAlive)
 		if keepIdle == 0 {
-			keepIdle = C.TCPKeepAliveInitial
+			if defaultKeepAlive != 0 {
+				keepIdle = defaultKeepAlive
+			} else {
+				keepIdle = C.TCPKeepAliveInitial
+			}
 		}
 		keepInterval := time.Duration(options.TCPKeepAliveInterval)
 		if keepInterval == 0 {
-			keepInterval = C.TCPKeepAliveInterval
+			if defaultKeepAliveInterval != 0 {
+				keepInterval = defaultKeepAliveInterval
+			} else {
+				keepInterval = C.TCPKeepAliveInterval
+			}
 		}
 		dialer.KeepAlive = keepIdle
 		dialer.Control = control.Append(dialer.Control, control.SetKeepAlivePeriod(keepIdle, keepInterval))
@@ -365,6 +379,22 @@ func (d *DefaultDialer) ListenSerialInterfacePacket(ctx context.Context, destina
 
 func (d *DefaultDialer) WireGuardControl() control.Func {
 	return d.udpListener.Control
+}
+
+func (d *DefaultDialer) TCPDialer6() net.Dialer {
+	return d.dialer6.Dialer
+}
+
+func (d *DefaultDialer) UDPDialer6() net.Dialer {
+	return d.udpDialer6
+}
+
+func (d *DefaultDialer) UDPListenerConfig() net.ListenConfig {
+	return d.udpListener
+}
+
+func (d *DefaultDialer) NetNs() string {
+	return d.netns
 }
 
 func trackConn(conn net.Conn, err error) (net.Conn, error) {

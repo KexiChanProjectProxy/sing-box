@@ -28,6 +28,8 @@ type Router interface {
 	NeedFindProcess() bool
 	AppendTracker(tracker ConnectionTracker)
 	ResetNetwork()
+	ASNReader() ASNReader
+	GeositeReader() GeositeReader
 }
 
 type ConnectionTracker interface {

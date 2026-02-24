@@ -70,12 +70,18 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	outbound.dialer = tls.NewDialer(outboundDialer, tlsConfig)
 
 	client, err := anytls.NewClient(ctx, anytls.ClientConfig{
-		Password:                 options.Password,
-		IdleSessionCheckInterval: options.IdleSessionCheckInterval.Build(),
-		IdleSessionTimeout:       options.IdleSessionTimeout.Build(),
-		MinIdleSession:           options.MinIdleSession,
-		DialOut:                  outbound.dialOut,
-		Logger:                   logger,
+		Password:                    options.Password,
+		IdleSessionCheckInterval:    options.IdleSessionCheckInterval.Build(),
+		IdleSessionTimeout:          options.IdleSessionTimeout.Build(),
+		MaxConnectionLifetime:       options.MaxConnectionLifetime.Build(),
+		ConnectionLifetimeJitter:    options.ConnectionLifetimeJitter.Build(),
+		MinIdleSession:              options.MinIdleSession,
+		MinIdleSessionForAge:        options.MinIdleSessionForAge,
+		EnsureIdleSession:           options.EnsureIdleSession,
+		EnsureIdleSessionCreateRate: options.EnsureIdleSessionCreateRate,
+		Heartbeat:                   options.Heartbeat.Build(),
+		DialOut:                     outbound.dialOut,
+		Logger:                      logger,
 	})
 	if err != nil {
 		return nil, err

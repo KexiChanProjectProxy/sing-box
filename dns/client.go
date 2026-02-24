@@ -44,6 +44,10 @@ type Client struct {
 	cacheLock          compatible.Map[dns.Question, chan struct{}]
 	transportCache     freelru.Cache[transportCacheKey, *dns.Msg]
 	transportCacheLock compatible.Map[dns.Question, chan struct{}]
+
+	// Track in-flight background refreshes to prevent duplicate refresh goroutines
+	refreshing          compatible.Map[dns.Question, struct{}]
+	refreshingTransport compatible.Map[transportCacheKey, struct{}]
 }
 
 type ClientOptions struct {
@@ -93,6 +97,282 @@ func (c *Client) Start() {
 	if c.initRDRCFunc != nil {
 		c.rdrc = c.initRDRCFunc()
 	}
+}
+
+func (c *Client) exchangeWithRetry(ctx context.Context, transport adapter.DNSTransport,
+	message *dns.Msg, options adapter.DNSQueryOptions) (*dns.Msg, error) {
+	resolveTimeout := c.timeout
+	if options.ResolveTimeout > 0 {
+		resolveTimeout = options.ResolveTimeout
+	}
+	retries := 1
+	if options.ResolveRetries > 0 {
+		retries = options.ResolveRetries
+	}
+
+	var response *dns.Msg
+	var lastErr error
+	for attempt := 0; attempt < retries; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, resolveTimeout)
+		response, lastErr = transport.Exchange(attemptCtx, message)
+		cancel()
+		if lastErr == nil {
+			break
+		}
+		var rcodeError RcodeError
+		if errors.As(lastErr, &rcodeError) {
+			response = FixedResponseStatus(message, int(rcodeError))
+			lastErr = nil
+			break
+		}
+		if attempt < retries-1 && c.logger != nil {
+			c.logger.DebugContext(ctx, "DNS resolve attempt ", attempt+1, " failed, retrying: ", lastErr)
+		}
+	}
+	return response, lastErr
+}
+
+func (c *Client) triggerBackgroundRefresh(question dns.Question, transport adapter.DNSTransport,
+	options adapter.DNSQueryOptions) {
+	// Deduplication: only one in-flight refresh per question
+	if !c.independentCache {
+		if _, alreadyRefreshing := c.refreshing.LoadOrStore(question, struct{}{}); alreadyRefreshing {
+			return
+		}
+	} else {
+		key := transportCacheKey{Question: question, transportTag: transport.Tag()}
+		if _, alreadyRefreshing := c.refreshingTransport.LoadOrStore(key, struct{}{}); alreadyRefreshing {
+			return
+		}
+	}
+
+	go func() {
+		defer func() {
+			if !c.independentCache {
+				c.refreshing.Delete(question)
+			} else {
+				c.refreshingTransport.Delete(transportCacheKey{
+					Question: question, transportTag: transport.Tag(),
+				})
+			}
+		}()
+
+		// Build a fresh DNS query
+		message := &dns.Msg{
+			MsgHdr:   dns.MsgHdr{RecursionDesired: true},
+			Question: []dns.Question{question},
+		}
+
+		// Use retry logic if configured
+		ctx := context.Background()
+		response, err := c.exchangeWithRetry(ctx, transport, message, options)
+		if err != nil {
+			if c.logger != nil {
+				c.logger.Warn("background DNS refresh failed for ", question.Name, ": ", err)
+			}
+			return // Keep stale cache — don't update on failure
+		}
+
+		// Only update cache on SUCCESS
+		ttl := computeHoldTTL(response, extractMinTTL(response), options)
+		if ttl > 0 {
+			c.storeCacheWithHold(transport, question, response, ttl, options)
+			if c.logger != nil {
+				c.logger.Debug("background DNS refresh succeeded for ", question.Name)
+			}
+		}
+	}()
+}
+
+func (c *Client) storeCacheWithHold(transport adapter.DNSTransport, question dns.Question,
+	message *dns.Msg, softTTL uint32, options adapter.DNSQueryOptions) {
+	if softTTL == 0 {
+		return
+	}
+	// Hard TTL = soft TTL * 2, minimum soft TTL + 30s
+	hardTTL := softTTL * 2
+	if hardTTL < softTTL+30 {
+		hardTTL = softTTL + 30
+	}
+	// Store with hard TTL in the cache
+	if !c.independentCache {
+		c.cache.AddWithLifetime(question, message, time.Second*time.Duration(hardTTL))
+	} else {
+		c.transportCache.AddWithLifetime(transportCacheKey{
+			Question:     question,
+			transportTag: transport.Tag(),
+		}, message, time.Second*time.Duration(hardTTL))
+	}
+}
+
+func (c *Client) loadResponseWithHold(question dns.Question, transport adapter.DNSTransport,
+	options adapter.DNSQueryOptions) (*dns.Msg, int) {
+	var (
+		response *dns.Msg
+		expireAt time.Time
+		loaded   bool
+	)
+
+	if !c.independentCache {
+		response, expireAt, loaded = c.cache.GetWithLifetime(question)
+	} else {
+		response, expireAt, loaded = c.transportCache.GetWithLifetime(transportCacheKey{
+			Question:     question,
+			transportTag: transport.Tag(),
+		})
+	}
+	if !loaded {
+		return nil, 0
+	}
+
+	timeNow := time.Now()
+
+	if timeNow.After(expireAt) {
+		// Hard TTL expired — remove and return nil (force blocking refresh)
+		if !c.independentCache {
+			c.cache.Remove(question)
+		} else {
+			c.transportCache.Remove(transportCacheKey{
+				Question:     question,
+				transportTag: transport.Tag(),
+			})
+		}
+		return nil, 0
+	}
+
+	// Calculate soft TTL based on response type
+	softDuration := holdDurationForResponse(response, options)
+	if softDuration > 0 {
+		hardTTL := softDuration * 2
+		if hardTTL < softDuration+30*time.Second {
+			hardTTL = softDuration + 30*time.Second
+		}
+		softExpireAt := expireAt.Add(-(hardTTL - softDuration))
+
+		if timeNow.After(softExpireAt) {
+			// Soft TTL expired — return stale result AND trigger background refresh
+			c.triggerBackgroundRefresh(question, transport, options)
+			// Fall through to return the stale response
+		}
+	}
+
+	// Return the cached response (possibly stale but within hard TTL)
+	response = response.Copy()
+
+	// Adjust TTLs in the response
+	var originTTL int
+	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
+		for _, record := range recordList {
+			if originTTL == 0 || record.Header().Ttl > 0 && int(record.Header().Ttl) < originTTL {
+				originTTL = int(record.Header().Ttl)
+			}
+		}
+	}
+	nowTTL := int(expireAt.Sub(timeNow).Seconds())
+	if nowTTL < 0 {
+		nowTTL = 0
+	}
+
+	if originTTL > 0 {
+		duration := originTTL - nowTTL
+		if duration < 0 {
+			duration = 0
+		}
+		for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
+			for _, record := range recordList {
+				recordTTL := int(record.Header().Ttl)
+				if recordTTL > duration {
+					record.Header().Ttl = uint32(recordTTL - duration)
+				} else {
+					record.Header().Ttl = 0
+				}
+			}
+		}
+	} else {
+		for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
+			for _, record := range recordList {
+				record.Header().Ttl = uint32(nowTTL)
+			}
+		}
+	}
+	return response, nowTTL
+}
+
+func hasHoldOptions(options adapter.DNSQueryOptions) bool {
+	return options.HoldValid > 0 || options.HoldNX > 0 ||
+		options.HoldRefused > 0 || options.HoldOther > 0 ||
+		options.HoldTimeout > 0
+}
+
+func durationToSeconds(d time.Duration) uint32 {
+	if d <= 0 {
+		return 0
+	}
+	secs := uint32(d.Seconds())
+	if secs == 0 {
+		return 1 // round up sub-second to 1s minimum
+	}
+	return secs
+}
+
+func holdDurationForResponse(response *dns.Msg, options adapter.DNSQueryOptions) time.Duration {
+	switch {
+	case response.Rcode == dns.RcodeSuccess && len(response.Answer) > 0:
+		return options.HoldValid
+	case response.Rcode == dns.RcodeNameError:
+		return options.HoldNX
+	case response.Rcode == dns.RcodeRefused:
+		return options.HoldRefused
+	default:
+		return options.HoldOther
+	}
+}
+
+func computeHoldTTL(response *dns.Msg, nativeTTL uint32, options adapter.DNSQueryOptions) uint32 {
+	switch {
+	case response.Rcode == dns.RcodeSuccess && len(response.Answer) > 0:
+		if options.HoldValid > 0 {
+			return durationToSeconds(options.HoldValid)
+		}
+		if options.RewriteTTL != nil {
+			return *options.RewriteTTL
+		}
+		return nativeTTL
+	case response.Rcode == dns.RcodeNameError:
+		if options.HoldNX > 0 {
+			return durationToSeconds(options.HoldNX)
+		}
+		return nativeTTL
+	case response.Rcode == dns.RcodeRefused:
+		if options.HoldRefused > 0 {
+			return durationToSeconds(options.HoldRefused)
+		}
+		return 0
+	default: // SERVFAIL, etc.
+		if options.HoldOther > 0 {
+			return durationToSeconds(options.HoldOther)
+		}
+		return 0
+	}
+}
+
+func extractMinTTL(response *dns.Msg) uint32 {
+	var timeToLive uint32
+	if len(response.Answer) == 0 {
+		if soaTTL, hasSOA := extractNegativeTTL(response); hasSOA {
+			timeToLive = soaTTL
+		}
+	}
+	if timeToLive == 0 {
+		for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
+			for _, record := range recordList {
+				if timeToLive == 0 || record.Header().Ttl > 0 && record.Header().Ttl < timeToLive {
+					timeToLive = record.Header().Ttl
+				}
+			}
+		}
+	}
+	return timeToLive
 }
 
 func extractNegativeTTL(response *dns.Msg) (uint32, bool) {
@@ -170,7 +450,13 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 				}()
 			}
 		}
-		response, ttl := c.loadResponse(question, transport)
+		var response *dns.Msg
+		var ttl int
+		if hasHoldOptions(options) {
+			response, ttl = c.loadResponseWithHold(question, transport, options)
+		} else {
+			response, ttl = c.loadResponse(question, transport)
+		}
 		if response != nil {
 			logCachedResponse(c.logger, ctx, response, ttl)
 			response.Id = message.Id
@@ -190,16 +476,21 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 			return nil, ErrResponseRejectedCached
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	response, err := transport.Exchange(ctx, message)
-	cancel()
+	response, err := c.exchangeWithRetry(ctx, transport, message, options)
 	if err != nil {
-		var rcodeError RcodeError
-		if errors.As(err, &rcodeError) {
-			response = FixedResponseStatus(message, int(rcodeError))
-		} else {
-			return nil, err
+		// HoldTimeout fallback: serve last-known-good from cache on timeout
+		if options.HoldTimeout > 0 && !disableCache {
+			cachedResponse, cachedTTL := c.loadResponseWithHold(question, transport, options)
+			if cachedResponse != nil {
+				if c.logger != nil {
+					c.logger.DebugContext(ctx, "DNS timeout, returning stale cached response for ", question.Name)
+				}
+				logCachedResponse(c.logger, ctx, cachedResponse, cachedTTL)
+				cachedResponse.Id = message.Id
+				return cachedResponse, nil
+			}
 		}
+		return nil, err
 	}
 	/*if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		validResponse := response
@@ -236,7 +527,11 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 			response.Answer = append(response.Answer, validResponse.Answer...)
 		}
 	}*/
-	disableCache = disableCache || (response.Rcode != dns.RcodeSuccess && response.Rcode != dns.RcodeNameError)
+	if hasHoldOptions(options) {
+		disableCache = disableCache || computeHoldTTL(response, 0, options) == 0
+	} else {
+		disableCache = disableCache || (response.Rcode != dns.RcodeSuccess && response.Rcode != dns.RcodeNameError)
+	}
 	if responseChecker != nil {
 		var rejected bool
 		// TODO: add accept_any rule and support to check response instead of addresses
@@ -272,22 +567,10 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 			}
 		}
 	}
-	var timeToLive uint32
-	if len(response.Answer) == 0 {
-		if soaTTL, hasSOA := extractNegativeTTL(response); hasSOA {
-			timeToLive = soaTTL
-		}
-	}
-	if timeToLive == 0 {
-		for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
-			for _, record := range recordList {
-				if timeToLive == 0 || record.Header().Ttl > 0 && record.Header().Ttl < timeToLive {
-					timeToLive = record.Header().Ttl
-				}
-			}
-		}
-	}
-	if options.RewriteTTL != nil {
+	timeToLive := extractMinTTL(response)
+	if hasHoldOptions(options) {
+		timeToLive = computeHoldTTL(response, timeToLive, options)
+	} else if options.RewriteTTL != nil {
 		timeToLive = *options.RewriteTTL
 	}
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
@@ -296,7 +579,11 @@ func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, m
 		}
 	}
 	if !disableCache {
-		c.storeCache(transport, question, response, timeToLive)
+		if hasHoldOptions(options) {
+			c.storeCacheWithHold(transport, question, response, timeToLive, options)
+		} else {
+			c.storeCache(transport, question, response, timeToLive)
+		}
 	}
 	response.Id = messageId
 	requestEDNSOpt := message.IsEdns0()

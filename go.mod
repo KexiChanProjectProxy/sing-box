@@ -6,6 +6,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/anytls/sing-anytls v0.0.11
 	github.com/caddyserver/certmagic v0.25.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/coder/websocket v1.8.14
 	github.com/cretz/bine v0.2.0
 	github.com/database64128/tfo-go/v2 v2.3.1
@@ -13,6 +14,7 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/godbus/dbus/v5 v5.2.1
 	github.com/gofrs/uuid/v5 v5.4.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
 	github.com/keybase/go-keychain v0.0.1
 	github.com/libdns/acmedns v0.5.0
@@ -166,3 +168,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
+
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13-0.20260202185322-24deedf1ce8c

@@ -157,6 +157,7 @@ type RouteActionOptions struct {
 type RawRouteOptionsActionOptions struct {
 	OverrideAddress string `json:"override_address,omitempty"`
 	OverridePort    uint16 `json:"override_port,omitempty"`
+	RevertOriginDst bool   `json:"revert_origin_dst,omitempty"`
 
 	NetworkStrategy *NetworkStrategy `json:"network_strategy,omitempty"`
 	FallbackDelay   uint32           `json:"fallback_delay,omitempty"`
@@ -228,6 +229,9 @@ func (d DirectActionOptions) Descriptions() []string {
 	}
 	if d.Inet6BindAddress != nil {
 		descriptions = append(descriptions, "inet6_bind_address="+d.Inet6BindAddress.Build(netip.IPv6Unspecified()).String())
+	}
+	if d.Inet6BindPrefix != nil {
+		descriptions = append(descriptions, "inet6_bind_prefix="+d.Inet6BindPrefix.Build(netip.Prefix{}).String())
 	}
 	if d.RoutingMark != 0 {
 		descriptions = append(descriptions, "routing_mark="+fmt.Sprintf("0x%x", d.RoutingMark))

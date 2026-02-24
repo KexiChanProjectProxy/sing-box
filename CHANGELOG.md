@@ -11,39 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.12.14.34] - 2026-02-20
-
-
----
-
-## [1.12.14.34] - 2026-02-20
-
-
----
-
-## [1.12.14.31] - 2026-02-20
-
-
-<!-- AGENT: Add new changes here before creating a release -->
-<!-- Use the following categories as needed: -->
+## [1.13.0.1] - 2026-02-24
 
 ### Added
-<!-- New features -->
+
+- **Cloudflared outbound**: Embedded Cloudflare WARP/tunnel WebSocket transport, indistinguishable from the official client; supports native detour and optional TLS
+- **LoadBalance outbound**: Full-featured load balancer with `hash`, `urltest`, and `hysteresis` strategies; eTLD+1 sticky sessions, ASN-aware routing, geosite group matching, and configurable `tolerance` for Top-N candidate pool stabilization
+- **HAProxy DNS resolver**: DNS resolver with hold-TTL, retry, and stale-while-revalidate semantics (HAProxy-style)
+- **Per-user IPv6 assignment**: Deterministic per-user IPv6 address derived from FNV-128a hash + configurable prefix on direct outbound
+- **464XLAT (CLAT)**: RFC 6877 IPv4-in-IPv6 translation on direct outbound
+- **ASN database**: MaxMind GeoLite2-ASN MMDB support for ASN-based routing rules
+- **Custom geosite matcher**: User-defined geosite database path and matcher
+- **AnyTLS masquerade**: File, proxy, string, and redirect masquerade modes; extended session pool options (`ensure_idle_session`, `heartbeat`, `max_connection_lifetime`, and more)
+- **Multi-output logging**: Simultaneous JSON, HTTP-batch, and formatted log outputs
+- **Transparent proxy extensions**: `use_origin_dst` / `revert_origin_dst` flags for TPROXY/redirect inbounds
+- **Route options**: `sniff_override_destination` as a per-route option; `default_tcp_keep_alive` and `default_tcp_keep_alive_interval` on `route`
+- **MatchedRuleSet propagation**: Matched rule-set tags forwarded to load-balance hash for deterministic session affinity
 
 ### Changed
-<!-- Changes to existing functionality -->
 
-### Deprecated
-<!-- Soon-to-be removed features -->
-
-### Removed
-<!-- Removed features -->
+- Rebased onto upstream sing-box **1.13.0-rc.6**, adopting all upstream architectural changes, API updates, and bug fixes
+- All 1.12.x custom features re-implemented and adapted to the new 1.13.0 adapter/router architecture
 
 ### Fixed
-<!-- Bug fixes -->
 
-### Security
-<!-- Security vulnerability fixes -->
+- Cloudflared `Read()` EOF leak and missing deadline methods (backported fix)
+- AnyTLS TLS now optional for outbound connections
 
 ---
 

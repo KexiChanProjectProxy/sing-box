@@ -2,10 +2,14 @@
 icon: material/alert-decagram
 ---
 
+!!! quote "Fork additions"
+
+    :material-plus: [mark](#mark)
+
 !!! quote "Changes in sing-box 1.13.0"
 
-    :material-plus: [interface_address](#interface_address)  
-    :material-plus: [network_interface_address](#network_interface_address)  
+    :material-plus: [interface_address](#interface_address)
+    :material-plus: [network_interface_address](#network_interface_address)
     :material-plus: [default_interface_address](#default_interface_address)
 
 !!! quote "Changes in sing-box 1.12.0"
@@ -161,6 +165,7 @@ icon: material/alert-decagram
         ],
         "rule_set_ip_cidr_match_source": false,
         "rule_set_ip_cidr_accept_empty": false,
+        "mark": "0x1",
         "invert": false,
         "outbound": [
           "direct"
@@ -445,6 +450,18 @@ Make `ip_cidr` rule items in rule-sets match the source IP.
 !!! question "Since sing-box 1.10.0"
 
 Make `ip_cidr` rule items in rule-sets match the source IP.
+
+#### mark
+
+Match the virtual route mark on the connection.
+
+The mark is a uint32 value set by the [`mark`](/configuration/route/rule_action/#mark) field in a `route-options` rule action.
+
+Accepts three formats:
+
+- Integer: `1` — exact match (equivalent to `"0x1"`)
+- Hex string: `"0x1"` — exact match
+- Bitmask: `"0x1/0xff"` — matches when `(mark & 0xff) == 0x1`
 
 #### invert
 

@@ -2,9 +2,13 @@
 icon: material/new-box
 ---
 
+!!! quote "Fork 新增"
+
+    :material-plus: route-options 中的 [mark](#mark)
+
 !!! quote "sing-box 1.13.0 中的更改"
 
-    :material-plus: [bypass](#bypass)  
+    :material-plus: [bypass](#bypass)
     :material-alert: [reject](#reject)
 
 !!! quote "sing-box 1.12.0 中的更改"
@@ -135,7 +139,11 @@ icon: material/new-box
   "fallback_delay": "",
   "udp_disable_domain_unmapping": false,
   "udp_connect": false,
-  "udp_timeout": ""
+  "udp_timeout": "",
+  "tls_fragment": false,
+  "tls_fragment_fallback_delay": "",
+  "tls_record_fragment": "",
+  "mark": "0x1"
 }
 ```
 
@@ -239,13 +247,45 @@ UDP 连接超时时间。
 
 通过分段 TLS 握手数据包到多个 TLS 记录来绕过防火墙检测。
 
+#### mark
+
+为连接设置虚拟路由标记。
+
+标记是一个内部 uint32 标签，在连接的整个生命周期内持续存在。后续规则可以使用 [`mark`](/zh/configuration/route/rule/#mark) 规则条件对其进行匹配。
+
+接受整数（`1`）或十六进制字符串（`"0x1"`）。
+
+此功能支持多阶段路由链：早期规则为连接打标签，后续规则据此标签执行路由操作。
+
+示例——标记 TLS 流量并路由到代理：
+
+```json
+{
+  "route": {
+    "rules": [
+      {
+        "protocol": "tls",
+        "action": "route-options",
+        "mark": "0x1"
+      },
+      {
+        "mark": "0x1",
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
+}
+```
+
 ### sniff
 
 ```json
 {
   "action": "sniff",
   "sniffer": [],
-  "timeout": ""
+  "timeout": "",
+  "override_destination": false
 }
 ```
 
@@ -266,6 +306,35 @@ UDP 连接超时时间。
 探测超时时间。
 
 默认使用 300ms。
+
+#### override_destination
+
+启用后，若成功从连接中嗅探到域名（例如 TLS SNI、HTTP `Host` 头），则将连接的 IP 目标地址替换为嗅探到的域名，端口保持不变。
+
+此选项允许按规则单独控制目标覆盖行为，无需使用全局的 `route.sniff_override_destination` 开关。
+
+当本字段与 `route.sniff_override_destination` 同时设置时，本字段对匹配此规则的连接优先生效。
+
+示例——仅对特定流量覆盖目标地址：
+
+```json
+{
+  "route": {
+    "rules": [
+      {
+        "action": "sniff",
+        "override_destination": true
+      },
+      {
+        "network": "tcp",
+        "port": 443,
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
+}
+```
 
 ### resolve
 

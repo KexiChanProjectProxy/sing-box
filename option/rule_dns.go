@@ -109,6 +109,7 @@ type RawDefaultDNSRule struct {
 	RuleSet                  badoption.Listable[string]                                                  `json:"rule_set,omitempty"`
 	RuleSetIPCIDRMatchSource bool                                                                        `json:"rule_set_ip_cidr_match_source,omitempty"`
 	RuleSetIPCIDRAcceptEmpty bool                                                                        `json:"rule_set_ip_cidr_accept_empty,omitempty"`
+	Mark                     *MarkMatch                                                                  `json:"mark,omitempty"`
 	Invert                   bool                                                                        `json:"invert,omitempty"`
 
 	// Deprecated: renamed to rule_set_ip_cidr_match_source

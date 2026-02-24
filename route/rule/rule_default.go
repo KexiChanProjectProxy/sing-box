@@ -280,6 +280,11 @@ func NewDefaultRule(ctx context.Context, logger log.ContextLogger, options optio
 		rule.items = append(rule.items, item)
 		rule.allItems = append(rule.allItems, item)
 	}
+	if options.Mark != nil {
+		item := NewMarkItem(options.Mark.Value, options.Mark.Mask)
+		rule.items = append(rule.items, item)
+		rule.allItems = append(rule.allItems, item)
+	}
 	return rule, nil
 }
 

@@ -2,11 +2,15 @@
 icon: material/new-box
 ---
 
+!!! quote "Fork 新增"
+
+    :material-plus: [prefer_domain](#prefer_domain)
+
 !!! quote "sing-box 1.13.0 中的更改"
 
-    :material-plus: [disable_tcp_keep_alive](#disable_tcp_keep_alive)  
-    :material-plus: [tcp_keep_alive](#tcp_keep_alive)  
-    :material-plus: [tcp_keep_alive_interval](#tcp_keep_alive_interval)  
+    :material-plus: [disable_tcp_keep_alive](#disable_tcp_keep_alive)
+    :material-plus: [tcp_keep_alive](#tcp_keep_alive)
+    :material-plus: [tcp_keep_alive_interval](#tcp_keep_alive_interval)
     :material-plus: [bind_address_no_port](#bind_address_no_port)
 
 !!! quote "sing-box 1.12.0 中的更改"
@@ -47,7 +51,8 @@ icon: material/new-box
   "network_type": [],
   "fallback_network_type": [],
   "fallback_delay": "",
-  
+  "prefer_domain": true,
+
   // 废弃的
 
   "domain_strategy": ""
@@ -241,6 +246,65 @@ TCP keep alive 间隔。
 仅当 `domain_strategy` 或 `network_strategy` 已设置时生效。
 
 默认使用 `300ms`。
+
+#### prefer_domain
+
+启用后，在连接出站之前，将连接的 IP 目标地址替换为已嗅探到的域名。
+
+对于代理出站（vmess、trojan、vless 等），域名将转发给远端服务器，由其进行远程 DNS 解析。对于 direct/WireGuard 出站，则在本地进行解析。
+
+若连接尚未经过 `sniff` 规则动作，将在出站层面自动尝试一次最优嗅探（TCP 使用 TLS SNI / HTTP Host，UDP 使用 QUIC）。
+
+支持两种形式：
+
+- **布尔值**：`true` — 只要有可用域名，始终执行覆盖。
+- **对象** `{"mark": "0x1"}` — 仅当连接的路由标记匹配时执行覆盖。格式与 [`mark`](/zh/configuration/route/rule/#mark) 规则条件相同（整数、十六进制或位掩码）。
+
+覆盖仅在以下条件同时满足时生效：
+1. 连接目标当前为 IP 地址（非域名），且
+2. 已成功从连接数据中嗅探到域名。
+
+示例——始终优先使用域名：
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy",
+      "prefer_domain": true
+    }
+  ]
+}
+```
+
+示例——仅在路由标记 `0x1` 设置时优先使用域名：
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy",
+      "prefer_domain": {"mark": "0x1"}
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "protocol": "tls",
+        "action": "route-options",
+        "mark": "0x1"
+      },
+      {
+        "mark": "0x1",
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
+}
+```
 
 #### domain_strategy
 

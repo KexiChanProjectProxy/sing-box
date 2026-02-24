@@ -87,6 +87,7 @@ type InboundContext struct {
 	ProcessInfo          *ConnectionOwner
 	QueryType            uint16
 	FakeIP               bool
+	Mark                 uint32
 
 	// rule cache
 

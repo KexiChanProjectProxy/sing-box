@@ -168,9 +168,33 @@ icon: material/alert-decagram
 
 #### sniff_override_destination
 
-使用嗅探到的域名覆盖连接目标地址。
+当 `sniff` 规则动作成功从连接中检测到域名时（例如 TLS SNI、HTTP `Host` 头），将连接的 IP 目标地址替换为嗅探到的域名，端口保持不变。
 
-可被各入站的 `inbound.sniff_override_destination` 设置覆盖。
+此功能使后续的 DNS 解析和路由决策使用域名而非原始 IP 地址，适用于以下场景：
+
+- 在接收到 IP 连接后（例如来自透明代理）进行精确的基于域名的路由
+- 由出站进行远端 DNS 解析，而非依赖客户端已解析的 IP
+
+**启用嗅探的方法：**
+
+覆盖生效前必须先执行嗅探。在路由规则中使用 `sniff` 动作：
+
+```json
+{
+  "route": {
+    "sniff_override_destination": true,
+    "rules": [
+      {
+        "action": "sniff"
+      }
+    ]
+  }
+}
+```
+
+覆盖仅在成功嗅探到域名时生效。如果嗅探失败或连接中没有可识别的域名（例如纯 IP 流量），目标地址保持不变。
+
+也可通过已废弃的 `inbound.sniff_override_destination` 选项在各入站中单独设置。
 
 #### asn
 

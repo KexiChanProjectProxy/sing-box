@@ -62,6 +62,7 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
 		idleTimeout:                  time.Duration(options.IdleTimeout),
 		interruptExternalConnections: options.InterruptExistConnections,
 	}
+	outbound.ApplyPreferDomain(options.PreferDomain)
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
 	}

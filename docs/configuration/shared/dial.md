@@ -264,6 +264,11 @@ When enabled, overrides the connection's IP destination with the sniffed domain 
 
 For proxy outbounds (vmess, trojan, vless, etc.), the domain name is forwarded to the remote server, enabling remote DNS resolution. For direct/WireGuard outbounds, it is resolved locally.
 
+!!! tip "Group outbounds"
+
+    `prefer_domain` also works on group outbounds (selector, urltest, loadbalance). When enabled on a group outbound,
+    the override applies before dispatching to the selected child outbound. See the group outbound documentation for details.
+
 If no prior `sniff` rule action was executed for the connection, a best-effort sniff (TLS SNI / HTTP Host for TCP, QUIC for UDP) is automatically attempted at the outbound level.
 
 Two forms are accepted:

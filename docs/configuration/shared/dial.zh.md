@@ -253,6 +253,11 @@ TCP keep alive 间隔。
 
 对于代理出站（vmess、trojan、vless 等），域名将转发给远端服务器，由其进行远程 DNS 解析。对于 direct/WireGuard 出站，则在本地进行解析。
 
+!!! tip "组出站"
+
+    `prefer_domain` 也可以在组出站（selector、urltest、loadbalance）上使用。在组出站上启用时，
+    覆盖将在分发给选定的子出站之前应用。详情参见组出站文档。
+
 若连接尚未经过 `sniff` 规则动作，将在出站层面自动尝试一次最优嗅探（TCP 使用 TLS SNI / HTTP Host，UDP 使用 QUIC）。
 
 支持两种形式：

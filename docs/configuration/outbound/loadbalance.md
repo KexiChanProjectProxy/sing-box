@@ -34,7 +34,7 @@
     "primary_failures": 3,
     "backup_hold_time": "5m"
   },
-  "empty_pool_action": "reject",
+  "empty_pool_action": "error",
   "interrupt_exist_connections": false
 }
 ```
@@ -160,18 +160,18 @@ Hysteresis configuration for failover damping. Prevents rapid switching between 
 
 ##### hysteresis.primary_failures
 
-Number of consecutive primary pool failures before failing over to backup pool. Default: `1` (immediate failover).
+Number of consecutive primary pool failures before failing over to backup pool. Default: `3`.
 
 ##### hysteresis.backup_hold_time
 
-Minimum time to stay on backup pool before returning to primary pool. Default: `0s` (return immediately when primary recovers).
+Minimum time to stay on backup pool before returning to primary pool. Default: `30s`.
 
 #### empty_pool_action
 
 Action to take when all outbounds are unavailable. Available values:
 
-- `reject`: Reject the connection (default)
-- `direct`: Use direct connection
+- `error`: Return an error for the connection (default)
+- `fallback_all`: Attempt all outbounds regardless of health status
 
 #### interrupt_exist_connections
 
@@ -575,7 +575,7 @@ Routes by source IP + destination geosite category. All domains within the same 
 ### Failover Strategy
 
 - **With backups**: Use `top_n` to keep best primaries active, fall back to backups when needed
-- **Without backups**: Use `empty_pool_action: "direct"` for graceful degradation
+- **Without backups**: Use `empty_pool_action: "fallback_all"` for graceful degradation
 - **High availability**: Combine `top_n`, `hysteresis`, and backup pools
 
 ---
@@ -660,7 +660,7 @@ Top-N selection only considers healthy outbounds, ranked by response latency.
 
 **Cause**: No backup outbounds configured and `empty_pool_action` is `reject`
 
-**Solution**: Add `backup_outbounds` or set `empty_pool_action: "direct"`
+**Solution**: Add `backup_outbounds` or set `empty_pool_action: "fallback_all"`
 
 ### Different hash results than expected
 

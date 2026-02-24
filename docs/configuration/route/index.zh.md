@@ -28,8 +28,6 @@ icon: material/alert-decagram
 ```json
 {
   "route": {
-    "geoip": {},
-    "geosite": {},
     "rules": [],
     "rule_set": [],
     "final": "",
@@ -37,8 +35,20 @@ icon: material/alert-decagram
     "override_android_vpn": false,
     "default_interface": "",
     "default_mark": 0,
+    "default_domain_resolver": "", // 或 {}
     "default_network_strategy": "",
-    "default_fallback_delay": ""
+    "default_network_type": [],
+    "default_fallback_network_type": [],
+    "default_fallback_delay": "",
+    "default_tcp_keep_alive": "",
+    "default_tcp_keep_alive_interval": "",
+    "sniff_override_destination": false,
+    "asn": {},
+
+    // 已移除
+
+    "geoip": {},
+    "geosite": {}
   }
 }
 ```
@@ -143,3 +153,33 @@ icon: material/alert-decagram
 !!! question "自 sing-box 1.11.0 起"
 
 详情参阅 [拨号字段](/configuration/shared/dial/#fallback_delay)。
+
+#### default_tcp_keep_alive
+
+出站连接的默认 TCP 保活初始周期。默认值：`5m`。
+
+可被 `outbound` 拨号设置覆盖。
+
+#### default_tcp_keep_alive_interval
+
+出站连接的默认 TCP 保活间隔。默认值：`75s`。
+
+可被 `outbound` 拨号设置覆盖。
+
+#### sniff_override_destination
+
+使用嗅探到的域名覆盖连接目标地址。
+
+可被各入站的 `inbound.sniff_override_destination` 设置覆盖。
+
+#### asn
+
+ASN 数据库配置。[LoadBalance](/zh/configuration/outbound/loadbalance/) 哈希键部分的 `dst_asn` 及 `ip_asn` 路由规则需要此配置。
+
+| 字段 | 描述 |
+|------|------|
+| `path` | ASN MMDB 文件路径 |
+| `download_url` | 自动下载数据库的 URL |
+| `download_detour` | 下载数据库所使用的出站标签 |
+
+支持 MaxMind GeoLite2-ASN 格式（MMDB）。

@@ -6,6 +6,8 @@ import (
 	"runtime"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/asn"
+	"github.com/sagernet/sing-box/common/geosite"
 	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/taskmonitor"
 	C "github.com/sagernet/sing-box/constant"
@@ -38,24 +40,38 @@ type Router struct {
 	trackers          []adapter.ConnectionTracker
 	platformInterface adapter.PlatformInterface
 	started           bool
+	// Custom fork extensions
+	asnReader              adapter.ASNReader
+	asnPath                string
+	geositeReader          adapter.GeositeReader
+	geositePath            string
+	sniffOverrideDestination bool
 }
 
 func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions) *Router {
-	return &Router{
-		ctx:               ctx,
-		logger:            logFactory.NewLogger("router"),
-		inbound:           service.FromContext[adapter.InboundManager](ctx),
-		outbound:          service.FromContext[adapter.OutboundManager](ctx),
-		dns:               service.FromContext[adapter.DNSRouter](ctx),
-		dnsTransport:      service.FromContext[adapter.DNSTransportManager](ctx),
-		connection:        service.FromContext[adapter.ConnectionManager](ctx),
-		network:           service.FromContext[adapter.NetworkManager](ctx),
-		rules:             make([]adapter.Rule, 0, len(options.Rules)),
-		ruleSetMap:        make(map[string]adapter.RuleSet),
-		needFindProcess:   hasRule(options.Rules, isProcessRule) || hasDNSRule(dnsOptions.Rules, isProcessDNSRule) || options.FindProcess,
-		pauseManager:      service.FromContext[pause.Manager](ctx),
-		platformInterface: service.FromContext[adapter.PlatformInterface](ctx),
+	router := &Router{
+		ctx:                      ctx,
+		logger:                   logFactory.NewLogger("router"),
+		inbound:                  service.FromContext[adapter.InboundManager](ctx),
+		outbound:                 service.FromContext[adapter.OutboundManager](ctx),
+		dns:                      service.FromContext[adapter.DNSRouter](ctx),
+		dnsTransport:             service.FromContext[adapter.DNSTransportManager](ctx),
+		connection:               service.FromContext[adapter.ConnectionManager](ctx),
+		network:                  service.FromContext[adapter.NetworkManager](ctx),
+		rules:                    make([]adapter.Rule, 0, len(options.Rules)),
+		ruleSetMap:               make(map[string]adapter.RuleSet),
+		needFindProcess:          hasRule(options.Rules, isProcessRule) || hasDNSRule(dnsOptions.Rules, isProcessDNSRule) || options.FindProcess,
+		pauseManager:             service.FromContext[pause.Manager](ctx),
+		platformInterface:        service.FromContext[adapter.PlatformInterface](ctx),
+		sniffOverrideDestination: options.SniffOverrideDestination,
 	}
+	if options.ASN != nil && options.ASN.Path != "" {
+		router.asnPath = options.ASN.Path
+	}
+	if options.Geosite != nil && options.Geosite.Path != "" {
+		router.geositePath = options.Geosite.Path
+	}
+	return router
 }
 
 func (r *Router) Initialize(rules []option.Rule, ruleSets []option.RuleSet) error {
@@ -84,6 +100,41 @@ func (r *Router) Start(stage adapter.StartStage) error {
 	monitor := taskmonitor.New(r.logger, C.StartTimeout)
 	switch stage {
 	case adapter.StartStateStart:
+		if r.asnPath != "" {
+			monitor.Start("initialize ASN database")
+			asnReader, err := asn.Open(r.asnPath)
+			monitor.Finish()
+			if err != nil {
+				if os.IsNotExist(err) {
+					r.logger.Debug("ASN database not found: ", r.asnPath)
+				} else {
+					r.logger.Warn(E.Cause(err, "open ASN database"))
+				}
+			} else {
+				r.asnReader = asnReader
+				r.logger.Info("ASN database loaded from ", r.asnPath)
+			}
+		}
+		if r.geositePath != "" {
+			monitor.Start("initialize geosite database")
+			gsReader, gsCodes, err := geosite.Open(r.geositePath)
+			monitor.Finish()
+			if err != nil {
+				if os.IsNotExist(err) {
+					r.logger.Debug("geosite database not found: ", r.geositePath)
+				} else {
+					r.logger.Warn(E.Cause(err, "open geosite database"))
+				}
+			} else {
+				matcher, err := geosite.NewMatcher(gsReader, gsCodes)
+				if err != nil {
+					r.logger.Warn(E.Cause(err, "create geosite matcher"))
+				} else {
+					r.geositeReader = matcher
+					r.logger.Info("geosite database loaded from ", r.geositePath, " with ", len(gsCodes), " codes")
+				}
+			}
+		}
 		var cacheContext *adapter.HTTPStartContext
 		if len(r.ruleSets) > 0 {
 			monitor.Start("initialize rule-set")
@@ -186,6 +237,20 @@ func (r *Router) Close() error {
 		})
 		monitor.Finish()
 	}
+	if asnCloser, ok := r.asnReader.(interface{ Close() error }); ok {
+		monitor.Start("close ASN database")
+		err = E.Append(err, asnCloser.Close(), func(err error) error {
+			return E.Cause(err, "close ASN database")
+		})
+		monitor.Finish()
+	}
+	if geositeCloser, ok := r.geositeReader.(interface{ Close() error }); ok {
+		monitor.Start("close geosite database")
+		err = E.Append(err, geositeCloser.Close(), func(err error) error {
+			return E.Cause(err, "close geosite database")
+		})
+		monitor.Finish()
+	}
 	return err
 }
 
@@ -209,4 +274,16 @@ func (r *Router) NeedFindProcess() bool {
 func (r *Router) ResetNetwork() {
 	r.network.ResetNetwork()
 	r.dns.ResetNetwork()
+}
+
+func (r *Router) ASNReader() adapter.ASNReader {
+	return r.asnReader
+}
+
+func (r *Router) GeositeReader() adapter.GeositeReader {
+	return r.geositeReader
+}
+
+func (r *Router) SniffOverrideDestination() bool {
+	return r.sniffOverrideDestination
 }

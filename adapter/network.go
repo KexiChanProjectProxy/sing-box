@@ -40,6 +40,8 @@ type NetworkOptions struct {
 	NetworkType          []C.InterfaceType
 	FallbackNetworkType  []C.InterfaceType
 	FallbackDelay        time.Duration
+	TCPKeepAlive         time.Duration
+	TCPKeepAliveInterval time.Duration
 }
 
 type InterfaceUpdateListener interface {

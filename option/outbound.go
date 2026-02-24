@@ -69,6 +69,7 @@ type DialerOptions struct {
 	BindInterface        string                            `json:"bind_interface,omitempty"`
 	Inet4BindAddress     *badoption.Addr                   `json:"inet4_bind_address,omitempty"`
 	Inet6BindAddress     *badoption.Addr                   `json:"inet6_bind_address,omitempty"`
+	Inet6BindPrefix      *badoption.Prefix                 `json:"inet6_bind_prefix,omitempty"`
 	BindAddressNoPort    bool                              `json:"bind_address_no_port,omitempty"`
 	ProtectPath          string                            `json:"protect_path,omitempty"`
 	RoutingMark          FwMark                            `json:"routing_mark,omitempty"`
@@ -98,6 +99,15 @@ type _DomainResolveOptions struct {
 	DisableCache bool                  `json:"disable_cache,omitempty"`
 	RewriteTTL   *uint32               `json:"rewrite_ttl,omitempty"`
 	ClientSubnet *badoption.Prefixable `json:"client_subnet,omitempty"`
+
+	// HAProxy-style resolver options for fast re-resolution
+	ResolveRetries int                `json:"resolve_retries,omitempty"`
+	ResolveTimeout badoption.Duration `json:"resolve_timeout,omitempty"`
+	HoldValid      badoption.Duration `json:"hold_valid,omitempty"`
+	HoldNX         badoption.Duration `json:"hold_nx,omitempty"`
+	HoldRefused    badoption.Duration `json:"hold_refused,omitempty"`
+	HoldTimeout    badoption.Duration `json:"hold_timeout,omitempty"`
+	HoldOther      badoption.Duration `json:"hold_other,omitempty"`
 }
 
 type DomainResolveOptions _DomainResolveOptions
@@ -108,7 +118,14 @@ func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 	} else if o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
 		!o.DisableCache &&
 		o.RewriteTTL == nil &&
-		o.ClientSubnet == nil {
+		o.ClientSubnet == nil &&
+		o.ResolveRetries == 0 &&
+		o.ResolveTimeout == 0 &&
+		o.HoldValid == 0 &&
+		o.HoldNX == 0 &&
+		o.HoldRefused == 0 &&
+		o.HoldTimeout == 0 &&
+		o.HoldOther == 0 {
 		return json.Marshal(o.Server)
 	} else {
 		return json.Marshal((_DomainResolveOptions)(o))

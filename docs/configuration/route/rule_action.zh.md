@@ -130,6 +130,7 @@ icon: material/new-box
   "action": "route-options",
   "override_address": "",
   "override_port": 0,
+  "revert_origin_dst": false,
   "network_strategy": "",
   "fallback_delay": "",
   "udp_disable_domain_unmapping": false,
@@ -151,6 +152,12 @@ icon: material/new-box
 #### override_port
 
 覆盖目标端口。
+
+#### revert_origin_dst
+
+将连接目标还原为通过 `SO_ORIGINAL_DST`（Linux 透明代理）获取的原始目标地址。
+
+当连接被 iptables/nftables REDIRECT/TPROXY 重定向时使用，用于在转发前恢复原始目标地址。
 
 #### network_strategy
 

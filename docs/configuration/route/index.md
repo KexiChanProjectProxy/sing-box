@@ -40,7 +40,11 @@ icon: material/alert-decagram
     "default_network_type": [],
     "default_fallback_network_type": [],
     "default_fallback_delay": "",
-    
+    "default_tcp_keep_alive": "",
+    "default_tcp_keep_alive_interval": "",
+    "sniff_override_destination": false,
+    "asn": {},
+
     // Removed
 
     "geoip": {},
@@ -144,3 +148,33 @@ See [Dial Fields](/configuration/shared/dial/#fallback_network_type) for details
 !!! question "Since sing-box 1.11.0"
 
 See [Dial Fields](/configuration/shared/dial/#fallback_delay) for details.
+
+#### default_tcp_keep_alive
+
+Default TCP keep-alive initial period for outbound connections. `5m` is used by default.
+
+Can be overridden by `outbound` dial settings.
+
+#### default_tcp_keep_alive_interval
+
+Default TCP keep-alive interval for outbound connections. `75s` is used by default.
+
+Can be overridden by `outbound` dial settings.
+
+#### sniff_override_destination
+
+Override the connection destination address with the sniffed domain name.
+
+Can be overridden per-inbound via `inbound.sniff_override_destination`.
+
+#### asn
+
+ASN database configuration. Required for `dst_asn` in [LoadBalance](/configuration/outbound/loadbalance/) hash key parts and for `ip_asn` route rules.
+
+| Field | Description |
+|-------|-------------|
+| `path` | Path to the ASN MMDB file |
+| `download_url` | URL to automatically download the database from |
+| `download_detour` | Outbound tag to use for downloading the database |
+
+Supports MaxMind GeoLite2-ASN format (MMDB).

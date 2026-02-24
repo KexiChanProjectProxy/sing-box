@@ -137,6 +137,7 @@ Not available when `method` is set to drop.
   "action": "route-options",
   "override_address": "",
   "override_port": 0,
+  "revert_origin_dst": false,
   "network_strategy": "",
   "fallback_delay": "",
   "udp_disable_domain_unmapping": false,
@@ -157,6 +158,12 @@ Override the connection destination address.
 #### override_port
 
 Override the connection destination port.
+
+#### revert_origin_dst
+
+Revert the connection destination to the original destination obtained via `SO_ORIGINAL_DST` (Linux transparent proxy).
+
+Use this when the connection was redirected by iptables/nftables REDIRECT/TPROXY, and you want to restore the original destination before forwarding.
 
 #### network_strategy
 

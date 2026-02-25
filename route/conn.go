@@ -15,6 +15,7 @@ import (
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/tlsfragment"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
@@ -78,7 +79,14 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 		}
 		err = E.Cause(err, "open connection to ", remoteString, dialerString)
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		m.logger.ErrorContext(ctx, err)
+		event := log.NewConnectionEvent("outbound", "error").
+			WithDestination(metadata.Destination).
+			WithError(err).
+			WithNetwork(metadata.Network)
+		if outbound, isOutbound := this.(adapter.Outbound); isOutbound {
+			event.WithOutbound(outbound.Tag(), outbound.Type())
+		}
+		log.WithConnectionEvent(m.logger, ctx, log.LevelError, event, err)
 		return
 	}
 	err = N.ReportConnHandshakeSuccess(conn, remoteConn)
@@ -149,7 +157,14 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			err = E.Cause(err, "open packet connection to ", remoteString, dialerString)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			m.logger.ErrorContext(ctx, err)
+			event := log.NewConnectionEvent("outbound", "error").
+				WithDestination(metadata.Destination).
+				WithError(err).
+				WithNetwork(metadata.Network)
+			if outbound, isOutbound := this.(adapter.Outbound); isOutbound {
+				event.WithOutbound(outbound.Tag(), outbound.Type())
+			}
+			log.WithConnectionEvent(m.logger, ctx, log.LevelError, event, err)
 			return
 		}
 		remotePacketConn = bufio.NewUnbindPacketConn(remoteConn)
@@ -247,19 +262,25 @@ func (m *ConnectionManager) connectionCopy(ctx context.Context, source net.Conn,
 	}
 	if !direction {
 		if err == nil {
-			m.logger.DebugContext(ctx, "connection upload finished")
+			event := log.NewTransferEvent("upload", "finished")
+			log.WithTransferEvent(m.logger, ctx, log.LevelDebug, event, "connection upload finished")
 		} else if !E.IsClosedOrCanceled(err) {
-			m.logger.ErrorContext(ctx, "connection upload closed: ", err)
+			event := log.NewTransferEvent("upload", "error").WithError(err)
+			log.WithTransferEvent(m.logger, ctx, log.LevelError, event, "connection upload closed: ", err)
 		} else {
-			m.logger.TraceContext(ctx, "connection upload closed")
+			event := log.NewTransferEvent("upload", "closed")
+			log.WithTransferEvent(m.logger, ctx, log.LevelTrace, event, "connection upload closed")
 		}
 	} else {
 		if err == nil {
-			m.logger.DebugContext(ctx, "connection download finished")
+			event := log.NewTransferEvent("download", "finished")
+			log.WithTransferEvent(m.logger, ctx, log.LevelDebug, event, "connection download finished")
 		} else if !E.IsClosedOrCanceled(err) {
-			m.logger.ErrorContext(ctx, "connection download closed: ", err)
+			event := log.NewTransferEvent("download", "error").WithError(err)
+			log.WithTransferEvent(m.logger, ctx, log.LevelError, event, "connection download closed: ", err)
 		} else {
-			m.logger.TraceContext(ctx, "connection download closed")
+			event := log.NewTransferEvent("download", "closed")
+			log.WithTransferEvent(m.logger, ctx, log.LevelTrace, event, "connection download closed")
 		}
 	}
 }
@@ -307,9 +328,11 @@ func (m *ConnectionManager) kickWriteHandshake(ctx context.Context, source net.C
 	}
 	common.Close(source, destination)
 	if !direction {
-		m.logger.ErrorContext(ctx, "connection upload handshake: ", err)
+		event := log.NewTransferEvent("upload", "handshake_error").WithError(err)
+		log.WithTransferEvent(m.logger, ctx, log.LevelError, event, "connection upload handshake: ", err)
 	} else {
-		m.logger.ErrorContext(ctx, "connection download handshake: ", err)
+		event := log.NewTransferEvent("download", "handshake_error").WithError(err)
+		log.WithTransferEvent(m.logger, ctx, log.LevelError, event, "connection download handshake: ", err)
 	}
 	return true
 }
@@ -318,19 +341,25 @@ func (m *ConnectionManager) packetConnectionCopy(ctx context.Context, source N.P
 	_, err := bufio.CopyPacket(destination, source)
 	if !direction {
 		if err == nil {
-			m.logger.DebugContext(ctx, "packet upload finished")
+			event := log.NewTransferEvent("upload", "finished")
+			log.WithTransferEvent(m.logger, ctx, log.LevelDebug, event, "packet upload finished")
 		} else if E.IsClosedOrCanceled(err) {
-			m.logger.TraceContext(ctx, "packet upload closed")
+			event := log.NewTransferEvent("upload", "closed")
+			log.WithTransferEvent(m.logger, ctx, log.LevelTrace, event, "packet upload closed")
 		} else {
-			m.logger.DebugContext(ctx, "packet upload closed: ", err)
+			event := log.NewTransferEvent("upload", "error").WithError(err)
+			log.WithTransferEvent(m.logger, ctx, log.LevelDebug, event, "packet upload closed: ", err)
 		}
 	} else {
 		if err == nil {
-			m.logger.DebugContext(ctx, "packet download finished")
+			event := log.NewTransferEvent("download", "finished")
+			log.WithTransferEvent(m.logger, ctx, log.LevelDebug, event, "packet download finished")
 		} else if E.IsClosedOrCanceled(err) {
-			m.logger.TraceContext(ctx, "packet download closed")
+			event := log.NewTransferEvent("download", "closed")
+			log.WithTransferEvent(m.logger, ctx, log.LevelTrace, event, "packet download closed")
 		} else {
-			m.logger.DebugContext(ctx, "packet download closed: ", err)
+			event := log.NewTransferEvent("download", "error").WithError(err)
+			log.WithTransferEvent(m.logger, ctx, log.LevelDebug, event, "packet download closed: ", err)
 		}
 	}
 	if !done.Swap(true) {

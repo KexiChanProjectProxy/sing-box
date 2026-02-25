@@ -38,3 +38,7 @@ func (r *ClashModeItem) Match(metadata *adapter.InboundContext) bool {
 func (r *ClashModeItem) String() string {
 	return "clash_mode=" + r.mode
 }
+
+func (r *ClashModeItem) MatchType() string {
+	return "clash_mode"
+}

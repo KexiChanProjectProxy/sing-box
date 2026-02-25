@@ -1,8 +1,13 @@
 package log
 
 import (
+	"context"
 	"time"
 )
+
+// MetadataExtractor is a callback function to extract metadata from context
+// This solves the import cycle: log cannot import adapter, but adapter can register an extractor
+type MetadataExtractor func(ctx context.Context) map[string]interface{}
 
 // LogEntry represents a structured log entry with all metadata
 type LogEntry struct {

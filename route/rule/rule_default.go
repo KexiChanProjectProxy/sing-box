@@ -51,6 +51,7 @@ type DefaultRule struct {
 type RuleItem interface {
 	Match(metadata *adapter.InboundContext) bool
 	String() string
+	MatchType() string // Returns the type of rule item (e.g., "domain", "ip_cidr", "protocol")
 }
 
 func NewDefaultRule(ctx context.Context, logger log.ContextLogger, options option.DefaultRule) (*DefaultRule, error) {

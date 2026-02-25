@@ -148,6 +148,19 @@ func (r *abstractDefaultRule) String() string {
 	}
 }
 
+// MatchedItems returns the type and value of the first matching rule item
+func (r *abstractDefaultRule) MatchedItems(metadata *adapter.InboundContext) (string, string) {
+	for _, item := range r.allItems {
+		if item.Match(metadata) {
+			if mt, ok := item.(interface{ MatchType() string }); ok {
+				return mt.MatchType(), item.String()
+			}
+			return "", item.String()
+		}
+	}
+	return "", ""
+}
+
 type abstractLogicalRule struct {
 	rules  []adapter.HeadlessRule
 	mode   string

@@ -38,3 +38,7 @@ func (r *UserItem) String() string {
 	}
 	return F.ToString("user=[", strings.Join(r.users, " "), "]")
 }
+
+func (r *UserItem) MatchType() string {
+	return "user"
+}

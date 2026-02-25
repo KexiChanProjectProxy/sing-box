@@ -45,3 +45,7 @@ func (r *QueryTypeItem) String() string {
 	}
 	return description
 }
+
+func (r *QueryTypeItem) MatchType() string {
+	return "query_type"
+}

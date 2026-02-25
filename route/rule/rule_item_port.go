@@ -50,3 +50,10 @@ func (r *PortItem) String() string {
 	}
 	return description
 }
+
+func (r *PortItem) MatchType() string {
+	if r.isSource {
+		return "source_port"
+	}
+	return "port"
+}

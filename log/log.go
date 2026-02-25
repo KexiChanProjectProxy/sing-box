@@ -31,6 +31,11 @@ func New(options Options) (Factory, error) {
 		return newMultiOutput(options)
 	}
 
+	// Check if JSON format is requested on legacy path
+	if logOptions.Format == "json" {
+		return newJSONLegacyOutput(options)
+	}
+
 	var logWriter io.Writer
 	var logFilePath string
 
@@ -164,4 +169,63 @@ func createFileOutput(config option.LogOutput, options Options) (Output, error) 
 		TimestampFormat:  "-0700 2006-01-02 15:04:05",
 	}
 	return NewFormattedOutput(formatter, nil, config.Path), nil
+}
+
+// newJSONLegacyOutput creates a JSON output for the legacy config path
+func newJSONLegacyOutput(options Options) (Factory, error) {
+	logOptions := options.Options
+
+	var output Output
+	var err error
+
+	switch logOptions.Output {
+	case "", "stderr":
+		output, err = createStdOutput(option.LogOutput{
+			Type:      "stderr",
+			Format:    "json",
+			Timestamp: logOptions.Timestamp,
+		}, options, os.Stderr)
+	case "stdout":
+		output, err = createStdOutput(option.LogOutput{
+			Type:      "stdout",
+			Format:    "json",
+			Timestamp: logOptions.Timestamp,
+		}, options, os.Stdout)
+	default:
+		output, err = createFileOutput(option.LogOutput{
+			Type:      "file",
+			Path:      logOptions.Output,
+			Format:    "json",
+			Timestamp: logOptions.Timestamp,
+		}, options)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	platformFormatter := Formatter{
+		BaseTime:         options.BaseTime,
+		DisableLineBreak: true,
+	}
+
+	factory := NewMultiOutputFactory(
+		options.Context,
+		[]Output{output},
+		platformFormatter,
+		options.PlatformWriter,
+		options.Observable,
+	)
+
+	if logOptions.Level != "" {
+		logLevel, err := ParseLevel(logOptions.Level)
+		if err != nil {
+			return nil, E.Cause(err, "parse log level")
+		}
+		factory.SetLevel(logLevel)
+	} else {
+		factory.SetLevel(LevelTrace)
+	}
+
+	return factory, nil
 }

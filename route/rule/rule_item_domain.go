@@ -77,3 +77,7 @@ func (r *DomainItem) Match(metadata *adapter.InboundContext) bool {
 func (r *DomainItem) String() string {
 	return r.description
 }
+
+func (r *DomainItem) MatchType() string {
+	return "domain"
+}

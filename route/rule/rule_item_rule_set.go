@@ -69,3 +69,7 @@ func (r *RuleSetItem) String() string {
 		return F.ToString("rule_set=[", strings.Join(r.tagList, " "), "]")
 	}
 }
+
+func (r *RuleSetItem) MatchType() string {
+	return "rule_set"
+}

@@ -41,3 +41,7 @@ func (r *AdGuardDomainItem) Match(metadata *adapter.InboundContext) bool {
 func (r *AdGuardDomainItem) String() string {
 	return "!adguard_domain_rules=<binary>"
 }
+
+func (r *AdGuardDomainItem) MatchType() string {
+	return "adguard_domain_rules"
+}

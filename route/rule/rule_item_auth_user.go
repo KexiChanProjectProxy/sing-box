@@ -35,3 +35,7 @@ func (r *AuthUserItem) String() string {
 	}
 	return F.ToString("auth_user=[", strings.Join(r.users, " "), "]")
 }
+
+func (r *AuthUserItem) MatchType() string {
+	return "auth_user"
+}

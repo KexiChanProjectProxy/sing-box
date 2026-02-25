@@ -1,6 +1,8 @@
 package log
 
 import (
+	"strconv"
+
 	"github.com/miekg/dns"
 	M "github.com/sagernet/sing/common/metadata"
 )
@@ -62,11 +64,33 @@ type DNSEvent struct {
 
 // RouterMatchEvent represents a router rule matching event
 type RouterMatchEvent struct {
-	RuleIndex int    `json:"rule_index"`
-	Rule      string `json:"rule"`
-	Action    string `json:"action"`
-	Outbound  string `json:"outbound,omitempty"`
-	Matched   bool   `json:"matched"`
+	RuleIndex      int    `json:"rule_index"`
+	Rule           string `json:"rule"`
+	Action         string `json:"action"`
+	Outbound       string `json:"outbound,omitempty"`
+	Matched        bool   `json:"matched"`
+	MatchType      string `json:"match_type,omitempty"`      // "domain", "ip_cidr", "protocol", etc.
+	MatchValue     string `json:"match_value,omitempty"`     // The specific matched rule item description
+	PreMatch       bool   `json:"pre_match,omitempty"`       // Whether this is a pre-match event
+	// Connection context fields
+	Source         string `json:"source,omitempty"`
+	SourcePort     uint16 `json:"source_port,omitempty"`
+	Destination    string `json:"destination,omitempty"`
+	DestPort       uint16 `json:"dest_port,omitempty"`
+	Domain         string `json:"domain,omitempty"`
+	Network        string `json:"network,omitempty"`
+	Protocol       string `json:"protocol,omitempty"`
+	Inbound        string `json:"inbound,omitempty"`
+}
+
+// ProcessInfoEvent represents a process discovery event
+type ProcessInfoEvent struct {
+	Action           string `json:"action"` // "found", "error"
+	ProcessPath      string `json:"process_path,omitempty"`
+	AndroidPackageName string `json:"android_package_name,omitempty"`
+	UserName         string `json:"user_name,omitempty"`
+	UserId           int32  `json:"user_id,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 // TransferEvent represents data transfer progress
@@ -99,6 +123,13 @@ func NewRouterMatchEvent(ruleIndex int, rule, action string) *RouterMatchEvent {
 		RuleIndex: ruleIndex,
 		Rule:      rule,
 		Action:    action,
+	}
+}
+
+// NewProcessInfoEvent creates a structured process info event
+func NewProcessInfoEvent(action string) *ProcessInfoEvent {
+	return &ProcessInfoEvent{
+		Action: action,
 	}
 }
 
@@ -261,6 +292,54 @@ func (e *RouterMatchEvent) WithMatched(matched bool) *RouterMatchEvent {
 	return e
 }
 
+// WithMatchType sets the match type and value
+func (e *RouterMatchEvent) WithMatchType(matchType, matchValue string) *RouterMatchEvent {
+	e.MatchType = matchType
+	e.MatchValue = matchValue
+	return e
+}
+
+// WithPreMatch sets whether this is a pre-match event
+func (e *RouterMatchEvent) WithPreMatch(preMatch bool) *RouterMatchEvent {
+	e.PreMatch = preMatch
+	return e
+}
+
+// WithConnectionContext sets the connection context fields
+func (e *RouterMatchEvent) WithConnectionContext(source, sourcePortStr, dest, destPortStr, domain, network, protocol, inbound string) *RouterMatchEvent {
+	if source != "" {
+		e.Source = source
+	}
+	if sourcePortStr != "" && sourcePortStr != "0" {
+		// Parse port string to uint16
+		if port, err := strconv.ParseUint(sourcePortStr, 10, 16); err == nil {
+			e.SourcePort = uint16(port)
+		}
+	}
+	if dest != "" {
+		e.Destination = dest
+	}
+	if destPortStr != "" && destPortStr != "0" {
+		// Parse port string to uint16
+		if port, err := strconv.ParseUint(destPortStr, 10, 16); err == nil {
+			e.DestPort = uint16(port)
+		}
+	}
+	if domain != "" {
+		e.Domain = domain
+	}
+	if network != "" {
+		e.Network = network
+	}
+	if protocol != "" {
+		e.Protocol = protocol
+	}
+	if inbound != "" {
+		e.Inbound = inbound
+	}
+	return e
+}
+
 // WithBytes sets the transfer bytes
 func (e *TransferEvent) WithBytes(bytes int64) *TransferEvent {
 	e.Bytes = bytes
@@ -369,6 +448,35 @@ func (e *RouterMatchEvent) ToMap() map[string]interface{} {
 		m["outbound"] = e.Outbound
 	}
 	m["matched"] = e.Matched
+	if e.MatchType != "" {
+		m["match_type"] = e.MatchType
+	}
+	if e.MatchValue != "" {
+		m["match_value"] = e.MatchValue
+	}
+	if e.PreMatch {
+		m["pre_match"] = e.PreMatch
+	}
+	if e.Source != "" {
+		m["source"] = e.Source
+		m["source_port"] = e.SourcePort
+	}
+	if e.Destination != "" {
+		m["destination"] = e.Destination
+		m["dest_port"] = e.DestPort
+	}
+	if e.Domain != "" {
+		m["domain"] = e.Domain
+	}
+	if e.Network != "" {
+		m["network"] = e.Network
+	}
+	if e.Protocol != "" {
+		m["protocol"] = e.Protocol
+	}
+	if e.Inbound != "" {
+		m["inbound"] = e.Inbound
+	}
 	return m
 }
 
@@ -384,4 +492,66 @@ func (e *TransferEvent) ToMap() map[string]interface{} {
 		m["error"] = e.Error
 	}
 	return m
+}
+
+// ToMap converts ProcessInfoEvent to map
+func (e *ProcessInfoEvent) ToMap() map[string]interface{} {
+	m := make(map[string]interface{})
+	m["action"] = e.Action
+	if e.ProcessPath != "" {
+		m["process_path"] = e.ProcessPath
+	}
+	if e.AndroidPackageName != "" {
+		m["android_package_name"] = e.AndroidPackageName
+	}
+	if e.UserName != "" {
+		m["user_name"] = e.UserName
+	}
+	if e.UserId != -1 {
+		m["user_id"] = int32(e.UserId)
+	}
+	if e.Error != "" {
+		m["error"] = e.Error
+	}
+	return m
+}
+
+// WithProcessPath sets the process path
+func (e *ProcessInfoEvent) WithProcessPath(path string) *ProcessInfoEvent {
+	if path != "" {
+		e.ProcessPath = path
+	}
+	return e
+}
+
+// WithAndroidPackageName sets the Android package name
+func (e *ProcessInfoEvent) WithAndroidPackageName(packageName string) *ProcessInfoEvent {
+	if packageName != "" {
+		e.AndroidPackageName = packageName
+	}
+	return e
+}
+
+// WithUserName sets the user name
+func (e *ProcessInfoEvent) WithUserName(userName string) *ProcessInfoEvent {
+	if userName != "" {
+		e.UserName = userName
+	}
+	return e
+}
+
+// WithUserId sets the user ID
+func (e *ProcessInfoEvent) WithUserId(userId int32) *ProcessInfoEvent {
+	if userId != -1 {
+		e.UserId = userId
+	}
+	return e
+}
+
+// WithError sets the error
+func (e *ProcessInfoEvent) WithError(err error) *ProcessInfoEvent {
+	if err != nil {
+		e.Error = err.Error()
+	}
+	return e
 }

@@ -37,3 +37,7 @@ func (r *WIFISSIDItem) String() string {
 	}
 	return F.ToString("wifi_ssid=[", strings.Join(r.ssidList, " "), "]")
 }
+
+func (r *WIFISSIDItem) MatchType() string {
+	return "wifi_ssid"
+}

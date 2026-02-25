@@ -35,3 +35,7 @@ func (r *ClientItem) String() string {
 	}
 	return F.ToString("client=[", strings.Join(r.clients, " "), "]")
 }
+
+func (r *ClientItem) MatchType() string {
+	return "client"
+}

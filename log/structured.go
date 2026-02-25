@@ -56,6 +56,16 @@ func WithTransferEvent(logger ContextLogger, ctx context.Context, level Level, e
 	}
 }
 
+// WithProcessInfoEvent creates a log entry with process info event
+func WithProcessInfoEvent(logger ContextLogger, ctx context.Context, level Level, event *ProcessInfoEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		// Fallback to regular logging (without event data)
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
 // logWithLevel calls the appropriate logging method based on level
 func logWithLevel(logger ContextLogger, ctx context.Context, level Level, args []any) {
 	switch level {
@@ -106,6 +116,14 @@ func (e *RouterMatchEvent) ToStructuredEvent() *StructuredEvent {
 func (e *TransferEvent) ToStructuredEvent() *StructuredEvent {
 	return &StructuredEvent{
 		Type: EventTypeTransfer,
+		Data: e.ToMap(),
+	}
+}
+
+// ToStructuredEvent converts ProcessInfoEvent to StructuredEvent
+func (e *ProcessInfoEvent) ToStructuredEvent() *StructuredEvent {
+	return &StructuredEvent{
+		Type: EventTypeProcessInfo,
 		Data: e.ToMap(),
 	}
 }

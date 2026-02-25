@@ -41,3 +41,7 @@ func (r *ProcessPathItem) String() string {
 	}
 	return description
 }
+
+func (r *ProcessPathItem) MatchType() string {
+	return "process_path"
+}

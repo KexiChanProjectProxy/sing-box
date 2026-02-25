@@ -13,6 +13,7 @@ import (
 	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/sniff"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	R "github.com/sagernet/sing-box/route/rule"
 	"github.com/sagernet/sing-mux"
@@ -148,6 +149,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 			return E.New("TCP is not supported by default outbound: ", defaultOutbound.Tag())
 		}
 		selectedOutbound = defaultOutbound
+		r.logger.DebugContext(ctx, "no match => default(", defaultOutbound.Tag(), ")")
 	}
 
 	// prefer_domain: override IP destination with sniffed domain name before connecting
@@ -473,23 +475,41 @@ func (r *Router) matchRule(
 		}
 		processInfo, fErr := process.FindProcessInfo(r.processSearcher, ctx, metadata.Network, metadata.Source.AddrPort(), originDestination)
 		if fErr != nil {
-			r.logger.InfoContext(ctx, "failed to search process: ", fErr)
+			event := log.NewProcessInfoEvent("error").WithError(fErr)
+			log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+				"failed to search process: ", fErr)
 		} else {
 			if processInfo.ProcessPath != "" {
 				if processInfo.UserName != "" {
-					r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath, ", user: ", processInfo.UserName)
+					event := log.NewProcessInfoEvent("found").
+						WithProcessPath(processInfo.ProcessPath).
+						WithUserName(processInfo.UserName)
+					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+						"found process path: ", processInfo.ProcessPath, ", user: ", processInfo.UserName)
 				} else if processInfo.UserId != -1 {
-					r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath, ", user id: ", processInfo.UserId)
+					event := log.NewProcessInfoEvent("found").
+						WithProcessPath(processInfo.ProcessPath).
+						WithUserId(processInfo.UserId)
+					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+						"found process path: ", processInfo.ProcessPath, ", user id: ", processInfo.UserId)
 				} else {
-					r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath)
+					event := log.NewProcessInfoEvent("found").WithProcessPath(processInfo.ProcessPath)
+					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+						"found process path: ", processInfo.ProcessPath)
 				}
 			} else if processInfo.AndroidPackageName != "" {
-				r.logger.InfoContext(ctx, "found package name: ", processInfo.AndroidPackageName)
+				event := log.NewProcessInfoEvent("found").WithAndroidPackageName(processInfo.AndroidPackageName)
+				log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+					"found package name: ", processInfo.AndroidPackageName)
 			} else if processInfo.UserId != -1 {
 				if processInfo.UserName != "" {
-					r.logger.InfoContext(ctx, "found user: ", processInfo.UserName)
+					event := log.NewProcessInfoEvent("found").WithUserName(processInfo.UserName)
+					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+						"found user: ", processInfo.UserName)
 				} else {
-					r.logger.InfoContext(ctx, "found user id: ", processInfo.UserId)
+					event := log.NewProcessInfoEvent("found").WithUserId(processInfo.UserId)
+					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
+						"found user id: ", processInfo.UserId)
 				}
 			}
 			metadata.ProcessInfo = processInfo
@@ -508,7 +528,9 @@ func (r *Router) matchRule(
 				Port: metadata.Destination.Port,
 			}
 			metadata.FakeIP = true
-			r.logger.DebugContext(ctx, "found fakeip domain: ", domain)
+			event := log.NewDNSEvent("fakeip_lookup", domain)
+			log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event,
+				"found fakeip domain: ", domain)
 		}
 	} else if metadata.Domain == "" {
 		domain, loaded := r.dns.LookupReverseMapping(metadata.Destination.Addr)
@@ -562,20 +584,77 @@ match:
 		}
 		if !preMatch {
 			ruleDescription := currentRule.String()
-			if ruleDescription != "" {
-				r.logger.DebugContext(ctx, "match[", currentRuleIndex, "] ", currentRule, " => ", currentRule.Action())
-			} else {
-				r.logger.DebugContext(ctx, "match[", currentRuleIndex, "] => ", currentRule.Action())
+			actionType := currentRule.Action().Type()
+			var outboundTag string
+			if routeAction, ok := currentRule.Action().(*R.RuleActionRoute); ok {
+				outboundTag = routeAction.Outbound
 			}
+
+			// Try to get match type and value from RuleMatchInfo interface
+			var matchType, matchValue string
+			if matchInfo, ok := currentRule.(adapter.RuleMatchInfo); ok {
+				matchType, matchValue = matchInfo.MatchedItems(metadata)
+			}
+
+			// Build the structured router match event
+			event := log.NewRouterMatchEvent(currentRuleIndex, ruleDescription, string(actionType)).
+				WithOutbound(outboundTag).
+				WithMatched(true).
+				WithMatchType(matchType, matchValue).
+				WithPreMatch(false)
+
+			// Add connection context to the event
+			source := metadata.Source.Addr.String()
+			sourcePort := F.ToString(metadata.Source.Port)
+			dest := metadata.Destination.Addr.String()
+			destPort := F.ToString(metadata.Destination.Port)
+			domain := metadata.Domain
+			if domain == "" {
+				domain = metadata.Destination.Fqdn
+			}
+			network := metadata.Network
+			protocol := metadata.Protocol
+			inbound := metadata.Inbound
+
+			event.WithConnectionContext(source, sourcePort, dest, destPort, domain, network, protocol, inbound)
+
+			// Build the text message with enhanced format
+			var message string
+			if matchType != "" && matchValue != "" {
+				message = F.ToString("match[", currentRuleIndex, "] [", matchType, "] ", matchValue, " => ", currentRule.Action())
+			} else if ruleDescription != "" {
+				message = F.ToString("match[", currentRuleIndex, "] ", ruleDescription, " => ", currentRule.Action())
+			} else {
+				message = F.ToString("match[", currentRuleIndex, "] => ", currentRule.Action())
+			}
+			log.WithRouterMatchEvent(r.logger, ctx, log.LevelDebug, event, message)
 		} else {
 			switch currentRule.Action().Type() {
 			case C.RuleActionTypeReject:
 				ruleDescription := currentRule.String()
-				if ruleDescription != "" {
-					r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] ", currentRule, " => ", currentRule.Action())
-				} else {
-					r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] => ", currentRule.Action())
+
+				// Try to get match type and value from RuleMatchInfo interface
+				var matchType, matchValue string
+				if matchInfo, ok := currentRule.(adapter.RuleMatchInfo); ok {
+					matchType, matchValue = matchInfo.MatchedItems(metadata)
 				}
+
+				// Build the structured router match event for pre-match
+				event := log.NewRouterMatchEvent(currentRuleIndex, ruleDescription, "reject").
+					WithMatched(true).
+					WithMatchType(matchType, matchValue).
+					WithPreMatch(true)
+
+				// Build the text message with enhanced format
+				var message string
+				if matchType != "" && matchValue != "" {
+					message = F.ToString("pre-match[", currentRuleIndex, "] [", matchType, "] ", matchValue, " => ", currentRule.Action())
+				} else if ruleDescription != "" {
+					message = F.ToString("pre-match[", currentRuleIndex, "] ", ruleDescription, " => ", currentRule.Action())
+				} else {
+					message = F.ToString("pre-match[", currentRuleIndex, "] => ", currentRule.Action())
+				}
+				log.WithRouterMatchEvent(r.logger, ctx, log.LevelDebug, event, message)
 			}
 		}
 		var routeOptions *R.RuleActionRouteOptions
@@ -688,6 +767,29 @@ match:
 			break match
 		}
 	}
+
+	// Debug-level metadata logging after the match is determined
+	if selectedRule != nil || selectedRuleIndex >= 0 {
+		src := metadata.Source.Addr.String()
+		sport := F.ToString(metadata.Source.Port)
+		dst := metadata.Destination.Addr.String()
+		dport := F.ToString(metadata.Destination.Port)
+		domain := metadata.Domain
+		if domain == "" {
+			domain = metadata.Destination.Fqdn
+		}
+		net := metadata.Network
+		proto := metadata.Protocol
+		inbound := metadata.Inbound
+
+		r.logger.DebugContext(ctx, "metadata: src=", src, ":", sport,
+			" dst=", dst, ":", dport,
+			" domain=", domain,
+			" net=", net,
+			" proto=", proto,
+			" inbound=", inbound)
+	}
+
 	return
 }
 
@@ -742,12 +844,23 @@ func (r *Router) actionSniff(
 					Port: metadata.Destination.Port,
 				}
 			}
+			event := log.NewConnectionEvent("inbound", "sniffed").
+				WithProtocol(metadata.Protocol, metadata.Client)
+			if metadata.Domain != "" {
+				event.WithDestination(M.Socksaddr{Fqdn: metadata.Domain})
+			}
 			if metadata.Domain != "" && metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
 			} else if metadata.Domain != "" {
-				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
+			} else if metadata.Client != "" {
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed protocol: ", metadata.Protocol, ", client: ", metadata.Client)
 			} else {
-				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed protocol: ", metadata.Protocol)
 			}
 		}
 		if !sniffBuffer.IsEmpty() {
@@ -874,14 +987,23 @@ func (r *Router) actionSniff(
 					Port: metadata.Destination.Port,
 				}
 			}
+			event := log.NewConnectionEvent("inbound", "sniffed").
+				WithProtocol(metadata.Protocol, metadata.Client)
+			if metadata.Domain != "" {
+				event.WithDestination(M.Socksaddr{Fqdn: metadata.Domain})
+			}
 			if metadata.Domain != "" && metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
 			} else if metadata.Domain != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
 			} else if metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", client: ", metadata.Client)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed packet protocol: ", metadata.Protocol, ", client: ", metadata.Client)
 			} else {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol)
+				log.WithConnectionEvent(r.logger, ctx, log.LevelDebug, event,
+					"sniffed packet protocol: ", metadata.Protocol)
 			}
 		}
 	}
@@ -909,7 +1031,10 @@ func (r *Router) actionResolve(ctx context.Context, metadata *adapter.InboundCon
 			return err
 		}
 		metadata.DestinationAddresses = addresses
-		r.logger.DebugContext(ctx, "resolved [", strings.Join(F.MapToString(metadata.DestinationAddresses), " "), "]")
+		event := log.NewDNSEvent("resolve", metadata.Destination.Fqdn).
+			WithAnswers(F.MapToString(metadata.DestinationAddresses))
+		log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event,
+			"resolved [", strings.Join(F.MapToString(metadata.DestinationAddresses), " "), "]")
 	}
 	return nil
 }

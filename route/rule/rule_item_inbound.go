@@ -33,3 +33,7 @@ func (r *InboundItem) String() string {
 		return F.ToString("inbound=[", strings.Join(r.inbounds, " "), "]")
 	}
 }
+
+func (r *InboundItem) MatchType() string {
+	return "inbound"
+}

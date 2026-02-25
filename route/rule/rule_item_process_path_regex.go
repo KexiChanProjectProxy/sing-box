@@ -52,3 +52,7 @@ func (r *ProcessPathRegexItem) Match(metadata *adapter.InboundContext) bool {
 func (r *ProcessPathRegexItem) String() string {
 	return r.description
 }
+
+func (r *ProcessPathRegexItem) MatchType() string {
+	return "process_path_regex"
+}

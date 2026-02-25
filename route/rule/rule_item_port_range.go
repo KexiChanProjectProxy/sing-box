@@ -85,3 +85,10 @@ func (r *PortRangeItem) String() string {
 	}
 	return description
 }
+
+func (r *PortRangeItem) MatchType() string {
+	if r.isSource {
+		return "source_port_range"
+	}
+	return "port_range"
+}

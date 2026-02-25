@@ -84,3 +84,7 @@ func (r *PreferredByItem) String() string {
 	}
 	return description
 }
+
+func (r *PreferredByItem) MatchType() string {
+	return "preferred_by"
+}

@@ -19,3 +19,7 @@ func (r *IPAcceptAnyItem) Match(metadata *adapter.InboundContext) bool {
 func (r *IPAcceptAnyItem) String() string {
 	return "ip_accept_any=true"
 }
+
+func (r *IPAcceptAnyItem) MatchType() string {
+	return "ip_accept_any"
+}

@@ -59,3 +59,7 @@ func (r *DomainRegexItem) Match(metadata *adapter.InboundContext) bool {
 func (r *DomainRegexItem) String() string {
 	return r.description
 }
+
+func (r *DomainRegexItem) MatchType() string {
+	return "domain_regex"
+}

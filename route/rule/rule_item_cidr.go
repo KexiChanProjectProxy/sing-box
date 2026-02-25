@@ -93,3 +93,10 @@ func (r *IPCIDRItem) Match(metadata *adapter.InboundContext) bool {
 func (r *IPCIDRItem) String() string {
 	return r.description
 }
+
+func (r *IPCIDRItem) MatchType() string {
+	if r.isSource {
+		return "source_ip_cidr"
+	}
+	return "ip_cidr"
+}

@@ -38,3 +38,7 @@ func (r *NetworkTypeItem) String() string {
 		return F.ToString("network_type=", "["+strings.Join(F.MapToString(r.networkType), " ")+"]")
 	}
 }
+
+func (r *NetworkTypeItem) MatchType() string {
+	return "network_type"
+}

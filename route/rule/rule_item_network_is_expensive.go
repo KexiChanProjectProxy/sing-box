@@ -27,3 +27,7 @@ func (r *NetworkIsExpensiveItem) Match(metadata *adapter.InboundContext) bool {
 func (r *NetworkIsExpensiveItem) String() string {
 	return "network_is_expensive=true"
 }
+
+func (r *NetworkIsExpensiveItem) MatchType() string {
+	return "network_is_expensive"
+}

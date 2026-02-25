@@ -44,3 +44,10 @@ func (r *IPIsPrivateItem) String() string {
 		return "ip_is_private=true"
 	}
 }
+
+func (r *IPIsPrivateItem) MatchType() string {
+	if r.isSource {
+		return "source_ip_is_private"
+	}
+	return "ip_is_private"
+}

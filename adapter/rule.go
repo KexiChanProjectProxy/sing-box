@@ -16,6 +16,11 @@ type Rule interface {
 	Action() RuleAction
 }
 
+// RuleMatchInfo provides additional information about what matched in a rule
+type RuleMatchInfo interface {
+	MatchedItems(metadata *InboundContext) (matchType string, matchValue string)
+}
+
 type DNSRule interface {
 	Rule
 	WithAddressLimit() bool

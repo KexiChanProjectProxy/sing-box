@@ -41,3 +41,7 @@ func (r *PackageNameItem) String() string {
 	}
 	return description
 }
+
+func (r *PackageNameItem) MatchType() string {
+	return "package_name"
+}

@@ -60,3 +60,7 @@ func (r *InterfaceAddressItem) Match(metadata *adapter.InboundContext) bool {
 func (r *InterfaceAddressItem) String() string {
 	return r.description
 }
+
+func (r *InterfaceAddressItem) MatchType() string {
+	return "interface_address"
+}

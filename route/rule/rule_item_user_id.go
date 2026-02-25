@@ -42,3 +42,7 @@ func (r *UserIdItem) String() string {
 	}
 	return description
 }
+
+func (r *UserIdItem) MatchType() string {
+	return "user_id"
+}

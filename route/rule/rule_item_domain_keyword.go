@@ -45,3 +45,7 @@ func (r *DomainKeywordItem) String() string {
 		return "domain_keyword=[" + strings.Join(r.keywords, " ") + "]"
 	}
 }
+
+func (r *DomainKeywordItem) MatchType() string {
+	return "domain_keyword"
+}

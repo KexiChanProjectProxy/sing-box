@@ -28,3 +28,7 @@ func (r *MarkItem) String() string {
 	}
 	return F.ToString("mark=0x", strconv.FormatUint(uint64(r.value), 16), "/0x", strconv.FormatUint(uint64(r.mask), 16))
 }
+
+func (r *MarkItem) MatchType() string {
+	return "mark"
+}

@@ -62,3 +62,7 @@ match:
 func (r *NetworkInterfaceAddressItem) String() string {
 	return r.description
 }
+
+func (r *NetworkInterfaceAddressItem) MatchType() string {
+	return "network_interface_address"
+}

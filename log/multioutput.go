@@ -176,8 +176,12 @@ func (l *multiOutputLogger) buildLogEntry(ctx context.Context, level Level, mess
 		entry.ConnectionDuration = time.Since(id.CreatedAt)
 	}
 
-	// Note: InboundContext metadata is not automatically extracted to avoid import cycles.
-	// Use structured events (ConnectionEvent, DNSEvent, etc.) to include rich metadata.
+	// Extract additional metadata from the registered extractor
+	if metadata := extractMetadata(ctx); metadata != nil {
+		for k, v := range metadata {
+			entry.Metadata[k] = v
+		}
+	}
 
 	return entry
 }

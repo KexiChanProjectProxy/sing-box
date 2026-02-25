@@ -42,3 +42,7 @@ func (r *ProcessItem) String() string {
 	}
 	return description
 }
+
+func (r *ProcessItem) MatchType() string {
+	return "process_name"
+}

@@ -40,3 +40,7 @@ func (r *NetworkItem) String() string {
 	}
 	return description
 }
+
+func (r *NetworkItem) MatchType() string {
+	return "network"
+}

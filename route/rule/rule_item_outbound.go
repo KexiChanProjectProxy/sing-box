@@ -44,3 +44,7 @@ func (r *OutboundItem) String() string {
 		return F.ToString("outbound=[", strings.Join(r.outbounds, " "), "]")
 	}
 }
+
+func (r *OutboundItem) MatchType() string {
+	return "outbound"
+}

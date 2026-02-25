@@ -28,3 +28,7 @@ func (r *IPVersionItem) String() string {
 	}
 	return "ip_version=" + versionStr
 }
+
+func (r *IPVersionItem) MatchType() string {
+	return "ip_version"
+}

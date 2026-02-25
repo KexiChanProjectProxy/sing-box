@@ -54,3 +54,7 @@ func (r *DefaultInterfaceAddressItem) String() string {
 		return "default_interface_address=[" + strings.Join(common.Map(r.interfaceAddresses, netip.Prefix.String), " ") + "]"
 	}
 }
+
+func (r *DefaultInterfaceAddressItem) MatchType() string {
+	return "default_interface_address"
+}

@@ -35,3 +35,7 @@ func (r *ProtocolItem) String() string {
 	}
 	return F.ToString("protocol=[", strings.Join(r.protocols, " "), "]")
 }
+
+func (r *ProtocolItem) MatchType() string {
+	return "protocol"
+}

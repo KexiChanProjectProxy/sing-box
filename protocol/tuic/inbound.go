@@ -112,13 +112,16 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, source M.S
 	metadata.OriginDestination = h.listener.UDPAddr()
 	metadata.Source = source
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
+	event := log.NewConnectionEvent("inbound", "start").WithSource(metadata.Source)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound connection from ", metadata.Source)
 	userID, _ := auth.UserFromContext[int](ctx)
 	if userName := h.userNameList[userID]; userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination).WithUser(userName)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "[", userName, "] inbound connection to ", metadata.Destination)
 	} else {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound connection to ", metadata.Destination)
 	}
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -135,13 +138,16 @@ func (h *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	metadata.OriginDestination = h.listener.UDPAddr()
 	metadata.Source = source
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "inbound packet connection from ", metadata.Source)
+	event := log.NewConnectionEvent("inbound", "start").WithSource(metadata.Source).WithNetwork("udp")
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound packet connection from ", metadata.Source)
 	userID, _ := auth.UserFromContext[int](ctx)
 	if userName := h.userNameList[userID]; userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound packet connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination).WithNetwork("udp").WithUser(userName)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "[", userName, "] inbound packet connection to ", metadata.Destination)
 	} else {
-		h.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination).WithNetwork("udp")
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound packet connection to ", metadata.Destination)
 	}
 	h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }

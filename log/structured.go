@@ -66,6 +66,96 @@ func WithProcessInfoEvent(logger ContextLogger, ctx context.Context, level Level
 	}
 }
 
+// WithHealthCheckEvent creates a log entry with health check event
+func WithHealthCheckEvent(logger ContextLogger, ctx context.Context, level Level, event *HealthCheckEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithNetworkStateEvent creates a log entry with network state event
+func WithNetworkStateEvent(logger ContextLogger, ctx context.Context, level Level, event *NetworkStateEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithRuleSetEvent creates a log entry with rule set event
+func WithRuleSetEvent(logger ContextLogger, ctx context.Context, level Level, event *RuleSetEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithTLSEvent creates a log entry with TLS event
+func WithTLSEvent(logger ContextLogger, ctx context.Context, level Level, event *TLSEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithComponentLifecycleEvent creates a log entry with component lifecycle event
+func WithComponentLifecycleEvent(logger ContextLogger, ctx context.Context, level Level, event *ComponentLifecycleEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithServerLifecycleEvent creates a log entry with server lifecycle event
+func WithServerLifecycleEvent(logger ContextLogger, ctx context.Context, level Level, event *ServerLifecycleEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithTransportProtocolEvent creates a log entry with transport protocol event
+func WithTransportProtocolEvent(logger ContextLogger, ctx context.Context, level Level, event *TransportProtocolEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithHTTPRouteEvent creates a log entry with HTTP route event
+func WithHTTPRouteEvent(logger ContextLogger, ctx context.Context, level Level, event *HTTPRouteEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithAuthEvent creates a log entry with auth event
+func WithAuthEvent(logger ContextLogger, ctx context.Context, level Level, event *AuthEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
+// WithServiceEvent creates a log entry with service event
+func WithServiceEvent(logger ContextLogger, ctx context.Context, level Level, event *ServiceEvent, args ...any) {
+	if ml, ok := logger.(*multiOutputLogger); ok {
+		ml.LogWithEvent(ctx, level, event.ToStructuredEvent(), args)
+	} else {
+		logWithLevel(logger, ctx, level, args)
+	}
+}
+
 // logWithLevel calls the appropriate logging method based on level
 func logWithLevel(logger ContextLogger, ctx context.Context, level Level, args []any) {
 	switch level {

@@ -98,13 +98,19 @@ func (i *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, metadata a
 	}
 	metadata.Destination = destination
 	if i.overrideOption != 0 {
-		i.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").
+			WithDestination(metadata.Destination).WithInbound(i.Tag(), i.Type())
+		log.WithConnectionEvent(i.logger, ctx, log.LevelInfo, event,
+			"inbound connection to ", metadata.Destination)
 	}
 	i.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	i.logger.InfoContext(ctx, "inbound packet connection from ", source)
+	event := log.NewConnectionEvent("inbound", "start").
+		WithSource(source).WithNetwork(N.NetworkUDP).WithInbound(i.Tag(), i.Type())
+	log.WithConnectionEvent(i.logger, ctx, log.LevelInfo, event,
+		"inbound packet connection from ", source)
 	var metadata adapter.InboundContext
 	metadata.Inbound = i.Tag()
 	metadata.InboundType = i.Type()
@@ -123,7 +129,10 @@ func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 		destination.Port = i.overrideDestination.Port
 	default:
 	}
-	i.logger.InfoContext(ctx, "inbound packet connection to ", destination)
+	event2 := log.NewConnectionEvent("inbound", "start").
+		WithSource(source).WithDestination(destination).WithNetwork(N.NetworkUDP).WithInbound(i.Tag(), i.Type())
+	log.WithConnectionEvent(i.logger, ctx, log.LevelInfo, event2,
+		"inbound packet connection to ", destination)
 	metadata.Destination = destination
 	if i.overrideOption != 0 {
 		conn = bufio.NewDestinationNATPacketConn(bufio.NewNetPacketConn(conn), i.listener.UDPAddr(), destination)

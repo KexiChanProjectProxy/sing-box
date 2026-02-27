@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"strings"
 
 	"github.com/sagernet/sing-box/log"
 )
@@ -49,6 +48,14 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 		result["dest_domain"] = metadata.Destination.Fqdn
 	}
 
+	// Origin destination (before transparent proxy interception)
+	if metadata.OriginDestination.IsValid() {
+		result["origin_dest_ip"] = metadata.OriginDestination.Addr.String()
+		if metadata.OriginDestination.Port > 0 {
+			result["origin_dest_port"] = metadata.OriginDestination.Port
+		}
+	}
+
 	// Inbound/Outbound tags
 	if metadata.Inbound != "" {
 		result["inbound_tag"] = metadata.Inbound
@@ -58,6 +65,9 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 	}
 	if metadata.Outbound != "" {
 		result["outbound_tag"] = metadata.Outbound
+	}
+	if metadata.OutboundType != "" {
+		result["outbound_type"] = metadata.OutboundType
 	}
 
 	// User
@@ -90,6 +100,9 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 		if metadata.ProcessInfo.ProcessPath != "" {
 			result["process_path"] = metadata.ProcessInfo.ProcessPath
 		}
+		if metadata.ProcessInfo.ProcessID > 0 {
+			result["process_id"] = metadata.ProcessInfo.ProcessID
+		}
 		if metadata.ProcessInfo.AndroidPackageName != "" {
 			result["android_package_name"] = metadata.ProcessInfo.AndroidPackageName
 		}
@@ -106,12 +119,12 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 		result["source_geoip"] = metadata.SourceGeoIPCode
 	}
 	if metadata.GeoIPCode != "" {
-		result["geoip"] = metadata.GeoIPCode
+		result["dest_geoip"] = metadata.GeoIPCode
 	}
 
 	// Sniffer
 	if len(metadata.SnifferNames) > 0 {
-		result["sniffer_names"] = strings.Join(metadata.SnifferNames, ",")
+		result["sniffer_names"] = metadata.SnifferNames
 	}
 	if metadata.SniffError != nil {
 		result["sniff_error"] = metadata.SniffError.Error()
@@ -122,7 +135,7 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 		result["tls_fragment"] = true
 	}
 	if metadata.TLSFragmentFallbackDelay > 0 {
-		result["tls_fragment_fallback_delay"] = metadata.TLSFragmentFallbackDelay.String()
+		result["tls_fragment_fallback_delay_ms"] = metadata.TLSFragmentFallbackDelay.Milliseconds()
 	}
 	if metadata.TLSRecordFragment {
 		result["tls_record_fragment"] = true
@@ -179,7 +192,7 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 		result["fallback_network_type"] = types
 	}
 	if metadata.FallbackDelay > 0 {
-		result["fallback_delay"] = metadata.FallbackDelay.String()
+		result["fallback_delay_ms"] = metadata.FallbackDelay.Milliseconds()
 	}
 
 	// Matched ruleset

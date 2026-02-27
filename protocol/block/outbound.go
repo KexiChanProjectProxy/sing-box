@@ -32,11 +32,17 @@ func New(ctx context.Context, router adapter.Router, logger log.ContextLogger, t
 }
 
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	h.logger.InfoContext(ctx, "blocked connection to ", destination)
+	event := log.NewConnectionEvent("outbound", "error").
+		WithDestination(destination).WithNetwork(N.NetworkName(network))
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event,
+		"blocked connection to ", destination)
 	return nil, syscall.EPERM
 }
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	h.logger.InfoContext(ctx, "blocked packet connection to ", destination)
+	event := log.NewConnectionEvent("outbound", "error").
+		WithDestination(destination).WithNetwork(N.NetworkUDP)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event,
+		"blocked packet connection to ", destination)
 	return nil, syscall.EPERM
 }

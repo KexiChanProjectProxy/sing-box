@@ -98,12 +98,19 @@ func newMultiOutput(options Options) (Factory, error) {
 		DisableLineBreak: true,
 	}
 
-	factory := NewMultiOutputFactory(
+	// Create event bus if enabled
+	var eventBus *EventBus
+	if logOptions.EventBus != nil && logOptions.EventBus.Enabled {
+		eventBus = NewEventBus()
+	}
+
+	factory := NewMultiOutputFactoryWithBus(
 		options.Context,
 		outputs,
 		platformFormatter,
 		options.PlatformWriter,
 		options.Observable,
+		eventBus,
 	)
 
 	if logOptions.Level != "" {

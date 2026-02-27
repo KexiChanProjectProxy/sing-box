@@ -482,7 +482,8 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 
 			t, err := urltest.URLTest(testCtx, lb.link, d)
 			if err != nil {
-				lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
+				event := log.NewHealthCheckEvent("failed").WithOutbound(d.Tag()).WithError(err)
+				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check failed for ", d.Tag(), ": ", err)
 				resultChan <- nodeStat{tag: d.Tag(), failure: true}
 			} else {
 				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
@@ -1400,11 +1401,13 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 
 			t, err := urltest.URLTest(testCtx, lb.link, d)
 			if err != nil {
-				lb.logger.Debug("health check failed for ", d.Tag(), ": ", err)
+				event := log.NewHealthCheckEvent("failed").WithOutbound(d.Tag()).WithError(err)
+				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check failed for ", d.Tag(), ": ", err)
 				resultChan <- nodeStat{tag: d.Tag(), failure: true}
 				lb.history.DeleteURLTestHistory(RealTag(d))
 			} else {
-				lb.logger.Debug("health check succeeded for ", d.Tag(), ": ", t, "ms")
+				event := log.NewHealthCheckEvent("success").WithOutbound(d.Tag()).WithLatency(int64(t))
+				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check succeeded for ", d.Tag(), ": ", t, "ms")
 				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: t,

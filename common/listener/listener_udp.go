@@ -10,6 +10,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/redir"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -54,7 +55,8 @@ func (l *Listener) ListenUDP() (net.PacketConn, error) {
 	}
 	l.udpConn = udpConn.(*net.UDPConn)
 	l.udpAddr = bindAddr
-	l.logger.Info("udp server started at ", udpConn.LocalAddr())
+	event := log.NewServerLifecycleEvent("listen").WithNetwork("udp").WithAddress(udpConn.LocalAddr().String())
+	log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelInfo, event, "udp server started at ", udpConn.LocalAddr())
 	return udpConn, err
 }
 
@@ -122,7 +124,8 @@ func (l *Listener) loopUDPIn() {
 					return
 				}
 				l.udpConn.Close()
-				l.logger.Error("udp listener closed: ", err)
+				event := log.NewServerLifecycleEvent("close").WithNetwork("udp").WithError(err)
+				log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelError, event, "udp listener closed: ", err)
 				return
 			}
 			buffer.Truncate(n)
@@ -144,7 +147,8 @@ func (l *Listener) loopUDPIn() {
 					return
 				}
 				l.udpConn.Close()
-				l.logger.Error("udp listener closed: ", err)
+				event := log.NewServerLifecycleEvent("close").WithNetwork("udp").WithError(err)
+				log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelError, event, "udp listener closed: ", err)
 				return
 			}
 			buffer.Truncate(n)
@@ -165,7 +169,8 @@ func (l *Listener) loopUDPOut() {
 				if l.shutdown.Load() && E.IsClosed(err) {
 					return
 				}
-				l.logger.Error("udp listener write back: ", destination, ": ", err)
+				event := log.NewServerLifecycleEvent("error").WithNetwork("udp").WithError(err)
+				log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelError, event, "udp listener write back: ", destination, ": ", err)
 				continue
 			}
 			continue

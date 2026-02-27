@@ -108,12 +108,18 @@ func (h *Inbound) newUserConnection(ctx context.Context, conn net.Conn, metadata
 	metadata.InboundType = h.Type()
 	user, loaded := auth.UserFromContext[string](ctx)
 	if !loaded {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").
+			WithDestination(metadata.Destination).WithInbound(h.Tag(), h.Type())
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event,
+			"inbound connection to ", metadata.Destination)
 		h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 		return
 	}
 	metadata.User = user
-	h.logger.InfoContext(ctx, "[", user, "] inbound connection to ", metadata.Destination)
+	event := log.NewConnectionEvent("inbound", "start").
+		WithDestination(metadata.Destination).WithInbound(h.Tag(), h.Type()).WithUser(user)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event,
+		"[", user, "] inbound connection to ", metadata.Destination)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -122,11 +128,17 @@ func (h *Inbound) streamUserPacketConnection(ctx context.Context, conn N.PacketC
 	metadata.InboundType = h.Type()
 	user, loaded := auth.UserFromContext[string](ctx)
 	if !loaded {
-		h.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").
+			WithDestination(metadata.Destination).WithNetwork(N.NetworkUDP).WithInbound(h.Tag(), h.Type())
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event,
+			"inbound packet connection to ", metadata.Destination)
 		h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 		return
 	}
 	metadata.User = user
-	h.logger.InfoContext(ctx, "[", user, "] inbound packet connection to ", metadata.Destination)
+	event := log.NewConnectionEvent("inbound", "start").
+		WithDestination(metadata.Destination).WithNetwork(N.NetworkUDP).WithInbound(h.Tag(), h.Type()).WithUser(user)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event,
+		"[", user, "] inbound packet connection to ", metadata.Destination)
 	h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }

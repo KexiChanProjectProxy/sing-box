@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/logger"
 )
@@ -104,7 +105,9 @@ func (m *XmuxManager) GetXmuxClient(ctx context.Context) *XmuxClient {
 			xmuxClient.LeftRequests.Load() <= 0 ||
 			(!xmuxClient.UnreusableAt.IsZero() && time.Now().After(xmuxClient.UnreusableAt)) {
 
-			m.logger.DebugContext(ctx, "xhttp: removing expired xmuxClient",
+			event := log.NewTransportProtocolEvent("accept", "xhttp")
+			log.WithTransportProtocolEvent(m.logger, ctx, log.LevelDebug, event,
+				"xhttp: removing expired xmuxClient",
 				"closed", xmuxClient.IsClosed(),
 				"openUsage", xmuxClient.OpenUsage.Load(),
 				"leftUsage", xmuxClient.leftUsage,
@@ -120,13 +123,17 @@ func (m *XmuxManager) GetXmuxClient(ctx context.Context) *XmuxClient {
 
 	// Create new client if pool is empty
 	if len(m.xmuxClients) == 0 {
-		m.logger.DebugContext(ctx, "xhttp: creating new xmuxClient (pool empty)")
+		event := log.NewTransportProtocolEvent("accept", "xhttp")
+		log.WithTransportProtocolEvent(m.logger, ctx, log.LevelDebug, event,
+			"xhttp: creating new xmuxClient (pool empty)")
 		return m.newXmuxClient()
 	}
 
 	// Create new client if under connection limit
 	if m.connections > 0 && len(m.xmuxClients) < int(m.connections) {
-		m.logger.DebugContext(ctx, "xhttp: creating new xmuxClient (under max connections)", "poolSize", len(m.xmuxClients))
+		event := log.NewTransportProtocolEvent("accept", "xhttp")
+		log.WithTransportProtocolEvent(m.logger, ctx, log.LevelDebug, event,
+			"xhttp: creating new xmuxClient (under max connections)", "poolSize", len(m.xmuxClients))
 		return m.newXmuxClient()
 	}
 
@@ -144,7 +151,9 @@ func (m *XmuxManager) GetXmuxClient(ctx context.Context) *XmuxClient {
 
 	// Create new client if all existing clients hit concurrency limit
 	if len(availableClients) == 0 {
-		m.logger.DebugContext(ctx, "xhttp: creating new xmuxClient (concurrency limit hit)", "poolSize", len(m.xmuxClients))
+		event := log.NewTransportProtocolEvent("accept", "xhttp")
+		log.WithTransportProtocolEvent(m.logger, ctx, log.LevelDebug, event,
+			"xhttp: creating new xmuxClient (concurrency limit hit)", "poolSize", len(m.xmuxClients))
 		return m.newXmuxClient()
 	}
 

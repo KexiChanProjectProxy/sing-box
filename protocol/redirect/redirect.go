@@ -57,13 +57,15 @@ func (h *Redirect) NewConnectionEx(ctx context.Context, conn net.Conn, metadata 
 	destination, err := redir.GetOriginalDestination(conn)
 	if err != nil {
 		conn.Close()
-		h.logger.ErrorContext(ctx, "process connection from ", conn.RemoteAddr(), ": get redirect destination: ", err)
+		event := log.NewConnectionEvent("inbound", "error").WithError(err)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelError, event, "process connection from ", conn.RemoteAddr(), ": get redirect destination: ", err)
 		return
 	}
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	metadata.Destination = M.SocksaddrFromNetIP(destination)
 	metadata.OriginDestination = metadata.Destination
-	h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound connection to ", metadata.Destination)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

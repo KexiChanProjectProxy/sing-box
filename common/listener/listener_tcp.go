@@ -74,7 +74,8 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.logger.Info("tcp server started at ", tcpListener.Addr())
+	event := log.NewServerLifecycleEvent("listen").WithNetwork("tcp").WithAddress(tcpListener.Addr().String())
+	log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelInfo, event, "tcp server started at ", tcpListener.Addr())
 	l.tcpListener = tcpListener
 	return tcpListener, err
 }
@@ -87,14 +88,16 @@ func (l *Listener) loopTCPIn() {
 		if err != nil {
 			//nolint:staticcheck
 			if netError, isNetError := err.(net.Error); isNetError && netError.Temporary() {
-				l.logger.Error(err)
+				event := log.NewServerLifecycleEvent("error").WithNetwork("tcp").WithError(err)
+				log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelError, event, err)
 				continue
 			}
 			if l.shutdown.Load() && E.IsClosed(err) {
 				return
 			}
 			l.tcpListener.Close()
-			l.logger.Error("tcp listener closed: ", err)
+			event := log.NewServerLifecycleEvent("close").WithNetwork("tcp").WithError(err)
+			log.WithServerLifecycleEvent(l.logger, l.ctx, log.LevelError, event, "tcp listener closed: ", err)
 			continue
 		}
 		//nolint:staticcheck
@@ -104,7 +107,8 @@ func (l *Listener) loopTCPIn() {
 		metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
 		metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 		ctx := log.ContextWithNewID(l.ctx)
-		l.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
+		event := log.NewServerLifecycleEvent("accept").WithNetwork("tcp").WithAddress(metadata.Source.String())
+		log.WithServerLifecycleEvent(l.logger, ctx, log.LevelInfo, event, "inbound connection from ", metadata.Source)
 		go l.connHandler.NewConnectionEx(ctx, conn, metadata, nil)
 	}
 }

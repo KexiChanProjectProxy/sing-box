@@ -49,13 +49,14 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	}
 	for _, endpoint := range m.endpoints {
 		name := "endpoint/" + endpoint.Type() + "[" + endpoint.Tag() + "]"
-		m.logger.Trace(stage, " ", name)
+		event := log.NewComponentLifecycleEvent(stage.String(), "endpoint").WithTag(endpoint.Tag())
+		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name)
 		startTime := time.Now()
 		err := adapter.LegacyStart(endpoint, stage)
 		if err != nil {
 			return E.Cause(err, stage, " ", name)
 		}
-		m.logger.Trace(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
 	}
 	return nil
 }
@@ -73,14 +74,15 @@ func (m *Manager) Close() error {
 	var err error
 	for _, endpoint := range endpoints {
 		name := "endpoint/" + endpoint.Type() + "[" + endpoint.Tag() + "]"
-		m.logger.Trace("close ", name)
+		event := log.NewComponentLifecycleEvent("close", "endpoint").WithTag(endpoint.Tag())
+		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name)
 		startTime := time.Now()
 		monitor.Start("close ", name)
 		err = E.Append(err, endpoint.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
 		})
 		monitor.Finish()
-		m.logger.Trace("close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
 	}
 	return nil
 }
@@ -131,13 +133,14 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if m.started {
 		name := "endpoint/" + endpoint.Type() + "[" + endpoint.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			m.logger.Trace(stage, " ", name)
+			event := log.NewComponentLifecycleEvent(stage.String(), "endpoint").WithTag(endpoint.Tag())
+			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name)
 			startTime := time.Now()
 			err = adapter.LegacyStart(endpoint, stage)
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			m.logger.Trace(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
 		}
 	}
 	if existsEndpoint, loaded := m.endpointByTag[tag]; loaded {

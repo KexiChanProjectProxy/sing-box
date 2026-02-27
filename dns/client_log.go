@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	log "github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/logger"
 
 	"github.com/miekg/dns"
@@ -14,10 +15,12 @@ func logCachedResponse(logger logger.ContextLogger, ctx context.Context, respons
 		return
 	}
 	domain := FqdnToDomain(response.Question[0].Name)
-	logger.DebugContext(ctx, "cached ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
+	event := log.NewDNSEvent("cached", domain).WithResponse(response.Rcode, uint32(ttl)).WithCached()
+	log.WithDNSEvent(logger, ctx, log.LevelDebug, event, "cached ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "cached ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			recordEvent := log.NewDNSEvent("cached", domain).WithCached()
+			log.WithDNSEvent(logger, ctx, log.LevelInfo, recordEvent, "cached ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
 		}
 	}
 }
@@ -27,10 +30,12 @@ func logExchangedResponse(logger logger.ContextLogger, ctx context.Context, resp
 		return
 	}
 	domain := FqdnToDomain(response.Question[0].Name)
-	logger.DebugContext(ctx, "exchanged ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
+	event := log.NewDNSEvent("exchange", domain).WithResponse(response.Rcode, ttl)
+	log.WithDNSEvent(logger, ctx, log.LevelDebug, event, "exchanged ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "exchanged ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			recordEvent := log.NewDNSEvent("exchange", domain)
+			log.WithDNSEvent(logger, ctx, log.LevelInfo, recordEvent, "exchanged ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
 		}
 	}
 }
@@ -39,9 +44,11 @@ func logRejectedResponse(logger logger.ContextLogger, ctx context.Context, respo
 	if logger == nil || len(response.Question) == 0 {
 		return
 	}
+	domain := FqdnToDomain(response.Question[0].Name)
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "rejected ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			event := log.NewDNSEvent("rejected", domain).WithRejected()
+			log.WithDNSEvent(logger, ctx, log.LevelInfo, event, "rejected ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
 		}
 	}
 }

@@ -86,3 +86,7 @@ func (f *nopFactory) Subscribe() (subscription observable.Subscription[Entry], d
 
 func (f *nopFactory) UnSubscribe(subscription observable.Subscription[Entry]) {
 }
+
+func (f *nopFactory) EventBus() *EventBus {
+	return nil
+}

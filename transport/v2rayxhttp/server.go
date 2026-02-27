@@ -79,14 +79,18 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	// Validate host header
 	if s.config.Host != "" && request.Host != s.config.Host {
-		s.logger.WarnContext(s.ctx, "xhttp: invalid host", "expected", s.config.Host, "got", request.Host)
+		event := log.NewTransportProtocolEvent("warning", "xhttp")
+		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelWarn, event,
+			"xhttp: invalid host", "expected", s.config.Host, "got", request.Host)
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	// Validate path prefix
 	if !strings.HasPrefix(request.URL.Path, s.config.Path) {
-		s.logger.WarnContext(s.ctx, "xhttp: invalid path", "expected prefix", s.config.Path, "got", request.URL.Path)
+		event := log.NewTransportProtocolEvent("warning", "xhttp")
+		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelWarn, event,
+			"xhttp: invalid path", "expected prefix", s.config.Path, "got", request.URL.Path)
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -96,7 +100,9 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	paddingLen := int32(len(paddingStr))
 
 	if paddingLen < s.config.XPaddingBytes.From || paddingLen > s.config.XPaddingBytes.To {
-		s.logger.WarnContext(s.ctx, "xhttp: invalid x_padding length", "length", paddingLen)
+		event := log.NewTransportProtocolEvent("warning", "xhttp")
+		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelWarn, event,
+			"xhttp: invalid x_padding length", "length", paddingLen)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -125,7 +131,9 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	// Unsupported method
-	s.logger.WarnContext(s.ctx, "xhttp: unsupported method", "method", request.Method)
+	event := log.NewTransportProtocolEvent("warning", "xhttp")
+	log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelWarn, event,
+		"xhttp: unsupported method", "method", request.Method)
 	writer.WriteHeader(http.StatusMethodNotAllowed)
 }
 
@@ -139,7 +147,9 @@ func (s *Server) handleUpload(writer http.ResponseWriter, request *http.Request,
 		var err error
 		seq, err = strconv.ParseUint(parts[1], 10, 64)
 		if err != nil {
-			s.logger.ErrorContext(s.ctx, "xhttp: invalid sequence number", "seq", parts[1], "error", err)
+			event := log.NewTransportProtocolEvent("error", "xhttp")
+			log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelError, event,
+				"xhttp: invalid sequence number", "seq", parts[1], "error", err)
 			writer.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -149,13 +159,17 @@ func (s *Server) handleUpload(writer http.ResponseWriter, request *http.Request,
 	maxBytes := int64(getNormalizedValue(s.config.ScMaxEachPostBytes))
 	payload, err := io.ReadAll(io.LimitReader(request.Body, maxBytes+1))
 	if err != nil {
-		s.logger.ErrorContext(s.ctx, "xhttp: failed to read upload payload", "error", err)
+		event := log.NewTransportProtocolEvent("error", "xhttp")
+		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelError, event,
+			"xhttp: failed to read upload payload", "error", err)
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if int64(len(payload)) > maxBytes {
-		s.logger.ErrorContext(s.ctx, "xhttp: upload payload too large", "size", len(payload), "max", maxBytes)
+		event := log.NewTransportProtocolEvent("error", "xhttp")
+		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelError, event,
+			"xhttp: upload payload too large", "size", len(payload), "max", maxBytes)
 		writer.WriteHeader(http.StatusRequestEntityTooLarge)
 		return
 	}
@@ -167,7 +181,9 @@ func (s *Server) handleUpload(writer http.ResponseWriter, request *http.Request,
 	})
 
 	if err != nil {
-		s.logger.ErrorContext(s.ctx, "xhttp: failed to push packet", "error", err)
+		event := log.NewTransportProtocolEvent("error", "xhttp")
+		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelError, event,
+			"xhttp: failed to push packet", "error", err)
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -182,7 +198,9 @@ func (s *Server) handleDownload(writer http.ResponseWriter, request *http.Reques
 		var ok bool
 		session, ok = s.sessionManager.getSession(sessionID)
 		if !ok {
-			s.logger.ErrorContext(s.ctx, "xhttp: session not found", "sessionID", sessionID)
+			event := log.NewTransportProtocolEvent("error", "xhttp")
+			log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelError, event,
+				"xhttp: session not found", "sessionID", sessionID)
 			writer.WriteHeader(http.StatusNotFound)
 			return
 		}

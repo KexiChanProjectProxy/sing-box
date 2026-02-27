@@ -17,6 +17,7 @@ import (
 	"github.com/sagernet/sing-box/common/settings"
 	"github.com/sagernet/sing-box/common/taskmonitor"
 	C "github.com/sagernet/sing-box/constant"
+	log "github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
@@ -308,7 +309,7 @@ func (r *NetworkManager) UpdateInterfaces() error {
 				oldInterface.Expensive == newInterface.Expensive &&
 				oldInterface.Constrained == newInterface.Constrained
 		}) {
-			r.logger.Info("updated available networks: ", strings.Join(common.Map(newInterfaces, func(it adapter.NetworkInterface) string {
+			ifaceNames := common.Map(newInterfaces, func(it adapter.NetworkInterface) string {
 				var options []string
 				options = append(options, F.ToString(it.Type))
 				if it.Expensive {
@@ -318,7 +319,9 @@ func (r *NetworkManager) UpdateInterfaces() error {
 					options = append(options, "constrained")
 				}
 				return F.ToString(it.Name, " (", strings.Join(options, ", "), ")")
-			}), ", "))
+			})
+			event := log.NewNetworkStateEvent("update").WithInterfaces(ifaceNames)
+			log.WithNetworkStateEvent(r.logger, context.Background(), log.LevelInfo, event, "updated available networks: ", strings.Join(ifaceNames, ", "))
 		}
 		return nil
 	}
@@ -437,9 +440,11 @@ func (r *NetworkManager) onWIFIStateChanged(state adapter.WIFIState) {
 		r.wifiState = state
 		r.wifiStateMutex.Unlock()
 		if state.SSID != "" {
-			r.logger.Info("WIFI state changed: SSID=", state.SSID, ", BSSID=", state.BSSID)
+			event := log.NewNetworkStateEvent("change").WithDefaultAddr(state.SSID)
+			log.WithNetworkStateEvent(r.logger, context.Background(), log.LevelInfo, event, "WIFI state changed: SSID=", state.SSID, ", BSSID=", state.BSSID)
 		} else {
-			r.logger.Info("WIFI disconnected")
+			event := log.NewNetworkStateEvent("change")
+			log.WithNetworkStateEvent(r.logger, context.Background(), log.LevelInfo, event, "WIFI disconnected")
 		}
 	} else {
 		r.wifiStateMutex.Unlock()
@@ -486,7 +491,8 @@ func (r *NetworkManager) ResetNetwork() {
 func (r *NetworkManager) notifyInterfaceUpdate(defaultInterface *control.Interface, flags int) {
 	if defaultInterface == nil {
 		r.pauseManager.NetworkPause()
-		r.logger.Error("missing default interface")
+		event := log.NewNetworkStateEvent("error")
+		log.WithNetworkStateEvent(r.logger, context.Background(), log.LevelError, event, "missing default interface")
 		return
 	}
 
@@ -517,7 +523,10 @@ func (r *NetworkManager) notifyInterfaceUpdate(defaultInterface *control.Interfa
 			options = append(options, "constrained")
 		}
 	}
-	r.logger.Info("updated default interface ", defaultInterface.Name, ", ", strings.Join(options, ", "))
+	{
+		event := log.NewNetworkStateEvent("update").WithDefaultAddr(defaultInterface.Name)
+		log.WithNetworkStateEvent(r.logger, context.Background(), log.LevelInfo, event, "updated default interface ", defaultInterface.Name, ", ", strings.Join(options, ", "))
+	}
 	r.UpdateWIFIState()
 
 	if !r.started {

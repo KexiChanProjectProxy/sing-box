@@ -4,3 +4,6 @@
 [submodule "clients/android"]
 	path = clients/android
 	url = https://github.com/SagerNet/sing-box-for-android.git
+[submodule "sing-anytls"]
+	path = sing-anytls
+	url = https://github.com/KexiChanProjectProxy/sing-anytls.git

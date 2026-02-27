@@ -213,7 +213,7 @@ type URLTestGroup struct {
 	outbound                     adapter.OutboundManager
 	pause                        pause.Manager
 	pauseCallback                *list.Element[pause.Callback]
-	logger                       log.Logger
+	logger                       log.ContextLogger
 	outbounds                    []adapter.Outbound
 	link                         string
 	interval                     time.Duration
@@ -232,7 +232,7 @@ type URLTestGroup struct {
 	lastActive                   common.TypedValue[time.Time]
 }
 
-func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
+func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.ContextLogger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
 	if interval == 0 {
 		interval = C.DefaultURLTestInterval
 	}
@@ -410,10 +410,12 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 			defer cancel()
 			t, err := urltest.URLTest(testCtx, g.link, p)
 			if err != nil {
-				g.logger.Debug("outbound ", tag, " unavailable: ", err)
+				event := log.NewHealthCheckEvent("failed").WithOutbound(tag).WithError(err)
+				log.WithHealthCheckEvent(g.logger, testCtx, log.LevelDebug, event, "outbound ", tag, " unavailable: ", err)
 				g.history.DeleteURLTestHistory(realTag)
 			} else {
-				g.logger.Debug("outbound ", tag, " available: ", t, "ms")
+				event := log.NewHealthCheckEvent("success").WithOutbound(tag).WithLatency(int64(t))
+				log.WithHealthCheckEvent(g.logger, testCtx, log.LevelDebug, event, "outbound ", tag, " available: ", t, "ms")
 				g.history.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: t,

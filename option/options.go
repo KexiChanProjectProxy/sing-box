@@ -45,6 +45,23 @@ type LogOptions struct {
 	Format       string      `json:"format,omitempty"`
 	DisableColor bool        `json:"-"`
 	Outputs      []LogOutput `json:"outputs,omitempty"`
+	EventBus     *EventBusOptions `json:"event_bus,omitempty"`
+}
+
+// EventBusOptions configures the event bus for structured log events
+type EventBusOptions struct {
+	Enabled    bool                     `json:"enabled,omitempty"`
+	BufferSize int                      `json:"buffer_size,omitempty"`
+	Webhooks   []WebhookSubscriberOptions `json:"webhooks,omitempty"`
+}
+
+// WebhookSubscriberOptions configures a webhook subscriber
+type WebhookSubscriberOptions struct {
+	URL           string            `json:"url"`
+	Headers       map[string]string `json:"headers,omitempty"`
+	BatchSize     int               `json:"batch_size,omitempty"`
+	FlushInterval string            `json:"flush_interval,omitempty"`
+	Timeout       string            `json:"timeout,omitempty"`
 }
 
 type LogOutput struct {

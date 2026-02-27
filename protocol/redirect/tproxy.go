@@ -76,13 +76,16 @@ func (t *TProxy) NewConnectionEx(ctx context.Context, conn net.Conn, metadata ad
 	metadata.InboundType = t.Type()
 	metadata.Destination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 	metadata.OriginDestination = metadata.Destination
-	t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination)
+	log.WithConnectionEvent(t.logger, ctx, log.LevelInfo, event, "inbound connection to ", metadata.Destination)
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (t *TProxy) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	t.logger.InfoContext(ctx, "inbound packet connection from ", source)
-	t.logger.InfoContext(ctx, "inbound packet connection to ", destination)
+	eventFrom := log.NewConnectionEvent("inbound", "start").WithSource(source)
+	log.WithConnectionEvent(t.logger, ctx, log.LevelInfo, eventFrom, "inbound packet connection from ", source)
+	eventTo := log.NewConnectionEvent("inbound", "start").WithDestination(destination)
+	log.WithConnectionEvent(t.logger, ctx, log.LevelInfo, eventTo, "inbound packet connection to ", destination)
 	var metadata adapter.InboundContext
 	metadata.Inbound = t.Tag()
 	metadata.InboundType = t.Type()

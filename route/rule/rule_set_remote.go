@@ -16,6 +16,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/srs"
 	C "github.com/sagernet/sing-box/constant"
+	log "github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -206,7 +207,8 @@ func (s *RemoteRuleSet) loopUpdate() {
 	if time.Since(s.lastUpdated) > s.updateInterval {
 		err := s.fetch(s.ctx, nil)
 		if err != nil {
-			s.logger.Error("fetch rule-set ", s.options.Tag, ": ", err)
+			event := log.NewRuleSetEvent("error", s.options.Tag).WithError(err)
+			log.WithRuleSetEvent(s.logger, s.ctx, log.LevelError, event, "fetch rule-set ", s.options.Tag, ": ", err)
 		} else if s.refs.Load() == 0 {
 			s.rules = nil
 		}
@@ -225,14 +227,16 @@ func (s *RemoteRuleSet) loopUpdate() {
 func (s *RemoteRuleSet) updateOnce() {
 	err := s.fetch(s.ctx, nil)
 	if err != nil {
-		s.logger.Error("fetch rule-set ", s.options.Tag, ": ", err)
+		event := log.NewRuleSetEvent("error", s.options.Tag).WithError(err)
+		log.WithRuleSetEvent(s.logger, s.ctx, log.LevelError, event, "fetch rule-set ", s.options.Tag, ": ", err)
 	} else if s.refs.Load() == 0 {
 		s.rules = nil
 	}
 }
 
 func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPStartContext) error {
-	s.logger.Debug("updating rule-set ", s.options.Tag, " from URL: ", s.options.RemoteOptions.URL)
+	event := log.NewRuleSetEvent("download", s.options.Tag).WithURL(s.options.RemoteOptions.URL)
+	log.WithRuleSetEvent(s.logger, ctx, log.LevelDebug, event, "updating rule-set ", s.options.Tag, " from URL: ", s.options.RemoteOptions.URL)
 	var httpClient *http.Client
 	if startContext != nil {
 		httpClient = startContext.HTTPClient(s.options.RemoteOptions.DownloadDetour, s.dialer)
@@ -277,7 +281,10 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPSta
 				}
 			}
 		}
-		s.logger.Info("update rule-set ", s.options.Tag, ": not modified")
+		{
+			event := log.NewRuleSetEvent("update", s.options.Tag)
+			log.WithRuleSetEvent(s.logger, ctx, log.LevelInfo, event, "update rule-set ", s.options.Tag, ": not modified")
+		}
 		return nil
 	default:
 		return E.New("unexpected status: ", response.Status)
@@ -308,7 +315,10 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPSta
 			s.logger.Error("save rule-set cache: ", err)
 		}
 	}
-	s.logger.Info("updated rule-set ", s.options.Tag)
+	{
+		event := log.NewRuleSetEvent("update", s.options.Tag)
+		log.WithRuleSetEvent(s.logger, ctx, log.LevelInfo, event, "updated rule-set ", s.options.Tag)
+	}
 	return nil
 }
 

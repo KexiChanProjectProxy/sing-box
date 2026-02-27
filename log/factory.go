@@ -22,6 +22,8 @@ type Factory interface {
 type ObservableFactory interface {
 	Factory
 	observable.Observable[Entry]
+	// EventBus returns the event bus for structured event subscription (may be nil)
+	EventBus() *EventBus
 }
 
 type Entry struct {

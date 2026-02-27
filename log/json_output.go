@@ -100,9 +100,14 @@ func (o *JSONOutput) buildJSONDocument(entry LogEntry) map[string]interface{} {
 		}
 
 		// Destination
-		if destIP, ok := entry.Metadata["dest_ip"]; ok {
+		_, hasDestIP := entry.Metadata["dest_ip"]
+		_, hasDestDomain := entry.Metadata["dest_domain"]
+		_, hasDestPort := entry.Metadata["dest_port"]
+		if hasDestIP || hasDestDomain || hasDestPort {
 			dest := make(map[string]interface{})
-			dest["ip"] = destIP
+			if destIP, ok := entry.Metadata["dest_ip"]; ok {
+				dest["ip"] = destIP
+			}
 			if destPort, ok := entry.Metadata["dest_port"]; ok {
 				dest["port"] = destPort
 			}
@@ -123,6 +128,13 @@ func (o *JSONOutput) buildJSONDocument(entry LogEntry) map[string]interface{} {
 				origDest["port"] = origPort
 			}
 			conn["original_destination"] = origDest
+		}
+
+		if ipVersion, ok := entry.Metadata["ip_version"]; ok {
+			conn["ip_version"] = ipVersion
+		}
+		if mark, ok := entry.Metadata["mark"]; ok {
+			conn["mark"] = mark
 		}
 
 		doc["connection"] = conn
@@ -147,6 +159,9 @@ func (o *JSONOutput) buildJSONDocument(entry LogEntry) map[string]interface{} {
 	outbound := make(map[string]interface{})
 	if tag, ok := entry.Metadata["outbound_tag"]; ok {
 		outbound["tag"] = tag
+	}
+	if otype, ok := entry.Metadata["outbound_type"]; ok {
+		outbound["type"] = otype
 	}
 	if ruleset, ok := entry.Metadata["matched_ruleset"]; ok {
 		outbound["matched_rule"] = ruleset
@@ -201,8 +216,24 @@ func (o *JSONOutput) buildJSONDocument(entry LogEntry) map[string]interface{} {
 	}
 
 	// Process
-	if processInfo, ok := entry.Metadata["process"].(map[string]interface{}); ok && len(processInfo) > 0 {
-		doc["process"] = processInfo
+	process := make(map[string]interface{})
+	if v, ok := entry.Metadata["process_path"]; ok {
+		process["path"] = v
+	}
+	if v, ok := entry.Metadata["process_id"]; ok {
+		process["pid"] = v
+	}
+	if v, ok := entry.Metadata["android_package_name"]; ok {
+		process["android_package"] = v
+	}
+	if v, ok := entry.Metadata["user_name"]; ok {
+		process["user_name"] = v
+	}
+	if v, ok := entry.Metadata["user_id"]; ok {
+		process["user_id"] = v
+	}
+	if len(process) > 0 {
+		doc["process"] = process
 	}
 
 	// Routing

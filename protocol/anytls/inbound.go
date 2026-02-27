@@ -218,7 +218,8 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, metadata a
 		tlsConn, err := tls.ServerHandshake(ctx, conn, h.tlsConfig)
 		if err != nil {
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake"))
+			event := log.NewConnectionEvent("inbound", "error").WithSource(metadata.Source).WithError(err)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelError, event, E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake"))
 			return
 		}
 		conn = tlsConn
@@ -226,7 +227,8 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, metadata a
 	err := h.service.NewConnection(adapter.WithContext(ctx, &metadata), conn, metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
+		event := log.NewConnectionEvent("inbound", "error").WithSource(metadata.Source).WithError(err)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelError, event, E.Cause(err, "process connection from ", metadata.Source))
 	}
 }
 
@@ -244,9 +246,11 @@ func (h *inboundHandler) NewConnectionEx(ctx context.Context, conn net.Conn, sou
 	metadata.Destination = destination.Unwrap()
 	if userName, _ := auth.UserFromContext[string](ctx); userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination).WithUser(userName)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "[", userName, "] inbound connection to ", metadata.Destination)
 	} else {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound connection to ", metadata.Destination)
 	}
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

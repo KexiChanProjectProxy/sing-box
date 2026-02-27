@@ -85,22 +85,27 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	if h.multiplexDialer == nil {
 		switch N.NetworkName(network) {
 		case N.NetworkTCP:
-			h.logger.InfoContext(ctx, "outbound connection to ", destination)
+			event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkTCP)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound connection to ", destination)
 		case N.NetworkUDP:
 			if h.uotClient != nil {
-				h.logger.InfoContext(ctx, "outbound UoT connect packet connection to ", destination)
+				event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+				log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound UoT connect packet connection to ", destination)
 				return h.uotClient.DialContext(ctx, network, destination)
 			} else {
-				h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+				event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+				log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound packet connection to ", destination)
 			}
 		}
 		return (*shadowsocksDialer)(h).DialContext(ctx, network, destination)
 	} else {
 		switch N.NetworkName(network) {
 		case N.NetworkTCP:
-			h.logger.InfoContext(ctx, "outbound multiplex connection to ", destination)
+			event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkTCP)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound multiplex connection to ", destination)
 		case N.NetworkUDP:
-			h.logger.InfoContext(ctx, "outbound multiplex packet connection to ", destination)
+			event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound multiplex packet connection to ", destination)
 		}
 		return h.multiplexDialer.DialContext(ctx, network, destination)
 	}
@@ -112,15 +117,19 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	metadata.Destination = destination
 	if h.multiplexDialer == nil {
 		if h.uotClient != nil {
-			h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+			event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound UoT packet connection to ", destination)
 			return h.uotClient.ListenPacket(ctx, destination)
 		} else {
-			h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+			event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound packet connection to ", destination)
 		}
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound packet connection to ", destination)
 		return (*shadowsocksDialer)(h).ListenPacket(ctx, destination)
 	} else {
-		h.logger.InfoContext(ctx, "outbound multiplex packet connection to ", destination)
+		event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork(N.NetworkUDP)
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound multiplex packet connection to ", destination)
 		return h.multiplexDialer.ListenPacket(ctx, destination)
 	}
 }

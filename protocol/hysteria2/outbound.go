@@ -95,7 +95,8 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork("tcp")
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound connection to ", destination)
 		return h.client.DialConn(ctx, destination)
 	case N.NetworkUDP:
 		conn, err := h.ListenPacket(ctx, destination)
@@ -109,7 +110,8 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 }
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork("udp")
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound packet connection to ", destination)
 	return h.client.ListenPacket(ctx)
 }
 

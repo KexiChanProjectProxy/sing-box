@@ -116,10 +116,12 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	metadata.Destination = destination
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork("tcp")
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound connection to ", destination)
 		return h.client.CreateProxy(ctx, destination)
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+		event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork("udp")
+		log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound UoT packet connection to ", destination)
 		return h.uotClient.DialContext(ctx, network, destination)
 	}
 	return nil, os.ErrInvalid
@@ -129,7 +131,8 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+	event := log.NewConnectionEvent("outbound", "start").WithDestination(destination).WithNetwork("udp")
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "outbound UoT packet connection to ", destination)
 	return h.uotClient.ListenPacket(ctx, destination)
 }
 

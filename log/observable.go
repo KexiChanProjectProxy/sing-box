@@ -102,6 +102,10 @@ func (f *defaultFactory) UnSubscribe(sub observable.Subscription[Entry]) {
 	f.observer.UnSubscribe(sub)
 }
 
+func (f *defaultFactory) EventBus() *EventBus {
+	return nil
+}
+
 var _ ContextLogger = (*observableLogger)(nil)
 
 type observableLogger struct {

@@ -21,6 +21,7 @@ type multiOutputFactory struct {
 	level             Level
 	subscriber        *observable.Subscriber[Entry]
 	observer          *observable.Observer[Entry]
+	eventBus          *EventBus
 }
 
 // NewMultiOutputFactory creates a new multi-output factory
@@ -31,6 +32,18 @@ func NewMultiOutputFactory(
 	platformWriter PlatformWriter,
 	needObservable bool,
 ) ObservableFactory {
+	return NewMultiOutputFactoryWithBus(ctx, outputs, platformFormatter, platformWriter, needObservable, nil)
+}
+
+// NewMultiOutputFactoryWithBus creates a new multi-output factory with an optional event bus
+func NewMultiOutputFactoryWithBus(
+	ctx context.Context,
+	outputs []Output,
+	platformFormatter Formatter,
+	platformWriter PlatformWriter,
+	needObservable bool,
+	eventBus *EventBus,
+) ObservableFactory {
 	factory := &multiOutputFactory{
 		ctx:               ctx,
 		outputs:           outputs,
@@ -39,6 +52,7 @@ func NewMultiOutputFactory(
 		needObservable:    needObservable,
 		level:             LevelTrace,
 		subscriber:        observable.NewSubscriber[Entry](128),
+		eventBus:          eventBus,
 	}
 	if needObservable {
 		factory.observer = observable.NewObserver[Entry](factory.subscriber, 64)
@@ -69,6 +83,9 @@ func (f *multiOutputFactory) Close() error {
 	if err := f.subscriber.Close(); err != nil {
 		errs = append(errs, err)
 	}
+	if f.eventBus != nil {
+		f.eventBus.Close()
+	}
 	if len(errs) > 0 {
 		return errs[0]
 	}
@@ -96,6 +113,11 @@ func (f *multiOutputFactory) NewLogger(tag string) ContextLogger {
 		factory: f,
 		tag:     tag,
 	}
+}
+
+// EventBus returns the event bus (may be nil if not configured)
+func (f *multiOutputFactory) EventBus() *EventBus {
+	return f.eventBus
 }
 
 // Subscribe subscribes to log entries (for observable pattern)
@@ -146,6 +168,11 @@ func (l *multiOutputLogger) LogWithEvent(ctx context.Context, level Level, event
 	// Write to all outputs (non-blocking)
 	for _, output := range l.factory.outputs {
 		go output.Write(entry)
+	}
+
+	// Publish to event bus if configured
+	if l.factory.eventBus != nil {
+		l.factory.eventBus.Publish(entry)
 	}
 
 	// Emit to observable if needed

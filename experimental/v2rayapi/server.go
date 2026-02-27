@@ -1,6 +1,7 @@
 package v2rayapi
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -56,12 +57,14 @@ func (s *Server) Start(stage adapter.StartStage) error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info("grpc server started at ", listener.Addr())
+	event := log.NewServiceEvent("start", "v2ray-api")
+	log.WithServiceEvent(s.logger.(log.ContextLogger), context.Background(), log.LevelInfo, event, "grpc server started at ", listener.Addr())
 	s.tcpListener = listener
 	go func() {
 		err = s.grpcServer.Serve(listener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error(err)
+			errEvent := log.NewServiceEvent("error", "v2ray-api").WithError(err)
+			log.WithServiceEvent(s.logger.(log.ContextLogger), context.Background(), log.LevelError, errEvent, err)
 		}
 	}()
 	return nil

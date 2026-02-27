@@ -25,7 +25,7 @@ var errInsecureUnused = E.New("tls: insecure unused")
 type STDServerConfig struct {
 	access                sync.RWMutex
 	config                *tls.Config
-	logger                log.Logger
+	logger                log.ContextLogger
 	acmeService           adapter.SimpleLifecycle
 	certificate           []byte
 	key                   []byte
@@ -124,7 +124,8 @@ func (c *STDServerConfig) startWatcher() error {
 		Callback: func(path string) {
 			err := c.certificateUpdated(path)
 			if err != nil {
-				c.logger.Error(E.Cause(err, "reload certificate"))
+				event := log.NewTLSEvent("cert_reload")
+				log.WithTLSEvent(c.logger, context.Background(), log.LevelError, event.WithError(err), "reload certificate: ", err)
 			}
 		},
 	})
@@ -163,18 +164,21 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.Certificates = []tls.Certificate{keyPair}
 		c.config = config
 		c.access.Unlock()
-		c.logger.Info("reloaded TLS certificate")
+		event := log.NewTLSEvent("cert_reload")
+		log.WithTLSEvent(c.logger, context.Background(), log.LevelInfo, event, "reloaded TLS certificate")
 	} else if common.Contains(c.clientCertificatePath, path) {
 		clientCertificateCA := x509.NewCertPool()
 		var reloaded bool
 		for _, certPath := range c.clientCertificatePath {
 			content, err := os.ReadFile(certPath)
 			if err != nil {
-				c.logger.Error(E.Cause(err, "reload certificate from ", c.clientCertificatePath))
+				event := log.NewTLSEvent("cert_reload")
+				log.WithTLSEvent(c.logger, context.Background(), log.LevelError, event.WithError(err), "reload certificate from ", c.clientCertificatePath)
 				continue
 			}
 			if !clientCertificateCA.AppendCertsFromPEM(content) {
-				c.logger.Error(E.New("invalid client certificate file: ", certPath))
+				event := log.NewTLSEvent("cert_reload")
+				log.WithTLSEvent(c.logger, context.Background(), log.LevelError, event.WithError(E.New("invalid client certificate file: ", certPath)), "invalid client certificate file: ", certPath)
 				continue
 			}
 			reloaded = true
@@ -187,7 +191,8 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.ClientCAs = clientCertificateCA
 		c.config = config
 		c.access.Unlock()
-		c.logger.Info("reloaded client certificates")
+		event := log.NewTLSEvent("cert_reload")
+		log.WithTLSEvent(c.logger, context.Background(), log.LevelInfo, event, "reloaded client certificates")
 	} else if path == c.echKeyPath {
 		echKey, err := os.ReadFile(c.echKeyPath)
 		if err != nil {
@@ -197,7 +202,8 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		if err != nil {
 			return err
 		}
-		c.logger.Info("reloaded ECH keys")
+		event := log.NewTLSEvent("ech_reload")
+		log.WithTLSEvent(c.logger, context.Background(), log.LevelInfo, event, "reloaded ECH keys")
 	}
 	return nil
 }

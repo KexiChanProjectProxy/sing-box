@@ -114,7 +114,8 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, metadata a
 		if E.IsClosedOrCanceled(err) {
 			h.logger.DebugContext(ctx, "connection closed: ", err)
 		} else {
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
+			event := log.NewConnectionEvent("inbound", "error").WithSource(metadata.Source).WithError(err)
+			log.WithConnectionEvent(h.logger, ctx, log.LevelError, event, E.Cause(err, "process connection from ", metadata.Source))
 		}
 	}
 }
@@ -128,7 +129,8 @@ func (h *Inbound) NewPacketEx(buffer *buf.Buffer, source M.Socksaddr) {
 }
 
 func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
-	h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	event := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound connection to ", metadata.Destination)
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	return h.router.RouteConnection(ctx, conn, metadata)
@@ -136,8 +138,10 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 
 func (h *Inbound) newPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
 	ctx = log.ContextWithNewID(ctx)
-	h.logger.InfoContext(ctx, "inbound packet connection from ", metadata.Source)
-	h.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+	event := log.NewConnectionEvent("inbound", "start").WithSource(metadata.Source)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound packet connection from ", metadata.Source)
+	event2 := log.NewConnectionEvent("inbound", "start").WithDestination(metadata.Destination)
+	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event2, "inbound packet connection to ", metadata.Destination)
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	return h.router.RoutePacketConnection(ctx, conn, metadata)

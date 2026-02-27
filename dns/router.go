@@ -211,7 +211,10 @@ func (r *Router) Exchange(ctx context.Context, message *mDNS.Msg, options adapte
 		}
 		return &responseMessage, nil
 	}
-	r.logger.DebugContext(ctx, "exchange ", FormatQuestion(message.Question[0].String()))
+	{
+		event := log.NewDNSEvent("exchange", FqdnToDomain(message.Question[0].Name)).WithQueryType(message.Question[0].Qtype)
+		log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event, "exchange ", FormatQuestion(message.Question[0].String()))
+	}
 	var (
 		response  *mDNS.Msg
 		transport adapter.DNSTransport
@@ -287,12 +290,15 @@ func (r *Router) Exchange(ctx context.Context, message *mDNS.Msg, options adapte
 			if err != nil {
 				if errors.Is(err, ErrResponseRejectedCached) {
 					rejected = true
-					r.logger.DebugContext(ctx, E.Cause(err, "response rejected for ", FormatQuestion(message.Question[0].String())), " (cached)")
+					event := log.NewDNSEvent("rejected", FqdnToDomain(message.Question[0].Name)).WithRejected().WithCached().WithError(err)
+					log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event, E.Cause(err, "response rejected for ", FormatQuestion(message.Question[0].String())), " (cached)")
 				} else if errors.Is(err, ErrResponseRejected) {
 					rejected = true
-					r.logger.DebugContext(ctx, E.Cause(err, "response rejected for ", FormatQuestion(message.Question[0].String())))
+					event := log.NewDNSEvent("rejected", FqdnToDomain(message.Question[0].Name)).WithRejected().WithError(err)
+					log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event, E.Cause(err, "response rejected for ", FormatQuestion(message.Question[0].String())))
 				} else if len(message.Question) > 0 {
-					r.logger.ErrorContext(ctx, E.Cause(err, "exchange failed for ", FormatQuestion(message.Question[0].String())))
+					event := log.NewDNSEvent("exchange", FqdnToDomain(message.Question[0].Name)).WithError(err)
+					log.WithDNSEvent(r.logger, ctx, log.LevelError, event, E.Cause(err, "exchange failed for ", FormatQuestion(message.Question[0].String())))
 				} else {
 					r.logger.ErrorContext(ctx, E.Cause(err, "exchange failed for <empty query>"))
 				}
@@ -332,18 +338,24 @@ func (r *Router) Lookup(ctx context.Context, domain string, options adapter.DNSQ
 		}
 		if err != nil {
 			if errors.Is(err, ErrResponseRejectedCached) {
-				r.logger.DebugContext(ctx, "response rejected for ", domain, " (cached)")
+				event := log.NewDNSEvent("rejected", domain).WithRejected().WithCached().WithError(err)
+				log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event, "response rejected for ", domain, " (cached)")
 			} else if errors.Is(err, ErrResponseRejected) {
-				r.logger.DebugContext(ctx, "response rejected for ", domain)
+				event := log.NewDNSEvent("rejected", domain).WithRejected().WithError(err)
+				log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event, "response rejected for ", domain)
 			} else {
-				r.logger.ErrorContext(ctx, E.Cause(err, "lookup failed for ", domain))
+				event := log.NewDNSEvent("lookup", domain).WithError(err)
+				log.WithDNSEvent(r.logger, ctx, log.LevelError, event, E.Cause(err, "lookup failed for ", domain))
 			}
 		}
 		if err != nil {
 			err = E.Cause(err, "lookup ", domain)
 		}
 	}
-	r.logger.DebugContext(ctx, "lookup domain ", domain)
+	{
+		event := log.NewDNSEvent("lookup", domain)
+		log.WithDNSEvent(r.logger, ctx, log.LevelDebug, event, "lookup domain ", domain)
+	}
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Destination = M.Socksaddr{}
 	metadata.Domain = FqdnToDomain(domain)
@@ -414,7 +426,8 @@ func (r *Router) Lookup(ctx context.Context, domain string, options adapter.DNSQ
 response:
 	printResult()
 	if len(responseAddrs) > 0 {
-		r.logger.InfoContext(ctx, "lookup succeed for ", domain, ": ", strings.Join(F.MapToString(responseAddrs), " "))
+		event := log.NewDNSEvent("lookup", domain).WithAnswers(F.MapToString(responseAddrs))
+		log.WithDNSEvent(r.logger, ctx, log.LevelInfo, event, "lookup succeed for ", domain, ": ", strings.Join(F.MapToString(responseAddrs), " "))
 	}
 	return responseAddrs, err
 }

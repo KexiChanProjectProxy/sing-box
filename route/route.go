@@ -152,6 +152,9 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		r.logger.DebugContext(ctx, "no match => default(", defaultOutbound.Tag(), ")")
 	}
 
+	metadata.OutboundType = selectedOutbound.Type()
+	ctx = adapter.WithContext(ctx, &metadata)
+
 	// prefer_domain: override IP destination with sniffed domain name before connecting
 	if overrider, ok := selectedOutbound.(adapter.PreferDomainOverrider); ok {
 		if config := overrider.PreferDomainConfig(); config != nil && config.Enabled {
@@ -305,6 +308,9 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		}
 		selectedOutbound = defaultOutbound
 	}
+
+	metadata.OutboundType = selectedOutbound.Type()
+	ctx = adapter.WithContext(ctx, &metadata)
 
 	// prefer_domain: override IP destination with sniffed domain name before connecting
 	if overrider, ok := selectedOutbound.(adapter.PreferDomainOverrider); ok {

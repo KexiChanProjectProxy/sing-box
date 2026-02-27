@@ -175,11 +175,13 @@ func (s *Server) Start(stage adapter.StartStage) error {
 			if err != nil {
 				return E.Cause(err, "external controller listen error")
 			}
-			s.logger.Info("restful api listening at ", listener.Addr())
+			event := log.NewServiceEvent("start", "clash-api")
+			log.WithServiceEvent(s.logger.(log.ContextLogger), s.ctx, log.LevelInfo, event, "restful api listening at ", listener.Addr())
 			go func() {
 				err = s.httpServer.Serve(listener)
 				if err != nil && !errors.Is(err, http.ErrServerClosed) {
-					s.logger.Error("external controller serve error: ", err)
+					errEvent := log.NewServiceEvent("error", "clash-api").WithError(err)
+					log.WithServiceEvent(s.logger.(log.ContextLogger), s.ctx, log.LevelError, errEvent, "external controller serve error: ", err)
 				}
 			}()
 		}
@@ -229,10 +231,12 @@ func (s *Server) SetMode(newMode string) {
 	if cacheFile != nil {
 		err := cacheFile.StoreMode(newMode)
 		if err != nil {
-			s.logger.Error(E.Cause(err, "save mode"))
+			errEvent := log.NewServiceEvent("error", "clash-api").WithError(err)
+			log.WithServiceEvent(s.logger.(log.ContextLogger), s.ctx, log.LevelError, errEvent, E.Cause(err, "save mode"))
 		}
 	}
-	s.logger.Info("updated mode: ", newMode)
+	updateEvent := log.NewServiceEvent("update", "clash-api")
+	log.WithServiceEvent(s.logger.(log.ContextLogger), s.ctx, log.LevelInfo, updateEvent, "updated mode: ", newMode)
 }
 
 func (s *Server) HistoryStorage() adapter.URLTestHistoryStorage {

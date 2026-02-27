@@ -143,7 +143,7 @@ icon: material/new-box
   "tls_fragment": false,
   "tls_fragment_fallback_delay": "",
   "tls_record_fragment": "",
-  "mark": "0x1"
+  "set_mark": "0x1"
 }
 ```
 
@@ -247,7 +247,7 @@ UDP 连接超时时间。
 
 通过分段 TLS 握手数据包到多个 TLS 记录来绕过防火墙检测。
 
-#### mark
+#### set_mark
 
 为连接设置虚拟路由标记。
 
@@ -266,7 +266,7 @@ UDP 连接超时时间。
       {
         "protocol": "tls",
         "action": "route-options",
-        "mark": "0x1"
+        "set_mark": "0x1"
       },
       {
         "mark": "0x1",

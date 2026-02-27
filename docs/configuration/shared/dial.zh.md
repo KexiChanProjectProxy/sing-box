@@ -276,7 +276,7 @@ TCP keep alive 间隔。
 
     - 使用 `prefer_domain: {"mark": "0x80/0x80"}` 可默认对所有连接启用 prefer_domain
       （因为所有连接均带有第 7 位，除非被显式清除）。
-    - 通过 `route-options` 规则设置 `"mark": 0` 可让特定连接退出——
+    - 通过 `route-options` 规则设置 `"set_mark": 0` 可让特定连接退出——
       清除第 7 位后 `0x00 & 0x80 != 0x80`，prefer_domain 将被跳过。
 
     与 `prefer_domain: true` 相比，此模式更灵活，因为后者没有退出机制。
@@ -304,6 +304,10 @@ TCP keep alive 间隔。
       "type": "vmess",
       "tag": "proxy",
       "prefer_domain": {"mark": "0x80/0x80"}
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
     }
   ],
   "route": {
@@ -311,7 +315,12 @@ TCP keep alive 间隔。
       {
         "ip_cidr": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
         "action": "route-options",
-        "mark": 0
+        "set_mark": 0
+      },
+      {
+        "ip_cidr": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+        "action": "route",
+        "outbound": "direct"
       },
       {
         "action": "route",
@@ -338,7 +347,7 @@ TCP keep alive 间隔。
       {
         "protocol": "tls",
         "action": "route-options",
-        "mark": "0x1"
+        "set_mark": "0x1"
       },
       {
         "mark": "0x1",

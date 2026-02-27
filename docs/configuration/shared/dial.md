@@ -288,7 +288,7 @@ The override only applies when:
 
     - Use `prefer_domain: {"mark": "0x80/0x80"}` to apply prefer_domain by default
       (active on all connections, since all have bit 7 set unless explicitly cleared).
-    - Add a `route-options` rule with `"mark": 0` to opt specific connections out —
+    - Add a `route-options` rule with `"set_mark": 0` to opt specific connections out —
       clearing bit 7 causes `0x00 & 0x80 != 0x80`, so prefer_domain is skipped.
 
     This is more flexible than `prefer_domain: true`, which has no opt-out mechanism.
@@ -316,6 +316,10 @@ Example — prefer domain by default, opt out for LAN ranges (using default mark
       "type": "vmess",
       "tag": "proxy",
       "prefer_domain": {"mark": "0x80/0x80"}
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
     }
   ],
   "route": {
@@ -323,7 +327,12 @@ Example — prefer domain by default, opt out for LAN ranges (using default mark
       {
         "ip_cidr": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
         "action": "route-options",
-        "mark": 0
+        "set_mark": 0
+      },
+      {
+        "ip_cidr": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+        "action": "route",
+        "outbound": "direct"
       },
       {
         "action": "route",
@@ -350,7 +359,7 @@ Example — only prefer domain when route mark `0x1` is set:
       {
         "protocol": "tls",
         "action": "route-options",
-        "mark": "0x1"
+        "set_mark": "0x1"
       },
       {
         "mark": "0x1",

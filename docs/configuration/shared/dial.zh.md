@@ -269,6 +269,18 @@ TCP keep alive 间隔。
 1. 连接目标当前为 IP 地址（非域名），且
 2. 已成功从连接数据中嗅探到域名。
 
+!!! tip "默认元数据标记"
+
+    自 v1.13.0.7 起，sing-box 会为所有进入路由器且未预设标记的连接设置默认元数据标记
+    `0x80`（第 7 位）。这使 `prefer_domain` 支持**退出（opt-out）模式**：
+
+    - 使用 `prefer_domain: {"mark": "0x80/0x80"}` 可默认对所有连接启用 prefer_domain
+      （因为所有连接均带有第 7 位，除非被显式清除）。
+    - 通过 `route-options` 规则设置 `"mark": 0` 可让特定连接退出——
+      清除第 7 位后 `0x00 & 0x80 != 0x80`，prefer_domain 将被跳过。
+
+    与 `prefer_domain: true` 相比，此模式更灵活，因为后者没有退出机制。
+
 示例——始终优先使用域名：
 
 ```json
@@ -280,6 +292,33 @@ TCP keep alive 间隔。
       "prefer_domain": true
     }
   ]
+}
+```
+
+示例——默认优先使用域名，对局域网地址退出（使用默认标记 `0x80`）：
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy",
+      "prefer_domain": {"mark": "0x80/0x80"}
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "ip_cidr": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+        "action": "route-options",
+        "mark": 0
+      },
+      {
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
 }
 ```
 

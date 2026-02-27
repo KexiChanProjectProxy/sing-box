@@ -280,6 +280,19 @@ The override only applies when:
 1. The connection destination is currently an IP address (not already a domain), and
 2. A domain name was successfully sniffed from the connection data.
 
+!!! tip "Default metadata mark"
+
+    Since v1.13.0.7, sing-box sets a default metadata mark of `0x80` (bit 7) on every
+    connection that enters the router without a pre-set mark. This enables an **opt-out**
+    pattern for `prefer_domain`:
+
+    - Use `prefer_domain: {"mark": "0x80/0x80"}` to apply prefer_domain by default
+      (active on all connections, since all have bit 7 set unless explicitly cleared).
+    - Add a `route-options` rule with `"mark": 0` to opt specific connections out —
+      clearing bit 7 causes `0x00 & 0x80 != 0x80`, so prefer_domain is skipped.
+
+    This is more flexible than `prefer_domain: true`, which has no opt-out mechanism.
+
 Example — always prefer domain:
 
 ```json
@@ -291,6 +304,33 @@ Example — always prefer domain:
       "prefer_domain": true
     }
   ]
+}
+```
+
+Example — prefer domain by default, opt out for LAN ranges (using default mark `0x80`):
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "proxy",
+      "prefer_domain": {"mark": "0x80/0x80"}
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "ip_cidr": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+        "action": "route-options",
+        "mark": 0
+      },
+      {
+        "action": "route",
+        "outbound": "proxy"
+      }
+    ]
+  }
 }
 ```
 

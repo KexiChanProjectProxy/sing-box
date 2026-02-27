@@ -150,7 +150,7 @@ Not available when `method` is set to drop.
   "tls_fragment": false,
   "tls_fragment_fallback_delay": "",
   "tls_record_fragment": "",
-  "mark": "0x1"
+  "set_mark": "0x1"
 }
 ```
 
@@ -255,7 +255,7 @@ The fallback value used when TLS segmentation cannot automatically determine the
 
 Fragment TLS handshake into multiple TLS records to bypass firewalls.
 
-#### mark
+#### set_mark
 
 Set a virtual route mark on the connection.
 
@@ -274,7 +274,7 @@ Example — tag TLS traffic and route it to a proxy:
       {
         "protocol": "tls",
         "action": "route-options",
-        "mark": "0x1"
+        "set_mark": "0x1"
       },
       {
         "mark": "0x1",

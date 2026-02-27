@@ -172,7 +172,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 						buffers = append(buffers, newBuffer)
 					}
 				}
-				if metadata.Domain != "" && metadata.Destination.IsIP() {
+				if metadata.Domain != "" && M.IsDomainName(metadata.Domain) && metadata.Destination.IsIP() {
 					r.logger.DebugContext(ctx, "prefer_domain: overriding destination to domain ", metadata.Domain)
 					metadata.Destination = M.Socksaddr{
 						Fqdn: metadata.Domain,
@@ -330,7 +330,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 						}
 					}
 				}
-				if metadata.Domain != "" && metadata.Destination.IsIP() {
+				if metadata.Domain != "" && M.IsDomainName(metadata.Domain) && metadata.Destination.IsIP() {
 					r.logger.DebugContext(ctx, "prefer_domain: overriding destination to domain ", metadata.Domain)
 					metadata.Destination = M.Socksaddr{
 						Fqdn: metadata.Domain,

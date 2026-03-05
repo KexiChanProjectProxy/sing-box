@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/sagernet/sing-box/common/conntrack"
 	"github.com/sagernet/sing-box/experimental/clashapi"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/memory"
@@ -28,13 +27,15 @@ func (s *CommandServer) readStatus() StatusMessage {
 	var message StatusMessage
 	message.Memory = int64(memory.Inuse())
 	message.Goroutines = int32(runtime.NumGoroutine())
-	message.ConnectionsOut = int32(conntrack.Count())
 
-	if s.service != nil {
-		message.TrafficAvailable = true
-		trafficManager := s.service.clashServer.(*clashapi.Server).TrafficManager()
-		message.UplinkTotal, message.DownlinkTotal = trafficManager.Total()
-		message.ConnectionsIn = int32(trafficManager.ConnectionsLen())
+	instance := s.Instance()
+	if instance != nil && instance.Box() != nil {
+		if clashServer := instance.Box().ClashServer(); clashServer != nil {
+			message.TrafficAvailable = true
+			trafficManager := clashServer.(*clashapi.Server).TrafficManager()
+			message.UplinkTotal, message.DownlinkTotal = trafficManager.Total()
+			message.ConnectionsIn = int32(trafficManager.ConnectionsLen())
+		}
 	}
 
 	return message

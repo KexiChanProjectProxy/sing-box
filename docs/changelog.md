@@ -2,9 +2,15 @@
 icon: material/alert-decagram
 ---
 
-#### 1.13.0-rc.7
+#### 1.13.1
 
 * Add advertise tags support for Tailscale endpoint
+
+#### 1.12.14
+
+* Backport fixes
+
+#### 1.13.0
 
 Important changes since 1.12:
 
@@ -22,7 +28,7 @@ Important changes since 1.12:
 * Improve `local` DNS server **12**
 * Add `disable_tcp_keep_alive`, `tcp_keep_alive` and `tcp_keep_alive_interval` options for listen and dial fields **13**
 * Add `bind_address_no_port` option for dial fields **14**
-* Add system interface and relay server options for Tailscale endpoint **15**
+* Add system interface, relay server and advertise tags options for Tailscale endpoint **15**
 * Add Claude Code Multiplexer service **16**
 * Add OpenAI Codex Multiplexer service **17**
 * Apple/Android: Refactor GUI
@@ -169,6 +175,10 @@ This update fixes missing padding extension for Chrome 120+ fingerprints.
 Also, documentation has been updated with a warning about uTLS fingerprinting vulnerabilities.
 uTLS is not recommended for censorship circumvention due to fundamental architectural limitations;
 use NaiveProxy instead for TLS fingerprint resistance.
+
+#### 1.12.23
+
+* Fixes and improvements
 
 #### 1.13.0-rc.5
 

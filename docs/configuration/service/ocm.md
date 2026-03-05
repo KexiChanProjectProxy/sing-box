@@ -54,6 +54,10 @@ When enabled, the service tracks and saves comprehensive statistics including:
 
 Statistics are organized by model and optionally by user when authentication is enabled.
 
+Each statistics entry includes a `week_start_unix` field recording the Unix timestamp of the start of the current weekly billing cycle. This allows clients to correctly attribute usage to the right billing week when parsing the statistics file.
+
+Supported model families include `gpt-5.3-codex`, `gpt-5.2-codex`, `gpt-5.1-codex`, `gpt-5-codex`, `gpt-5-codex-mini`, `gpt-5-pro`, `gpt-5`, `gpt-4.1`, `gpt-4o`, and their variants.
+
 The statistics file is automatically saved every minute and upon service shutdown.
 
 #### users

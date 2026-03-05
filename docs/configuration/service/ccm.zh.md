@@ -58,6 +58,8 @@ Claude Code OAuth 凭据文件的路径。
 
 统计信息按模型、上下文窗口（200k 标准版 vs 1M 高级版）以及可选的用户（启用身份验证时）进行组织。
 
+每条统计记录包含 `week_start_unix` 字段，记录当前每周计费周期开始的 Unix 时间戳，该值从 `anthropic-ratelimit-unified-7d-reset` 响应头中提取。这使得解析统计文件时能够将用量正确归属到对应的计费周期。
+
 统计文件每分钟自动保存一次，并在服务关闭时保存。
 
 #### users
@@ -101,6 +103,42 @@ TLS 配置，参阅 [TLS](/zh/configuration/shared/tls/#inbound)。
 ```bash
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8080"
 export ANTHROPIC_AUTH_TOKEN="sk-ant-ccm-auth-token-not-required-in-this-context"
+
+claude
+```
+
+### 带身份验证的示例
+
+#### 服务端
+
+```json
+{
+  "services": [
+    {
+      "type": "ccm",
+      "listen": "0.0.0.0",
+      "listen_port": 8080,
+      "usages_path": "./claude-usages.json",
+      "users": [
+        {
+          "name": "alice",
+          "token": "sk-alice-secret-token"
+        },
+        {
+          "name": "bob",
+          "token": "sk-bob-secret-token"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### 客户端
+
+```bash
+export ANTHROPIC_BASE_URL="http://your-server:8080"
+export ANTHROPIC_AUTH_TOKEN="sk-alice-secret-token"
 
 claude
 ```

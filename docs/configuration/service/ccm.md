@@ -58,6 +58,8 @@ When enabled, the service tracks and saves comprehensive statistics including:
 
 Statistics are organized by model, context window (200k standard vs 1M premium), and optionally by user when authentication is enabled.
 
+Each statistics entry includes a `week_start_unix` field recording the Unix timestamp of the start of the current weekly billing cycle, derived from the `anthropic-ratelimit-unified-7d-reset` response header. This makes it easy to attribute usage to the correct billing week.
+
 The statistics file is automatically saved every minute and upon service shutdown.
 
 #### users
@@ -101,6 +103,42 @@ Connect to the CCM service:
 ```bash
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8080"
 export ANTHROPIC_AUTH_TOKEN="sk-ant-ccm-auth-token-not-required-in-this-context"
+
+claude
+```
+
+### Example with Authentication
+
+#### Server
+
+```json
+{
+  "services": [
+    {
+      "type": "ccm",
+      "listen": "0.0.0.0",
+      "listen_port": 8080,
+      "usages_path": "./claude-usages.json",
+      "users": [
+        {
+          "name": "alice",
+          "token": "sk-alice-secret-token"
+        },
+        {
+          "name": "bob",
+          "token": "sk-bob-secret-token"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Client
+
+```bash
+export ANTHROPIC_BASE_URL="http://your-server:8080"
+export ANTHROPIC_AUTH_TOKEN="sk-alice-secret-token"
 
 claude
 ```

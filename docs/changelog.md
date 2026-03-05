@@ -5,19 +5,30 @@ icon: material/alert-decagram
 #### 1.13.1.1
 
 * Merge upstream sing-box v1.13.1 fixes and improvements **1**
-* Update dependency versions (dhcp, acmez, dns, openai-go, zerossl, mdlayher/netlink, oauth2)
-* Add gpt-5.3-codex and gpt-5-codex-mini model pricing entries for OCM service
-* Add weekly cycle tracking (WeekStartUnix, WeeklyCycleHint) for CCM/OCM usage
-* Fix prefer_domain guard with IsDomainName() to prevent IP-as-FQDN regression (from 1.13.0.7)
-* Remove deprecated legacy WireGuard outbound shim (LegacyWireGuardOutboundOptions removed upstream)
-* Remove deprecated conntrack package (replaced by adapter.ConnectionManager)
+* Update dependency versions (dhcp, acmez, miekg/dns, openai-go, zerossl, mdlayher/netlink, oauth2)
+* OCM: Add pricing entries for `gpt-5.3-codex` and `gpt-5-codex-mini` models **2**
+* CCM/OCM: Add weekly billing cycle tracking via `week_start_unix` in usage JSON output **3**
+* Fix `prefer_domain` incorrectly treating raw IP strings as domain names (IsDomainName guard)
+* Remove deprecated legacy WireGuard outbound shim (`LegacyWireGuardOutboundOptions` removed upstream)
+* Remove deprecated `conntrack` package (replaced by `adapter.ConnectionManager`)
 
 **1**:
 
-Upstream v1.13.1 changes included: fix darwin TUN batch loop EBADF, fix rule_set_ip_cidr_accept_empty,
-fix Tailscale netstack TCP with system interface, fix fake-ip address allocation, fix naive client close,
-fix IPv6 local DNS on Windows, fix per-outbound bind_interface, fix clash-api websocket close on SIGHUP,
-update dependencies, enforce hard-error for overdue deprecated features.
+Upstream v1.13.1 fixes: darwin TUN batch loop not exit on EBADF, `rule_set_ip_cidr_accept_empty` not working,
+Tailscale netstack TCP connections with system interface, fake-ip address allocation, naive client close,
+IPv6 local DNS on Windows, per-outbound `bind_interface`, clash-api websocket not closed after config reload via SIGHUP.
+Also enforces hard errors for overdue deprecated features (`override_address`, `override_port`, old TUN address fields).
+
+**2**:
+
+`gpt-5.3-codex` and `gpt-5-codex-mini` are now recognized model families in the OCM pricing table.
+`gpt-5.3-codex` uses the same pricing tier as `gpt-5.2-codex`. Variant suffixes (e.g. `-2025-05-01`) are matched automatically.
+
+**3**:
+
+The `week_start_unix` field in the usage JSON records the Unix timestamp of the start of the current
+weekly billing cycle, derived from the API's rate-limit reset response header. This allows clients to
+correctly attribute usage to the right billing week when parsing the statistics file.
 
 #### 1.13.1
 

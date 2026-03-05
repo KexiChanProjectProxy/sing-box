@@ -63,6 +63,7 @@ import (
 var (
 	_ adapter.OutboundWithPreferredRoutes = (*Endpoint)(nil)
 	_ adapter.DirectRouteOutbound         = (*Endpoint)(nil)
+	_ dialer.PacketDialerWithDestination  = (*Endpoint)(nil)
 )
 
 func init() {
@@ -210,10 +211,11 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 		UserLogf: func(format string, args ...any) {
 			logger.Debug(fmt.Sprintf(format, args...))
 		},
-		Ephemeral:  options.Ephemeral,
-		AuthKey:    options.AuthKey,
-		ControlURL: options.ControlURL,
-		Dialer:     &endpointDialer{Dialer: outboundDialer, logger: logger},
+		Ephemeral:     options.Ephemeral,
+		AuthKey:       options.AuthKey,
+		ControlURL:    options.ControlURL,
+		AdvertiseTags: options.AdvertiseTags,
+		Dialer:        &endpointDialer{Dialer: outboundDialer, logger: logger},
 		LookupHook: func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return dnsRouter.Lookup(ctx, host, outboundDialer.(dialer.ResolveDialer).QueryOptions())
 		},
@@ -363,12 +365,10 @@ func (t *Endpoint) Start(stage adapter.StartStage) error {
 		Prefs: ipn.Prefs{
 			RouteAll:        t.acceptRoutes,
 			AdvertiseRoutes: t.advertiseRoutes,
-			AdvertiseTags:   t.advertiseTags,
 		},
 		RouteAllSet:                   true,
 		ExitNodeIPSet:                 true,
 		AdvertiseRoutesSet:            true,
-		AdvertiseTagsSet:              true,
 		RelayServerPortSet:            true,
 		RelayServerStaticEndpointsSet: true,
 	}
@@ -519,19 +519,7 @@ func (t *Endpoint) DialContext(ctx context.Context, network string, destination 
 	}
 }
 
-func (t *Endpoint) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	t.logger.InfoContext(ctx, "outbound packet connection to ", destination)
-	if destination.IsFqdn() {
-		destinationAddresses, err := t.dnsRouter.Lookup(ctx, destination.Fqdn, adapter.DNSQueryOptions{})
-		if err != nil {
-			return nil, err
-		}
-		packetConn, _, err := N.ListenSerial(ctx, t, destination, destinationAddresses)
-		if err != nil {
-			return nil, err
-		}
-		return packetConn, err
-	}
+func (t *Endpoint) listenPacketWithAddress(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	addr4, addr6 := t.server.TailscaleIPs()
 	bind := tcpip.FullAddress{
 		NIC: 1,
@@ -555,6 +543,44 @@ func (t *Endpoint) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 		return nil, err
 	}
 	return udpConn, nil
+}
+
+func (t *Endpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {
+	t.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	if destination.IsFqdn() {
+		destinationAddresses, err := t.dnsRouter.Lookup(ctx, destination.Fqdn, adapter.DNSQueryOptions{})
+		if err != nil {
+			return nil, netip.Addr{}, err
+		}
+		var errors []error
+		for _, address := range destinationAddresses {
+			packetConn, packetErr := t.listenPacketWithAddress(ctx, M.SocksaddrFrom(address, destination.Port))
+			if packetErr == nil {
+				return packetConn, address, nil
+			}
+			errors = append(errors, packetErr)
+		}
+		return nil, netip.Addr{}, E.Errors(errors...)
+	}
+	packetConn, err := t.listenPacketWithAddress(ctx, destination)
+	if err != nil {
+		return nil, netip.Addr{}, err
+	}
+	if destination.IsIP() {
+		return packetConn, destination.Addr, nil
+	}
+	return packetConn, netip.Addr{}, nil
+}
+
+func (t *Endpoint) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	packetConn, destinationAddress, err := t.ListenPacketWithDestination(ctx, destination)
+	if err != nil {
+		return nil, err
+	}
+	if destinationAddress.IsValid() && destination != M.SocksaddrFrom(destinationAddress, destination.Port) {
+		return bufio.NewNATPacketConn(bufio.NewPacketConn(packetConn), M.SocksaddrFrom(destinationAddress, destination.Port), destination), nil
+	}
+	return packetConn, nil
 }
 
 func (t *Endpoint) PrepareConnection(network string, source M.Socksaddr, destination M.Socksaddr, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {

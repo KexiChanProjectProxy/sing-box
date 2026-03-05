@@ -153,17 +153,6 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 	if options.ProxyProtocol != 0 {
 		return nil, E.New("Proxy Protocol is deprecated and removed in sing-box 1.6.0")
 	}
-	//nolint:staticcheck
-	if options.OverrideAddress != "" && options.OverridePort != 0 {
-		outbound.overrideOption = 1
-		outbound.overrideDestination = M.ParseSocksaddrHostPort(options.OverrideAddress, options.OverridePort)
-	} else if options.OverrideAddress != "" {
-		outbound.overrideOption = 2
-		outbound.overrideDestination = M.ParseSocksaddrHostPort(options.OverrideAddress, options.OverridePort)
-	} else if options.OverridePort != 0 {
-		outbound.overrideOption = 3
-		outbound.overrideDestination = M.Socksaddr{Port: options.OverridePort}
-	}
 	return outbound, nil
 }
 
@@ -197,6 +186,7 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 		}
 		// Priority 3: Use default destination (already set)
 	}
+
 
 	network = N.NetworkName(network)
 	switch network {
@@ -277,6 +267,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	if originDestination != destination {
 		conn = bufio.NewNATPacketConn(bufio.NewPacketConn(conn), destination, originDestination)
 	}
+
 	return conn, nil
 }
 

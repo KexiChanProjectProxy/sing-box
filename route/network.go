@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/conntrack"
 	"github.com/sagernet/sing-box/common/settings"
 	"github.com/sagernet/sing-box/common/taskmonitor"
 	C "github.com/sagernet/sing-box/constant"
@@ -49,6 +48,7 @@ type NetworkManager struct {
 	powerListener          winpowrprof.EventListener
 	pauseManager           pause.Manager
 	platformInterface      adapter.PlatformInterface
+	connectionManager      adapter.ConnectionManager
 	endpoint               adapter.EndpointManager
 	inbound                adapter.InboundManager
 	outbound               adapter.OutboundManager
@@ -100,6 +100,7 @@ func NewNetworkManager(ctx context.Context, logger logger.ContextLogger, options
 		},
 		pauseManager:      service.FromContext[pause.Manager](ctx),
 		platformInterface: service.FromContext[adapter.PlatformInterface](ctx),
+		connectionManager: service.FromContext[adapter.ConnectionManager](ctx),
 		endpoint:          service.FromContext[adapter.EndpointManager](ctx),
 		inbound:           service.FromContext[adapter.InboundManager](ctx),
 		outbound:          service.FromContext[adapter.OutboundManager](ctx),
@@ -464,7 +465,9 @@ func (r *NetworkManager) UpdateWIFIState() {
 }
 
 func (r *NetworkManager) ResetNetwork() {
-	conntrack.Close()
+	if r.connectionManager != nil {
+		r.connectionManager.CloseAll()
+	}
 
 	for _, endpoint := range r.endpoint.Endpoints() {
 		listener, isListener := endpoint.(adapter.InterfaceUpdateListener)

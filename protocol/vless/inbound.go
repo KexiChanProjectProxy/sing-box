@@ -222,7 +222,6 @@ func (h *inboundTransportHandler) NewConnectionEx(ctx context.Context, conn net.
 	//nolint:staticcheck
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
-	metadata.InboundOptions = h.listener.ListenOptions().InboundOptions
 	event := log.NewConnectionEvent("inbound", "start").WithSource(metadata.Source)
 	log.WithConnectionEvent(h.logger, ctx, log.LevelInfo, event, "inbound connection from ", metadata.Source)
 	(*Inbound)(h).NewConnectionEx(ctx, conn, metadata, onClose)

@@ -86,7 +86,7 @@ func (d *perUserIPv6Dialer) DialContext(ctx context.Context, network string, des
 			}
 
 			// Dial using the per-connection dialer
-			return trackConn(listener.ListenNetworkNamespace[net.Conn](d.inner.NetNs(), func() (net.Conn, error) {
+			return d.inner.trackConn(listener.ListenNetworkNamespace[net.Conn](d.inner.NetNs(), func() (net.Conn, error) {
 				return dialer.DialContext(ctx, network, destination.String())
 			}))
 		}
@@ -105,7 +105,7 @@ func (d *perUserIPv6Dialer) ListenPacket(ctx context.Context, destination M.Sock
 			listenerConfig := d.inner.UDPListenerConfig()
 			localAddr := M.SocksaddrFrom(addr, 0).String()
 
-			return trackPacketConn(listener.ListenNetworkNamespace[net.PacketConn](d.inner.NetNs(), func() (net.PacketConn, error) {
+			return d.inner.trackPacketConn(listener.ListenNetworkNamespace[net.PacketConn](d.inner.NetNs(), func() (net.PacketConn, error) {
 				return listenerConfig.ListenPacket(ctx, N.NetworkUDP, localAddr)
 			}))
 		}

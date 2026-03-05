@@ -2,6 +2,23 @@
 icon: material/alert-decagram
 ---
 
+#### 1.13.1.1
+
+* Merge upstream sing-box v1.13.1 fixes and improvements **1**
+* Update dependency versions (dhcp, acmez, dns, openai-go, zerossl, mdlayher/netlink, oauth2)
+* Add gpt-5.3-codex and gpt-5-codex-mini model pricing entries for OCM service
+* Add weekly cycle tracking (WeekStartUnix, WeeklyCycleHint) for CCM/OCM usage
+* Fix prefer_domain guard with IsDomainName() to prevent IP-as-FQDN regression (from 1.13.0.7)
+* Remove deprecated legacy WireGuard outbound shim (LegacyWireGuardOutboundOptions removed upstream)
+* Remove deprecated conntrack package (replaced by adapter.ConnectionManager)
+
+**1**:
+
+Upstream v1.13.1 changes included: fix darwin TUN batch loop EBADF, fix rule_set_ip_cidr_accept_empty,
+fix Tailscale netstack TCP with system interface, fix fake-ip address allocation, fix naive client close,
+fix IPv6 local DNS on Windows, fix per-outbound bind_interface, fix clash-api websocket close on SIGHUP,
+update dependencies, enforce hard-error for overdue deprecated features.
+
 #### 1.13.1
 
 * Add advertise tags support for Tailscale endpoint

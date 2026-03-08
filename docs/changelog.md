@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.13.1.2
+
+* Add `cloudflared` V2Ray transport type: tunnels vmess/vless/trojan/anytls connections through a Cloudflare Access hostname via WebSocket (`wss://`) using the official cloudflared binary framing protocol
+* Add `transport` field to AnyTLS outbound: enables V2Ray transports (including `cloudflared`) on AnyTLS connections
+* Add `skip_auth_prefixes` option to SOCKS/HTTP/Mixed inbounds: connections from matching source IP prefixes bypass authentication
+* Update documentation (EN + ZH) for V2Ray transport and AnyTLS outbound
+
 #### 1.13.1.1
 
 * Merge upstream sing-box v1.13.1 fixes and improvements **1**

@@ -4,10 +4,12 @@ import (
 	std_bufio "bufio"
 	"context"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
+	localauth "github.com/sagernet/sing-box/common/auth"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/uot"
 	C "github.com/sagernet/sing-box/constant"
@@ -28,11 +30,12 @@ var _ adapter.TCPInjectableInbound = (*Inbound)(nil)
 
 type Inbound struct {
 	inbound.Adapter
-	router        adapter.ConnectionRouterEx
-	logger        logger.ContextLogger
-	listener      *listener.Listener
-	authenticator *auth.Authenticator
-	udpTimeout    time.Duration
+	router           adapter.ConnectionRouterEx
+	logger           logger.ContextLogger
+	listener         *listener.Listener
+	authenticator    *auth.Authenticator
+	skipAuthPrefixes []netip.Prefix
+	udpTimeout       time.Duration
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SocksInboundOptions) (adapter.Inbound, error) {
@@ -43,11 +46,12 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		udpTimeout = C.UDPTimeout
 	}
 	inbound := &Inbound{
-		Adapter:       inbound.NewAdapter(C.TypeSOCKS, tag),
-		router:        uot.NewRouter(router, logger),
-		logger:        logger,
-		authenticator: auth.NewAuthenticator(options.Users),
-		udpTimeout:    udpTimeout,
+		Adapter:          inbound.NewAdapter(C.TypeSOCKS, tag),
+		router:           uot.NewRouter(router, logger),
+		logger:           logger,
+		authenticator:    auth.NewAuthenticator(options.Users),
+		skipAuthPrefixes: options.SkipAuthPrefixes,
+		udpTimeout:       udpTimeout,
 	}
 	inbound.listener = listener.New(listener.Options{
 		Context:           ctx,
@@ -71,7 +75,11 @@ func (h *Inbound) Close() error {
 }
 
 func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
-	err := socks.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), h.authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), h.listener, h.udpTimeout, metadata.Source, onClose)
+	authenticator := h.authenticator
+	if authenticator != nil && len(h.skipAuthPrefixes) > 0 && localauth.SourceInPrefixes(metadata.Source.Addr, h.skipAuthPrefixes) {
+		authenticator = nil
+	}
+	err := socks.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), h.listener, h.udpTimeout, metadata.Source, onClose)
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
 		if E.IsClosedOrCanceled(err) {

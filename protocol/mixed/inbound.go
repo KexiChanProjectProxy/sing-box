@@ -4,10 +4,12 @@ import (
 	std_bufio "bufio"
 	"context"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
+	localauth "github.com/sagernet/sing-box/common/auth"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing-box/common/uot"
@@ -32,12 +34,13 @@ var _ adapter.TCPInjectableInbound = (*Inbound)(nil)
 
 type Inbound struct {
 	inbound.Adapter
-	router        adapter.ConnectionRouterEx
-	logger        log.ContextLogger
-	listener      *listener.Listener
-	authenticator *auth.Authenticator
-	tlsConfig     tls.ServerConfig
-	udpTimeout    time.Duration
+	router           adapter.ConnectionRouterEx
+	logger           log.ContextLogger
+	listener         *listener.Listener
+	authenticator    *auth.Authenticator
+	skipAuthPrefixes []netip.Prefix
+	tlsConfig        tls.ServerConfig
+	udpTimeout       time.Duration
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.HTTPMixedInboundOptions) (adapter.Inbound, error) {
@@ -48,11 +51,12 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		udpTimeout = C.UDPTimeout
 	}
 	inbound := &Inbound{
-		Adapter:       inbound.NewAdapter(C.TypeMixed, tag),
-		router:        uot.NewRouter(router, logger),
-		logger:        logger,
-		authenticator: auth.NewAuthenticator(options.Users),
-		udpTimeout:    udpTimeout,
+		Adapter:          inbound.NewAdapter(C.TypeMixed, tag),
+		router:           uot.NewRouter(router, logger),
+		logger:           logger,
+		authenticator:    auth.NewAuthenticator(options.Users),
+		skipAuthPrefixes: options.SkipAuthPrefixes,
+		udpTimeout:       udpTimeout,
 	}
 	if options.TLS != nil {
 		tlsConfig, err := tls.NewServerWithOptions(tls.ServerOptions{
@@ -118,6 +122,10 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 		}
 		conn = tlsConn
 	}
+	authenticator := h.authenticator
+	if authenticator != nil && len(h.skipAuthPrefixes) > 0 && localauth.SourceInPrefixes(metadata.Source.Addr, h.skipAuthPrefixes) {
+		authenticator = nil
+	}
 	reader := std_bufio.NewReader(conn)
 	headerBytes, err := reader.Peek(1)
 	if err != nil {
@@ -125,9 +133,9 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 	}
 	switch headerBytes[0] {
 	case socks4.Version, socks5.Version:
-		return socks.HandleConnectionEx(ctx, conn, reader, h.authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), h.listener, h.udpTimeout, metadata.Source, onClose)
+		return socks.HandleConnectionEx(ctx, conn, reader, authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), h.listener, h.udpTimeout, metadata.Source, onClose)
 	default:
-		return http.HandleConnectionEx(ctx, conn, reader, h.authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), metadata.Source, onClose)
+		return http.HandleConnectionEx(ctx, conn, reader, authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), metadata.Source, onClose)
 	}
 }
 

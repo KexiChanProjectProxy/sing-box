@@ -4,9 +4,11 @@ import (
 	std_bufio "bufio"
 	"context"
 	"net"
+	"net/netip"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
+	localauth "github.com/sagernet/sing-box/common/auth"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing-box/common/uot"
@@ -28,19 +30,21 @@ var _ adapter.TCPInjectableInbound = (*Inbound)(nil)
 
 type Inbound struct {
 	inbound.Adapter
-	router        adapter.ConnectionRouterEx
-	logger        log.ContextLogger
-	listener      *listener.Listener
-	authenticator *auth.Authenticator
-	tlsConfig     tls.ServerConfig
+	router           adapter.ConnectionRouterEx
+	logger           log.ContextLogger
+	listener         *listener.Listener
+	authenticator    *auth.Authenticator
+	skipAuthPrefixes []netip.Prefix
+	tlsConfig        tls.ServerConfig
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.HTTPMixedInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
-		Adapter:       inbound.NewAdapter(C.TypeHTTP, tag),
-		router:        uot.NewRouter(router, logger),
-		logger:        logger,
-		authenticator: auth.NewAuthenticator(options.Users),
+		Adapter:          inbound.NewAdapter(C.TypeHTTP, tag),
+		router:           uot.NewRouter(router, logger),
+		logger:           logger,
+		authenticator:    auth.NewAuthenticator(options.Users),
+		skipAuthPrefixes: options.SkipAuthPrefixes,
 	}
 	if options.TLS != nil {
 		tlsConfig, err := tls.NewServerWithOptions(tls.ServerOptions{
@@ -96,7 +100,11 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, metadata a
 		}
 		conn = tlsConn
 	}
-	err := http.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), h.authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), metadata.Source, onClose)
+	authenticator := h.authenticator
+	if authenticator != nil && len(h.skipAuthPrefixes) > 0 && localauth.SourceInPrefixes(metadata.Source.Addr, h.skipAuthPrefixes) {
+		authenticator = nil
+	}
+	err := http.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), authenticator, adapter.NewUpstreamHandlerEx(metadata, h.newUserConnection, h.streamUserPacketConnection), metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
 		h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))

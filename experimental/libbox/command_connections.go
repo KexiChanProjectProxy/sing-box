@@ -1,10 +1,10 @@
+//go:build libbox_legacy_ipc
+
 package libbox
 
 import (
 	"bufio"
 	"net"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/sagernet/sing-box/experimental/clashapi"
@@ -85,126 +85,6 @@ func (s *CommandServer) handleConnectionsConn(conn net.Conn) error {
 		case <-ticker.C:
 		}
 	}
-}
-
-const (
-	ConnectionStateAll = iota
-	ConnectionStateActive
-	ConnectionStateClosed
-)
-
-type Connections struct {
-	input    []Connection
-	filtered []Connection
-}
-
-func (c *Connections) FilterState(state int32) {
-	c.filtered = c.filtered[:0]
-	switch state {
-	case ConnectionStateAll:
-		c.filtered = append(c.filtered, c.input...)
-	case ConnectionStateActive:
-		for _, connection := range c.input {
-			if connection.ClosedAt == 0 {
-				c.filtered = append(c.filtered, connection)
-			}
-		}
-	case ConnectionStateClosed:
-		for _, connection := range c.input {
-			if connection.ClosedAt != 0 {
-				c.filtered = append(c.filtered, connection)
-			}
-		}
-	}
-}
-
-func (c *Connections) SortByDate() {
-	slices.SortStableFunc(c.filtered, func(x, y Connection) int {
-		if x.CreatedAt < y.CreatedAt {
-			return 1
-		} else if x.CreatedAt > y.CreatedAt {
-			return -1
-		} else {
-			return strings.Compare(y.ID, x.ID)
-		}
-	})
-}
-
-func (c *Connections) SortByTraffic() {
-	slices.SortStableFunc(c.filtered, func(x, y Connection) int {
-		xTraffic := x.Uplink + x.Downlink
-		yTraffic := y.Uplink + y.Downlink
-		if xTraffic < yTraffic {
-			return 1
-		} else if xTraffic > yTraffic {
-			return -1
-		} else {
-			return strings.Compare(y.ID, x.ID)
-		}
-	})
-}
-
-func (c *Connections) SortByTrafficTotal() {
-	slices.SortStableFunc(c.filtered, func(x, y Connection) int {
-		xTraffic := x.UplinkTotal + x.DownlinkTotal
-		yTraffic := y.UplinkTotal + y.DownlinkTotal
-		if xTraffic < yTraffic {
-			return 1
-		} else if xTraffic > yTraffic {
-			return -1
-		} else {
-			return strings.Compare(y.ID, x.ID)
-		}
-	})
-}
-
-func (c *Connections) Iterator() ConnectionIterator {
-	return newPtrIterator(c.filtered)
-}
-
-type Connection struct {
-	ID            string
-	Inbound       string
-	InboundType   string
-	IPVersion     int32
-	Network       string
-	Source        string
-	Destination   string
-	Domain        string
-	Protocol      string
-	User          string
-	FromOutbound  string
-	CreatedAt     int64
-	ClosedAt      int64
-	Uplink        int64
-	Downlink      int64
-	UplinkTotal   int64
-	DownlinkTotal int64
-	Rule          string
-	Outbound      string
-	OutboundType  string
-	ChainList     []string
-}
-
-func (c *Connection) Chain() StringIterator {
-	return newIterator(c.ChainList)
-}
-
-func (c *Connection) DisplayDestination() string {
-	destination := M.ParseSocksaddr(c.Destination)
-	if destination.IsIP() && c.Domain != "" {
-		destination = M.Socksaddr{
-			Fqdn: c.Domain,
-			Port: destination.Port,
-		}
-		return destination.String()
-	}
-	return c.Destination
-}
-
-type ConnectionIterator interface {
-	Next() *Connection
-	HasNext() bool
 }
 
 func newConnection(connections map[uuid.UUID]*Connection, metadata trafficontrol.TrackerMetadata, isClosed bool) Connection {

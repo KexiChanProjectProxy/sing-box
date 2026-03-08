@@ -1,3 +1,5 @@
+//go:build libbox_legacy_ipc
+
 package libbox
 
 import (
@@ -66,36 +68,6 @@ func (s *CommandServer) handleGroupConn(conn net.Conn) error {
 		case <-s.urlTestUpdate:
 		}
 	}
-}
-
-type OutboundGroup struct {
-	Tag        string
-	Type       string
-	Selectable bool
-	Selected   string
-	IsExpand   bool
-	ItemList   []*OutboundGroupItem
-}
-
-func (g *OutboundGroup) GetItems() OutboundGroupItemIterator {
-	return newIterator(g.ItemList)
-}
-
-type OutboundGroupIterator interface {
-	Next() *OutboundGroup
-	HasNext() bool
-}
-
-type OutboundGroupItem struct {
-	Tag          string
-	Type         string
-	URLTestTime  int64
-	URLTestDelay int32
-}
-
-type OutboundGroupItemIterator interface {
-	Next() *OutboundGroupItem
-	HasNext() bool
 }
 
 func readGroups(reader io.Reader) (OutboundGroupIterator, error) {

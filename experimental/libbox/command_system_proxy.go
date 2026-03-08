@@ -1,14 +1,11 @@
+//go:build libbox_legacy_ipc
+
 package libbox
 
 import (
 	"encoding/binary"
 	"net"
 )
-
-type SystemProxyStatus struct {
-	Available bool
-	Enabled   bool
-}
 
 func (c *CommandClient) GetSystemProxyStatus() (*SystemProxyStatus, error) {
 	conn, err := c.directConnectWithRetry()

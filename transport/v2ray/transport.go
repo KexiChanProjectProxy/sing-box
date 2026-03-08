@@ -7,6 +7,7 @@ import (
 	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/transport/v2raycloudflared"
 	"github.com/sagernet/sing-box/transport/v2rayhttp"
 	"github.com/sagernet/sing-box/transport/v2rayhttpupgrade"
 	"github.com/sagernet/sing-box/transport/v2raywebsocket"
@@ -62,6 +63,8 @@ func NewClientTransport(ctx context.Context, dialer N.Dialer, serverAddr M.Socks
 		return NewQUICClient(ctx, dialer, serverAddr, options.QUICOptions, tlsConfig)
 	case C.V2RayTransportTypeHTTPUpgrade:
 		return v2rayhttpupgrade.NewClient(ctx, dialer, serverAddr, options.HTTPUpgradeOptions, tlsConfig)
+	case C.V2RayTransportTypeCloudflared:
+		return v2raycloudflared.NewClient(ctx, dialer, serverAddr, options.CloudflaredOptions, tlsConfig)
 	default:
 		return nil, E.New("unknown transport type: " + options.Type)
 	}

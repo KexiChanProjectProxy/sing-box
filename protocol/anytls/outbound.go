@@ -12,6 +12,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	v2ray "github.com/sagernet/sing-box/transport/v2ray"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -30,6 +31,7 @@ type Outbound struct {
 	dialer    tls.Dialer
 	server    M.Socksaddr
 	tlsConfig tls.Config
+	transport adapter.V2RayClientTransport
 	client    *anytls.Client
 	uotClient *uot.Client
 	logger    log.ContextLogger
@@ -70,6 +72,14 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 
 	outbound.dialer = tls.NewDialer(outboundDialer, tlsConfig)
 
+	if options.Transport != nil {
+		transport, err := v2ray.NewClientTransport(ctx, outboundDialer, outbound.server, *options.Transport, tlsConfig)
+		if err != nil {
+			return nil, E.Cause(err, "create transport")
+		}
+		outbound.transport = transport
+	}
+
 	client, err := anytls.NewClient(ctx, anytls.ClientConfig{
 		Password:                    options.Password,
 		IdleSessionCheckInterval:    options.IdleSessionCheckInterval.Build(),
@@ -107,6 +117,13 @@ func (d anytlsDialer) ListenPacket(ctx context.Context, destination M.Socksaddr)
 }
 
 func (h *Outbound) dialOut(ctx context.Context) (net.Conn, error) {
+	if h.transport != nil {
+		conn, err := h.transport.DialContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return tls.ClientHandshake(ctx, conn, h.tlsConfig)
+	}
 	return h.dialer.DialTLSContext(ctx, h.server)
 }
 
@@ -137,5 +154,5 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 }
 
 func (h *Outbound) Close() error {
-	return common.Close(h.client)
+	return common.Close(h.client, h.transport)
 }

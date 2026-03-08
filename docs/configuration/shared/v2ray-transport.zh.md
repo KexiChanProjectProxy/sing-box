@@ -15,6 +15,7 @@ V2Ray Transport 是 v2ray 发明的一组私有协议，并污染了其他协议
 * QUIC
 * gRPC
 * HTTPUpgrade
+* Cloudflared
 
 !!! warning "与 v2ray-core 的区别"
 
@@ -216,3 +217,31 @@ HTTP 请求路径
 HTTP 请求的额外标头。
 
 如果设置，服务器将写入响应。
+
+### Cloudflared
+
+!!! warning "仅客户端"
+
+    `cloudflared` 传输层仅支持出站（客户端）配置，不可用于入站（服务器）配置。
+
+```json
+{
+  "type": "cloudflared",
+  "hostname": "tunnel.example.com",
+  "cloudflared_version": "2026.2.0"
+}
+```
+
+通过 [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-public-app/) 主机名，使用与官方 `cloudflared` 客户端相同的基于 WebSocket 的二进制帧协议，对代理协议流量进行隧道传输。无需运行 `cloudflared` 子进程。TLS 由 WebSocket 拨号器通过 `wss://` URL 处理，出站的 `tls` 配置块对传输连接本身不生效。
+
+#### hostname
+
+==必填==
+
+要连接的 Cloudflare Access 主机名（例如 `tunnel.example.com`）。传输层将拨号到 `wss://<hostname>`。
+
+#### cloudflared_version
+
+在 `User-Agent` 头中报告的版本字符串（`cloudflared/<version>`）。
+
+默认值：`2026.2.0`。

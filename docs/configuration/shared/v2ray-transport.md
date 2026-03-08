@@ -16,6 +16,7 @@ Available transports:
 * QUIC
 * gRPC
 * HTTPUpgrade
+* Cloudflared
 
 !!! warning "Difference from v2ray-core"
 
@@ -227,3 +228,31 @@ The server will verify.
 Extra headers of HTTP request.
 
 The server will write in response if not empty.
+
+### Cloudflared
+
+!!! warning "Client only"
+
+    The `cloudflared` transport is outbound (client) only. It cannot be used on inbound (server) configurations.
+
+```json
+{
+  "type": "cloudflared",
+  "hostname": "tunnel.example.com",
+  "cloudflared_version": "2026.2.0"
+}
+```
+
+Tunnels the proxy protocol through a [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-public-app/) hostname using the same WebSocket-based binary framing as the official `cloudflared` client. No `cloudflared` subprocess is required. TLS is handled by the WebSocket dialer via the `wss://` URL; the outbound `tls` block is ignored for the transport connection itself.
+
+#### hostname
+
+==Required==
+
+The Cloudflare Access hostname to connect through (e.g. `tunnel.example.com`). The transport dials `wss://<hostname>`.
+
+#### cloudflared_version
+
+The version string reported in the `User-Agent` header (`cloudflared/<version>`).
+
+Default: `2026.2.0`.

@@ -1,3 +1,5 @@
+//go:build libbox_legacy_ipc
+
 package libbox
 
 import (

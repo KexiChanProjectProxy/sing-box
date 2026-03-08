@@ -32,11 +32,11 @@ type OutboundGroup struct {
 	Selectable bool
 	Selected   string
 	IsExpand   bool
-	itemList   []*OutboundGroupItem
+	ItemList   []*OutboundGroupItem
 }
 
 func (g *OutboundGroup) GetItems() OutboundGroupItemIterator {
-	return newIterator(g.itemList)
+	return newIterator(g.ItemList)
 }
 
 type OutboundGroupIterator interface {
@@ -267,12 +267,12 @@ type Connection struct {
 	Rule          string
 	Outbound      string
 	OutboundType  string
-	chainList     []string
+	ChainList     []string
 	ProcessInfo   *ProcessInfo
 }
 
 func (c *Connection) Chain() StringIterator {
-	return newIterator(c.chainList)
+	return newIterator(c.ChainList)
 }
 
 func (c *Connection) DisplayDestination() string {
@@ -323,7 +323,7 @@ func outboundGroupIteratorFromGRPC(groups *daemon.Groups) OutboundGroupIterator 
 			IsExpand:   g.IsExpand,
 		}
 		for _, item := range g.Items {
-			libboxGroup.itemList = append(libboxGroup.itemList, &OutboundGroupItem{
+			libboxGroup.ItemList = append(libboxGroup.ItemList, &OutboundGroupItem{
 				Tag:          item.Tag,
 				Type:         item.Type,
 				URLTestTime:  item.UrlTestTime,
@@ -367,7 +367,7 @@ func connectionFromGRPC(conn *daemon.Connection) Connection {
 		Rule:          conn.Rule,
 		Outbound:      conn.Outbound,
 		OutboundType:  conn.OutboundType,
-		chainList:     conn.ChainList,
+		ChainList:     conn.ChainList,
 		ProcessInfo:   processInfo,
 	}
 }

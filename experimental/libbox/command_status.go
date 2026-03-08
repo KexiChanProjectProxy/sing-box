@@ -1,3 +1,5 @@
+//go:build libbox_legacy_ipc
+
 package libbox
 
 import (
@@ -10,18 +12,6 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/memory"
 )
-
-type StatusMessage struct {
-	Memory           int64
-	Goroutines       int32
-	ConnectionsIn    int32
-	ConnectionsOut   int32
-	TrafficAvailable bool
-	Uplink           int64
-	Downlink         int64
-	UplinkTotal      int64
-	DownlinkTotal    int64
-}
 
 func (s *CommandServer) readStatus() StatusMessage {
 	var message StatusMessage

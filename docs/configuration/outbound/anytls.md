@@ -24,6 +24,7 @@ icon: material/new-box
   "max_connection_lifetime": "",
   "connection_lifetime_jitter": "",
   "tls": {},
+  "transport": {},
 
   ... // Dial Fields
 }
@@ -90,6 +91,12 @@ Random jitter added to `max_connection_lifetime` to spread out session rotation 
 ==Required==
 
 TLS configuration, see [TLS](/configuration/shared/tls/#outbound).
+
+#### transport
+
+V2Ray Transport configuration, see [V2Ray Transport](/configuration/shared/v2ray-transport/).
+
+When `transport` is set, the AnyTLS handshake is performed over the transport connection. The `cloudflared` transport type is particularly useful for routing AnyTLS through a Cloudflare Access tunnel.
 
 ### Dial Fields
 

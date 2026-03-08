@@ -24,6 +24,7 @@ icon: material/new-box
   "max_connection_lifetime": "",
   "connection_lifetime_jitter": "",
   "tls": {},
+  "transport": {},
 
   ... // 拨号字段
 }
@@ -90,6 +91,12 @@ AnyTLS 密码。
 ==必填==
 
 TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#outbound)。
+
+#### transport
+
+V2Ray 传输层配置，参阅 [V2Ray 传输层](/zh/configuration/shared/v2ray-transport/)。
+
+当设置 `transport` 时，AnyTLS 握手将在传输层连接上进行。`cloudflared` 传输层类型尤其适合将 AnyTLS 流量通过 Cloudflare Access 隧道路由。
 
 ### 拨号字段
 

@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.13.2.1
+
+* Merge upstream sing-box v1.13.2: fix v2ray HTTP transport server, fix DNS exchange failure and recursion deadlock in connector, revert domain name validation relaxation
+
 #### 1.13.2
 
 * Fixes and improvements

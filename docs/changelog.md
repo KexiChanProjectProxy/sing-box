@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.13.2
+
+* Fixes and improvements
+
 #### 1.13.1.2
 
 * Add `cloudflared` V2Ray transport type: tunnels vmess/vless/trojan/anytls connections through a Cloudflare Access hostname via WebSocket (`wss://`) using the official cloudflared binary framing protocol

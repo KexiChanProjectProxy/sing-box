@@ -2,6 +2,12 @@
 icon: material/alert-decagram
 ---
 
+#### 1.13.2.2
+
+* Rebrand Android APK package to `com.kexichan.sfa` for side-by-side installation with upstream SFA; user agent changed to `sing-box-android-mod/`
+* Add `build_android.sh` for automated arm64-v8a APK builds via gomobile/Gradle
+* Integrate Android APK into unified `build_releases.sh` build + checksum pipeline
+
 #### 1.13.2.1
 
 * Merge upstream sing-box v1.13.2: fix v2ray HTTP transport server, fix DNS exchange failure and recursion deadlock in connector, revert domain name validation relaxation

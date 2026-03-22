@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.2.3] - 2026-03-21
+
+### Added
+
+- **Direct outbound / route-action direct**: Added `ipv6_source_address_range` and `ipv6_source_address_mode` to select IPv6 source addresses from a configured routed prefix
+  - Supports `random` and `hash_5tuple` modes
+  - Applies only to direct IPv6 dialing paths
+  - Falls back to normal direct dialing with warning logs when no candidate is available or bind fails
+
+### Changed
+
+- **Documentation**: Updated shared dial documentation in English and Chinese for IPv6 source-range configuration and behavior
+
+### Fixed
+
+- **Verification harness**: Aligned the separate `test/` module and stale test helpers so direct IPv6 source-range integration tests run against the current workspace and option APIs
+
 ## [1.13.0.1] - 2026-02-24
 
 ### Added

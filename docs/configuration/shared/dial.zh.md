@@ -34,6 +34,8 @@ icon: material/new-box
   "bind_interface": "",
   "inet4_bind_address": "",
   "inet6_bind_address": "",
+  "ipv6_source_address_range": "",
+  "ipv6_source_address_mode": "",
   "bind_address_no_port": false,
   "routing_mark": 0,
   "reuse_addr": false,
@@ -82,6 +84,29 @@ icon: material/new-box
 #### inet6_bind_address
 
 要绑定的 IPv6 地址。
+
+#### ipv6_source_address_range
+
+在直连拨号 IPv6 目标时，从该 CIDR 前缀中选择源 IPv6 地址。
+
+仅适用于直连 IPv6 拨号路径。
+
+接受的前缀长度范围为 `/0` 到 `/64`。
+
+与 `inet6_bind_prefix` 和 `inet6_bind_address` 冲突。
+
+如果源地址选择没有可用候选项，或绑定所选源地址失败，sing-box 会记录警告，并回退到普通的直连拨号行为。
+
+#### ipv6_source_address_mode
+
+`ipv6_source_address_range` 的选择模式。
+
+可用值：
+
+- `random`（默认）
+- `hash_5tuple`
+
+`hash_5tuple` 会根据入站 5 元组元数据（网络、源/目标 IP、源/目标端口）派生源 `/64` 选择结果。如果所需元数据不可用，sing-box 会记录回退警告，并继续使用普通的直连拨号行为。
 
 #### bind_address_no_port
 

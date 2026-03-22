@@ -72,6 +72,10 @@ func (f *fakeRuleItem) String() string {
 	return "fake-rule-item"
 }
 
+func (f *fakeRuleItem) MatchType() string {
+	return "fake"
+}
+
 func newRuleSetOnlyRule(ruleSetMatched bool, invert bool) *DefaultRule {
 	ruleSetItem := &RuleSetItem{
 		setList: []adapter.RuleSet{&fakeRuleSet{matched: ruleSetMatched}},

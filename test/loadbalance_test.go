@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"net/netip"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/sagernet/sing-box"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
@@ -36,9 +34,9 @@ func TestLoadBalanceBasic(t *testing.T) {
 			{
 				Tag:  "mixed-in",
 				Type: C.TypeMixed,
-				MixedOptions: option.HTTPMixedInboundOptions{
+				Options: &option.HTTPMixedInboundOptions{
 					ListenOptions: option.ListenOptions{
-						Listen:     option.NewListenAddress(netip.IPv4Unspecified()),
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
 						ListenPort: mkPort(t),
 					},
 				},
@@ -60,7 +58,7 @@ func TestLoadBalanceBasic(t *testing.T) {
 			{
 				Tag:  "lb-auto",
 				Type: C.TypeLoadBalance,
-				LoadBalanceOptions: option.LoadBalanceOutboundOptions{
+				Options: &option.LoadBalanceOutboundOptions{
 					PrimaryOutbounds: []string{"direct-1", "direct-2", "direct-3"},
 					BackupOutbounds:  []string{},
 					URL:              "http://127.0.0.1:" + fmt.Sprintf("%d", httpServerPort) + "/generate_204",
@@ -78,8 +76,11 @@ func TestLoadBalanceBasic(t *testing.T) {
 				{
 					Type: C.RuleTypeDefault,
 					DefaultOptions: option.DefaultRule{
-						RawDefaultRule: option.RawDefaultRule{
-							Outbound: "lb-auto",
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "lb-auto",
+							},
 						},
 					},
 				},
@@ -87,13 +88,13 @@ func TestLoadBalanceBasic(t *testing.T) {
 		},
 	}
 
-	instance := startInstance(t, options)
+	startInstance(t, options)
 
 	// Give time for initial health check
 	time.Sleep(time.Second * 2)
 
 	// Test connectivity through load balancer
-	clientPort := options.Inbounds[0].MixedOptions.ListenPort
+	clientPort := options.Inbounds[0].Options.(*option.HTTPMixedInboundOptions).ListenPort
 	testBasicConnectivity(t, clientPort)
 }
 
@@ -111,9 +112,9 @@ func TestLoadBalanceWithBackup(t *testing.T) {
 			{
 				Tag:  "mixed-in",
 				Type: C.TypeMixed,
-				MixedOptions: option.HTTPMixedInboundOptions{
+				Options: &option.HTTPMixedInboundOptions{
 					ListenOptions: option.ListenOptions{
-						Listen:     option.NewListenAddress(netip.IPv4Unspecified()),
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
 						ListenPort: mkPort(t),
 					},
 				},
@@ -131,7 +132,7 @@ func TestLoadBalanceWithBackup(t *testing.T) {
 			{
 				Tag:  "lb-backup",
 				Type: C.TypeLoadBalance,
-				LoadBalanceOptions: option.LoadBalanceOutboundOptions{
+				Options: &option.LoadBalanceOutboundOptions{
 					PrimaryOutbounds: []string{"primary-bad"},
 					BackupOutbounds:  []string{"backup-good"},
 					URL:              "http://127.0.0.1:1/unreachable", // This will fail for primary
@@ -154,8 +155,11 @@ func TestLoadBalanceWithBackup(t *testing.T) {
 				{
 					Type: C.RuleTypeDefault,
 					DefaultOptions: option.DefaultRule{
-						RawDefaultRule: option.RawDefaultRule{
-							Outbound: "lb-backup",
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "lb-backup",
+							},
 						},
 					},
 				},
@@ -163,13 +167,13 @@ func TestLoadBalanceWithBackup(t *testing.T) {
 		},
 	}
 
-	instance := startInstance(t, options)
+	startInstance(t, options)
 
 	// Wait for health checks to fail for primary and activate backup
 	time.Sleep(time.Second * 2)
 
 	// Should still be able to connect through backup
-	clientPort := options.Inbounds[0].MixedOptions.ListenPort
+	clientPort := options.Inbounds[0].Options.(*option.HTTPMixedInboundOptions).ListenPort
 	testBasicConnectivity(t, clientPort)
 }
 
@@ -185,9 +189,9 @@ func TestLoadBalanceConsistentHash(t *testing.T) {
 			{
 				Tag:  "mixed-in",
 				Type: C.TypeMixed,
-				MixedOptions: option.HTTPMixedInboundOptions{
+				Options: &option.HTTPMixedInboundOptions{
 					ListenOptions: option.ListenOptions{
-						Listen:     option.NewListenAddress(netip.IPv4Unspecified()),
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
 						ListenPort: mkPort(t),
 					},
 				},
@@ -209,7 +213,7 @@ func TestLoadBalanceConsistentHash(t *testing.T) {
 			{
 				Tag:  "lb-hash",
 				Type: C.TypeLoadBalance,
-				LoadBalanceOptions: option.LoadBalanceOutboundOptions{
+				Options: &option.LoadBalanceOutboundOptions{
 					PrimaryOutbounds: []string{"direct-1", "direct-2", "direct-3"},
 					URL:              "http://127.0.0.1:" + fmt.Sprintf("%d", httpServerPort) + "/generate_204",
 					Interval:         badoption.Duration(time.Second),
@@ -231,8 +235,11 @@ func TestLoadBalanceConsistentHash(t *testing.T) {
 				{
 					Type: C.RuleTypeDefault,
 					DefaultOptions: option.DefaultRule{
-						RawDefaultRule: option.RawDefaultRule{
-							Outbound: "lb-hash",
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "lb-hash",
+							},
 						},
 					},
 				},
@@ -240,13 +247,13 @@ func TestLoadBalanceConsistentHash(t *testing.T) {
 		},
 	}
 
-	instance := startInstance(t, options)
+	startInstance(t, options)
 
 	// Wait for initial health check
 	time.Sleep(time.Second * 2)
 
 	// Test connectivity
-	clientPort := options.Inbounds[0].MixedOptions.ListenPort
+	clientPort := options.Inbounds[0].Options.(*option.HTTPMixedInboundOptions).ListenPort
 	testBasicConnectivity(t, clientPort)
 }
 

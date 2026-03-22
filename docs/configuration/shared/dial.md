@@ -34,6 +34,8 @@ icon: material/new-box
   "bind_interface": "",
   "inet4_bind_address": "",
   "inet6_bind_address": "",
+  "ipv6_source_address_range": "",
+  "ipv6_source_address_mode": "",
   "bind_address_no_port": false,
   "routing_mark": 0,
   "reuse_addr": false,
@@ -82,6 +84,29 @@ The IPv4 address to bind to.
 #### inet6_bind_address
 
 The IPv6 address to bind to.
+
+#### ipv6_source_address_range
+
+Select source IPv6 addresses from this CIDR prefix when direct dialing IPv6 destinations.
+
+This only applies on direct IPv6 dialing paths.
+
+Accepted prefix length range is `/0` through `/64`.
+
+Conflicts with `inet6_bind_prefix` and `inet6_bind_address`.
+
+If source selection has no usable candidate, or binding the selected source address fails, sing-box logs a warning and falls back to normal direct dialing behavior.
+
+#### ipv6_source_address_mode
+
+Selection mode for `ipv6_source_address_range`.
+
+Available values:
+
+- `random` (default)
+- `hash_5tuple`
+
+`hash_5tuple` derives the source `/64` choice from inbound 5-tuple metadata (network, source/destination IP, source/destination port). If required metadata is unavailable, sing-box logs a fallback warning and continues with normal direct dialing behavior.
 
 #### bind_address_no_port
 
@@ -385,4 +410,3 @@ If set, the requested domain name will be resolved to IP before connect.
 |----------|--------------------------|-------------------------------------------|
 | `direct` | Domain in request        | Take `inbound.domain_strategy` if not set | 
 | others   | Domain in server address | /                                         |
-

@@ -36,13 +36,14 @@ func init() {
 }
 
 func startInstance(t *testing.T, options option.Options) *box.Box {
-	if debug.Enabled {
-		options.Log = &option.LogOptions{
-			Level: "trace",
-		}
-	} else {
-		options.Log = &option.LogOptions{
-			Level: "warning",
+	if options.Log == nil {
+		options.Log = &option.LogOptions{}
+	}
+	if options.Log.Level == "" {
+		if debug.Enabled {
+			options.Log.Level = "trace"
+		} else {
+			options.Log.Level = "warning"
 		}
 	}
 	ctx, cancel := context.WithCancel(globalCtx)

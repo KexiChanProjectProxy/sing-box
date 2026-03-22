@@ -9,6 +9,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/experimental/deprecated"
+	boxLog "github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -25,6 +26,7 @@ type Options struct {
 	NewDialer        bool
 	LegacyDNSDialer  bool
 	DirectOutbound   bool
+	Logger           boxLog.ContextLogger
 }
 
 // TODO: merge with NewWithOptions
@@ -38,6 +40,14 @@ func New(ctx context.Context, options option.DialerOptions, remoteIsDomain bool)
 
 func NewWithOptions(options Options) (N.Dialer, error) {
 	dialOptions := options.Options
+	if !options.DirectOutbound {
+		dialOptions.IPv6SourceAddressRange = nil
+		dialOptions.IPv6SourceAddressMode = ""
+	}
+	err := validateIPv6SourceAddressRangeOptions(&dialOptions)
+	if err != nil {
+		return nil, err
+	}
 	var dialer N.Dialer
 	if dialOptions.Detour != "" {
 		outboundManager := service.FromContext[adapter.OutboundManager](options.Context)
@@ -46,7 +56,7 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 		}
 		dialer = NewDetour(outboundManager, dialOptions.Detour, options.LegacyDNSDialer)
 	} else {
-		defaultDialer, err := NewDefault(options.Context, dialOptions)
+		defaultDialer, err := NewDefault(options.Context, dialOptions, options.Logger)
 		if err != nil {
 			return nil, err
 		}
@@ -153,6 +163,31 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 		)
 	}
 	return dialer, nil
+}
+
+func validateIPv6SourceAddressRangeOptions(dialOptions *option.DialerOptions) error {
+	if dialOptions.IPv6SourceAddressRange == nil {
+		return nil
+	}
+	if dialOptions.Inet6BindPrefix != nil {
+		return E.New("`ipv6_source_address_range` and `inet6_bind_prefix` are mutually exclusive")
+	}
+	if dialOptions.Inet6BindAddress != nil {
+		return E.New("`ipv6_source_address_range` and `inet6_bind_address` are mutually exclusive")
+	}
+	prefix := dialOptions.IPv6SourceAddressRange.Build(netip.Prefix{})
+	if !prefix.Addr().Is6() {
+		return E.New("`ipv6_source_address_range` must be an IPv6 prefix")
+	}
+	if prefix.Bits() > 64 {
+		return E.New("`ipv6_source_address_range` must have prefix length between 0 and 64")
+	}
+	if dialOptions.IPv6SourceAddressMode == "" {
+		dialOptions.IPv6SourceAddressMode = option.IPv6SourceAddressModeRandom
+	} else if dialOptions.IPv6SourceAddressMode != option.IPv6SourceAddressModeRandom && dialOptions.IPv6SourceAddressMode != option.IPv6SourceAddressMode("hash_5tuple") {
+		return E.New("`ipv6_source_address_mode` must be one of: random, hash_5tuple")
+	}
+	return nil
 }
 
 type ParallelInterfaceDialer interface {

@@ -86,7 +86,13 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 			},
 		}, nil
 	case C.RuleActionTypeDirect:
-		directDialer, err := dialer.New(ctx, option.DialerOptions(action.DirectOptions), false)
+		directDialer, err := dialer.NewWithOptions(dialer.Options{
+			Context:        ctx,
+			Options:        option.DialerOptions(action.DirectOptions),
+			RemoteIsDomain: false,
+			DirectOutbound: true,
+			Logger:         logger,
+		})
 		if err != nil {
 			return nil, err
 		}

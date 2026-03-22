@@ -85,6 +85,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 			Options:        options.DialerOptions,
 			RemoteIsDomain: false,
 			DirectOutbound: true,
+			Logger:         logger,
 		})
 		if err != nil {
 			return nil, err
@@ -127,6 +128,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 			Options:        options.DialerOptions,
 			RemoteIsDomain: true,
 			DirectOutbound: true,
+			Logger:         logger,
 		})
 		if err != nil {
 			return nil, err
@@ -186,7 +188,6 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 		}
 		// Priority 3: Use default destination (already set)
 	}
-
 
 	network = N.NetworkName(network)
 	switch network {

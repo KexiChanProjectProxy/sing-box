@@ -149,9 +149,12 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 			return E.New("TCP is not supported by default outbound: ", defaultOutbound.Tag())
 		}
 		selectedOutbound = defaultOutbound
-		r.logger.DebugContext(ctx, "no match => default(", defaultOutbound.Tag(), ")")
+		routeContext := r.newRouteLogContext(nil, defaultOutbound)
+		r.logger.DebugContext(ctx, "no match => default(", defaultOutbound.Tag(), ")", routeContext.resolvedChainSuffix())
 	}
 
+	routeContext := r.newRouteLogContext(selectedRule, selectedOutbound)
+	ctx = withRouteLogContext(ctx, routeContext)
 	metadata.OutboundType = selectedOutbound.Type()
 	ctx = adapter.WithContext(ctx, &metadata)
 
@@ -308,8 +311,12 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 			return E.New("UDP is not supported by outbound: ", defaultOutbound.Tag())
 		}
 		selectedOutbound = defaultOutbound
+		routeContext := r.newRouteLogContext(nil, defaultOutbound)
+		r.logger.DebugContext(ctx, "no match => default(", defaultOutbound.Tag(), ")", routeContext.resolvedChainSuffix())
 	}
 
+	routeContext := r.newRouteLogContext(selectedRule, selectedOutbound)
+	ctx = withRouteLogContext(ctx, routeContext)
 	metadata.OutboundType = selectedOutbound.Type()
 	ctx = adapter.WithContext(ctx, &metadata)
 
@@ -566,6 +573,8 @@ match:
 				outboundTag = routeAction.Outbound
 			}
 
+			routeContext := r.newRouteLogContextByTag(currentRule, outboundTag)
+
 			// Try to get match type and value from RuleMatchInfo interface
 			var matchType, matchValue string
 			if matchInfo, ok := currentRule.(adapter.RuleMatchInfo); ok {
@@ -578,6 +587,7 @@ match:
 				WithMatched(true).
 				WithMatchType(matchType, matchValue).
 				WithPreMatch(false)
+			routeContext.applyToRouterMatchEvent(event)
 
 			// Add connection context to the event
 			source := metadata.Source.Addr.String()
@@ -603,6 +613,7 @@ match:
 			} else {
 				message = F.ToString("match[", currentRuleIndex, "] => ", currentRule.Action())
 			}
+			message += routeContext.resolvedChainSuffix()
 			log.WithRouterMatchEvent(r.logger, ctx, log.LevelDebug, event, message)
 		} else {
 			switch currentRule.Action().Type() {

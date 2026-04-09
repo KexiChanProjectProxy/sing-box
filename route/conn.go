@@ -35,6 +35,24 @@ type ConnectionManager struct {
 	connections list.List[io.Closer]
 }
 
+func logOutboundConnectionError(logger log.ContextLogger, ctx context.Context, metadata adapter.InboundContext, outbound adapter.Outbound, err error) {
+	event := log.NewConnectionEvent("outbound", "error").
+		WithDestination(metadata.Destination).
+		WithError(err).
+		WithNetwork(metadata.Network)
+	if outbound != nil {
+		event.WithOutbound(outbound.Tag(), outbound.Type())
+	}
+	if routeContext, loaded := routeLogContextFrom(ctx); loaded {
+		routeContext.applyToConnectionEvent(event)
+		if routeLabel := routeContext.plainRouteLabel(); routeLabel != "" {
+			log.WithConnectionEvent(logger, ctx, log.LevelError, event, err, " [route ", routeLabel, "]")
+			return
+		}
+	}
+	log.WithConnectionEvent(logger, ctx, log.LevelError, event, err)
+}
+
 func NewConnectionManager(logger logger.ContextLogger) *ConnectionManager {
 	return &ConnectionManager{
 		logger: logger,
@@ -115,14 +133,11 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 		}
 		err = E.Cause(err, "open connection to ", remoteString, dialerString)
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		event := log.NewConnectionEvent("outbound", "error").
-			WithDestination(metadata.Destination).
-			WithError(err).
-			WithNetwork(metadata.Network)
 		if outbound, isOutbound := this.(adapter.Outbound); isOutbound {
-			event.WithOutbound(outbound.Tag(), outbound.Type())
+			logOutboundConnectionError(m.logger, ctx, metadata, outbound, err)
+		} else {
+			logOutboundConnectionError(m.logger, ctx, metadata, nil, err)
 		}
-		log.WithConnectionEvent(m.logger, ctx, log.LevelError, event, err)
 		return
 	}
 	err = N.ReportConnHandshakeSuccess(conn, remoteConn)
@@ -185,14 +200,11 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			err = E.Cause(err, "open packet connection to ", remoteString, dialerString)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			event := log.NewConnectionEvent("outbound", "error").
-				WithDestination(metadata.Destination).
-				WithError(err).
-				WithNetwork(metadata.Network)
 			if outbound, isOutbound := this.(adapter.Outbound); isOutbound {
-				event.WithOutbound(outbound.Tag(), outbound.Type())
+				logOutboundConnectionError(m.logger, ctx, metadata, outbound, err)
+			} else {
+				logOutboundConnectionError(m.logger, ctx, metadata, nil, err)
 			}
-			log.WithConnectionEvent(m.logger, ctx, log.LevelError, event, err)
 			return
 		}
 		remotePacketConn = bufio.NewUnbindPacketConn(remoteConn)
@@ -215,7 +227,11 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			err = E.Cause(err, "listen packet connection using ", dialerString)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			m.logger.ErrorContext(ctx, err)
+			if outbound, isOutbound := this.(adapter.Outbound); isOutbound {
+				logOutboundConnectionError(m.logger, ctx, metadata, outbound, err)
+			} else {
+				logOutboundConnectionError(m.logger, ctx, metadata, nil, err)
+			}
 			return
 		}
 	}

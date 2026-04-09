@@ -3,12 +3,14 @@ package group
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	adapterOutbound "github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/urltest"
 	"github.com/sagernet/sing-box/log"
 	M "github.com/sagernet/sing/common/metadata"
@@ -21,13 +23,13 @@ import (
 // Mock logger for testing
 type mockLogger struct{}
 
-func (m *mockLogger) Trace(args ...any)                 {}
-func (m *mockLogger) Debug(args ...any)                 {}
-func (m *mockLogger) Info(args ...any)                  {}
-func (m *mockLogger) Warn(args ...any)                  {}
-func (m *mockLogger) Error(args ...any)                 {}
-func (m *mockLogger) Fatal(args ...any)                 {}
-func (m *mockLogger) Panic(args ...any)                 {}
+func (m *mockLogger) Trace(args ...any)                             {}
+func (m *mockLogger) Debug(args ...any)                             {}
+func (m *mockLogger) Info(args ...any)                              {}
+func (m *mockLogger) Warn(args ...any)                              {}
+func (m *mockLogger) Error(args ...any)                             {}
+func (m *mockLogger) Fatal(args ...any)                             {}
+func (m *mockLogger) Panic(args ...any)                             {}
 func (m *mockLogger) TraceContext(ctx context.Context, args ...any) {}
 func (m *mockLogger) DebugContext(ctx context.Context, args ...any) {}
 func (m *mockLogger) InfoContext(ctx context.Context, args ...any)  {}
@@ -38,22 +40,44 @@ func (m *mockLogger) PanicContext(ctx context.Context, args ...any) {}
 
 // Mock outbound for testing
 type mockOutbound struct {
-	tag     string
-	network []string
+	tag             string
+	network         []string
+	dialErr         error
+	listenErr       error
+	dialConn        net.Conn
+	packetConn      net.PacketConn
+	dialCount       int
+	listenCount     int
+	lastDialNetwork string
 }
 
-func (m *mockOutbound) Type() string              { return "mock" }
-func (m *mockOutbound) Tag() string               { return m.tag }
-func (m *mockOutbound) Network() []string         { return m.network }
-func (m *mockOutbound) Dependencies() []string    { return nil }
+func (m *mockOutbound) Type() string                         { return "mock" }
+func (m *mockOutbound) Tag() string                          { return m.tag }
+func (m *mockOutbound) Network() []string                    { return m.network }
+func (m *mockOutbound) Dependencies() []string               { return nil }
 func (m *mockOutbound) Start(stage adapter.StartStage) error { return nil }
-func (m *mockOutbound) Close() error              { return nil }
+func (m *mockOutbound) Close() error                         { return nil }
 
 // Implement Dialer interface stubs
 func (m *mockOutbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	m.dialCount++
+	m.lastDialNetwork = network
+	if m.dialErr != nil {
+		return nil, m.dialErr
+	}
+	if m.dialConn != nil {
+		return m.dialConn, nil
+	}
 	return nil, nil
 }
 func (m *mockOutbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	m.listenCount++
+	if m.listenErr != nil {
+		return nil, m.listenErr
+	}
+	if m.packetConn != nil {
+		return m.packetConn, nil
+	}
 	return nil, nil
 }
 func (m *mockOutbound) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
@@ -62,6 +86,16 @@ func (m *mockOutbound) NewConnection(ctx context.Context, conn net.Conn, metadat
 func (m *mockOutbound) NewPacketConnection(ctx context.Context, conn net.PacketConn, metadata adapter.InboundContext) error {
 	return nil
 }
+
+type testPacketConn struct{}
+
+func (testPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) { return 0, nil, io.EOF }
+func (testPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error)  { return len(p), nil }
+func (testPacketConn) Close() error                                        { return nil }
+func (testPacketConn) LocalAddr() net.Addr                                 { return &net.UDPAddr{} }
+func (testPacketConn) SetDeadline(t time.Time) error                       { return nil }
+func (testPacketConn) SetReadDeadline(t time.Time) error                   { return nil }
+func (testPacketConn) SetWriteDeadline(t time.Time) error                  { return nil }
 
 // Mock outbound manager
 type mockOutboundManager struct {
@@ -102,6 +136,22 @@ func (m *mockOutboundManager) Create(ctx context.Context, router adapter.Router,
 	return nil
 }
 
+func storeLoadBalanceHistory(history adapter.URLTestHistoryStorage, tag string, probeHistory *adapter.URLTestHistory) {
+	history.StoreURLTestHistory(resolveProbeHistoryKey(&mockOutbound{tag: tag}, (&LoadBalance{}).probeConfig()), probeHistory)
+}
+
+func deleteLoadBalanceHistory(history adapter.URLTestHistoryStorage, tag string) {
+	history.DeleteURLTestHistory(resolveProbeHistoryKey(&mockOutbound{tag: tag}, (&LoadBalance{}).probeConfig()))
+}
+
+func storeLoadBalanceHistoryForConfig(history adapter.URLTestHistoryStorage, tag string, probeHistory *adapter.URLTestHistory, lb *LoadBalance) {
+	history.StoreURLTestHistory(resolveProbeHistoryKey(&mockOutbound{tag: tag}, lb.probeConfig()), probeHistory)
+}
+
+func deleteLoadBalanceHistoryForConfig(history adapter.URLTestHistoryStorage, tag string, lb *LoadBalance) {
+	history.DeleteURLTestHistory(resolveProbeHistoryKey(&mockOutbound{tag: tag}, lb.probeConfig()))
+}
+
 // Test 1: Top-N selection per tier
 func TestTopNSelection(t *testing.T) {
 	history := urltest.NewHistoryStorage()
@@ -110,20 +160,8 @@ func TestTopNSelection(t *testing.T) {
 	primaryTags := []string{"p1", "p2", "p3", "p4", "p5"}
 	backupTags := []string{"b1", "b2", "b3"}
 
-	// Set latencies: p1=10ms, p2=20ms, p3=30ms, p4=40ms, p5=50ms
-	//                b1=100ms, b2=110ms, b3=120ms
-	now := time.Now()
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 20})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 30})
-	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 40})
-	history.StoreURLTestHistory("p5", &adapter.URLTestHistory{Time: now, Delay: 50})
-	history.StoreURLTestHistory("b1", &adapter.URLTestHistory{Time: now, Delay: 100})
-	history.StoreURLTestHistory("b2", &adapter.URLTestHistory{Time: now, Delay: 110})
-	history.StoreURLTestHistory("b3", &adapter.URLTestHistory{Time: now, Delay: 120})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:      &mockLogger{},
 		primaryTags: primaryTags,
 		backupTags:  backupTags,
 		topNPrimary: 3,
@@ -143,6 +181,18 @@ func TestTopNSelection(t *testing.T) {
 			},
 		},
 	}
+
+	// Set latencies: p1=10ms, p2=20ms, p3=30ms, p4=40ms, p5=50ms
+	//                b1=100ms, b2=110ms, b3=120ms
+	now := time.Now()
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 10}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 20}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 30}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p4", &adapter.URLTestHistory{Time: now, Delay: 40}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p5", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
+	storeLoadBalanceHistoryForConfig(history, "b1", &adapter.URLTestHistory{Time: now, Delay: 100}, lb)
+	storeLoadBalanceHistoryForConfig(history, "b2", &adapter.URLTestHistory{Time: now, Delay: 110}, lb)
+	storeLoadBalanceHistoryForConfig(history, "b3", &adapter.URLTestHistory{Time: now, Delay: 120}, lb)
 
 	// Collect tier stats
 	primaryStats := lb.collectTierStats(primaryTags)
@@ -169,12 +219,8 @@ func TestBackupActivation(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Primary available: should use primary
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
-	history.StoreURLTestHistory("b1", &adapter.URLTestHistory{Time: now, Delay: 100})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:              &mockLogger{},
 		primaryTags:         []string{"p1"},
 		backupTags:          []string{"b1"},
 		topNPrimary:         1,
@@ -191,6 +237,10 @@ func TestBackupActivation(t *testing.T) {
 		},
 	}
 
+	// Primary available: should use primary
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 10}, lb)
+	storeLoadBalanceHistoryForConfig(history, "b1", &adapter.URLTestHistory{Time: now, Delay: 100}, lb)
+
 	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
 
 	// Update candidates
@@ -202,14 +252,14 @@ func TestBackupActivation(t *testing.T) {
 	assert.Len(t, snapshot.backupCandidates, 1)
 
 	// Now primary fails (no history for p1)
-	history.DeleteURLTestHistory("p1")
+	deleteLoadBalanceHistoryForConfig(history, "p1", lb)
 	lb.updateCandidates()
 
 	snapshot = lb.candidateState.Load().(*candidateSnapshot)
 	assert.Equal(t, "backup", snapshot.activeTier, "should switch to backup tier when primary fails")
 
 	// Primary recovers
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: time.Now(), Delay: 10})
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: time.Now(), Delay: 10}, lb)
 
 	// Immediately after recovery, should still be on backup (hold time not elapsed)
 	lb.updateCandidates()
@@ -227,7 +277,7 @@ func TestBackupActivation(t *testing.T) {
 // Test 3: Key composition
 func TestKeyComposition(t *testing.T) {
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:       &mockLogger{},
 		hashKeyParts: []string{"src_ip", "dst_ip", "dst_port", "network"},
 		hashKeySalt:  "test-salt",
 	}
@@ -268,7 +318,7 @@ func TestConsistentHashStability(t *testing.T) {
 	}
 
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:           &mockLogger{},
 		hashVirtualNodes: 100,
 	}
 
@@ -299,7 +349,7 @@ func TestMinimalRemapping(t *testing.T) {
 	}
 
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:           &mockLogger{},
 		hashVirtualNodes: 100,
 	}
 
@@ -390,10 +440,6 @@ func TestConcurrency(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Set up initial state
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 20})
-
 	lb := &LoadBalance{
 		logger:              &mockLogger{},
 		primaryTags:         []string{"p1", "p2"},
@@ -414,6 +460,10 @@ func TestConcurrency(t *testing.T) {
 			},
 		},
 	}
+
+	// Set up initial state
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 10}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 20}, lb)
 
 	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
 
@@ -456,7 +506,7 @@ func TestConcurrency(t *testing.T) {
 // Test 8: Hysteresis primary failure counting
 func TestHysteresisPrimaryFailureCounting(t *testing.T) {
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:              &mockLogger{},
 		hystPrimaryFailures: 3,
 		hystBackupHoldTime:  time.Second,
 	}
@@ -498,8 +548,8 @@ func TestHysteresisPrimaryFailureCounting(t *testing.T) {
 func TestEmptyKeyHandling(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 20})
+	storeLoadBalanceHistory(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 10})
+	storeLoadBalanceHistory(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 20})
 
 	candidates := []adapter.Outbound{
 		&mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -508,7 +558,7 @@ func TestEmptyKeyHandling(t *testing.T) {
 
 	// Test random mode
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
+		logger:           &mockLogger{},
 		strategy:         strategyConsistentHash,
 		hashKeyParts:     []string{"src_ip"},
 		hashOnEmptyKey:   onEmptyKeyRandom,
@@ -544,14 +594,14 @@ func TestBootstrapModeOnInitialAllFailed(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2"},
-		backupTags:      []string{"b1"},
-		topNPrimary:     2,
-		topNBackup:      1,
-		interval:        time.Minute,
-		history:         history,
-		strategy:        strategyRandom,
+		logger:              &mockLogger{},
+		primaryTags:         []string{"p1", "p2"},
+		backupTags:          []string{"b1"},
+		topNPrimary:         2,
+		topNBackup:          1,
+		interval:            time.Minute,
+		history:             history,
+		strategy:            strategyRandom,
 		hystPrimaryFailures: 1,
 		hystBackupHoldTime:  time.Second,
 		outbound: &mockOutboundManager{
@@ -586,18 +636,15 @@ func TestBootstrapModeExitsOnPartialSuccess(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Only one node succeeds
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2"},
-		backupTags:      []string{},
-		topNPrimary:     2,
-		topNBackup:      0,
-		interval:        time.Minute,
-		history:         history,
-		strategy:        strategyRandom,
+		logger:              &mockLogger{},
+		primaryTags:         []string{"p1", "p2"},
+		backupTags:          []string{},
+		topNPrimary:         2,
+		topNBackup:          0,
+		interval:            time.Minute,
+		history:             history,
+		strategy:            strategyRandom,
 		hystPrimaryFailures: 1,
 		hystBackupHoldTime:  time.Second,
 		outbound: &mockOutboundManager{
@@ -607,6 +654,9 @@ func TestBootstrapModeExitsOnPartialSuccess(t *testing.T) {
 			},
 		},
 	}
+
+	// Only one node succeeds
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 10}, lb)
 
 	// Initialize tier state
 	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
@@ -625,10 +675,10 @@ func TestBootstrapModeExitsOnPartialSuccess(t *testing.T) {
 // Test 12: Eager ticker start
 func TestEagerTickerStart(t *testing.T) {
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		interval:        100 * time.Millisecond,
-		idleTimeout:     time.Second,
-		close:           make(chan struct{}),
+		logger:      &mockLogger{},
+		interval:    100 * time.Millisecond,
+		idleTimeout: time.Second,
+		close:       make(chan struct{}),
 	}
 
 	// Ticker should be nil initially
@@ -659,15 +709,15 @@ func TestIdleTimeoutWithEagerStart(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 
 	lb := &LoadBalance{
-		ctx:             ctx,
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1"},
-		topNPrimary:     1,
-		interval:        50 * time.Millisecond,
-		idleTimeout:     200 * time.Millisecond,
-		history:         history,
-		link:            "https://www.gstatic.com/generate_204",
-		close:           make(chan struct{}),
+		ctx:                 ctx,
+		logger:              &mockLogger{},
+		primaryTags:         []string{"p1"},
+		topNPrimary:         1,
+		interval:            50 * time.Millisecond,
+		idleTimeout:         200 * time.Millisecond,
+		history:             history,
+		link:                "https://www.gstatic.com/generate_204",
+		close:               make(chan struct{}),
 		hystPrimaryFailures: 1,
 		hystBackupHoldTime:  time.Second,
 		outbound: &mockOutboundManager{
@@ -717,20 +767,13 @@ func TestToleranceZeroDisabled(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Set latencies: p1=10ms, p2=20ms, p3=30ms, p4=40ms, p5=50ms
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 10})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 20})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 30})
-	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 40})
-	history.StoreURLTestHistory("p5", &adapter.URLTestHistory{Time: now, Delay: 50})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2", "p3", "p4", "p5"},
-		topNPrimary:     3,
-		tolerance:       0, // Disabled
-		interval:        time.Minute,
-		history:         history,
+		logger:      &mockLogger{},
+		primaryTags: []string{"p1", "p2", "p3", "p4", "p5"},
+		topNPrimary: 3,
+		tolerance:   0, // Disabled
+		interval:    time.Minute,
+		history:     history,
 		outbound: &mockOutboundManager{
 			outbounds: map[string]adapter.Outbound{
 				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -741,6 +784,13 @@ func TestToleranceZeroDisabled(t *testing.T) {
 			},
 		},
 	}
+
+	// Set latencies: p1=10ms, p2=20ms, p3=30ms, p4=40ms, p5=50ms
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 10}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 20}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 30}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p4", &adapter.URLTestHistory{Time: now, Delay: 40}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p5", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
 
 	stats := lb.collectTierStats(lb.primaryTags)
 
@@ -759,21 +809,13 @@ func TestToleranceStabilization(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Current health: p1=48ms, p2=49ms, p3=50ms, p4=100ms
-	// Top-3 pure selection would be: p1, p2, p3
-	// Previous candidates included p4=55ms (within tolerance of p3=50ms)
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 48})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 49})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 50})
-	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 100})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2", "p3", "p4"},
-		topNPrimary:     3,
-		tolerance:       10, // 10ms tolerance
-		interval:        time.Minute,
-		history:         history,
+		logger:      &mockLogger{},
+		primaryTags: []string{"p1", "p2", "p3", "p4"},
+		topNPrimary: 3,
+		tolerance:   10, // 10ms tolerance
+		interval:    time.Minute,
+		history:     history,
 		outbound: &mockOutboundManager{
 			outbounds: map[string]adapter.Outbound{
 				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -783,6 +825,14 @@ func TestToleranceStabilization(t *testing.T) {
 			},
 		},
 	}
+
+	// Current health: p1=48ms, p2=49ms, p3=50ms, p4=100ms
+	// Top-3 pure selection would be: p1, p2, p3
+	// Previous candidates included p4=55ms (within tolerance of p3=50ms)
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 48}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 49}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p4", &adapter.URLTestHistory{Time: now, Delay: 100}, lb)
 
 	stats := lb.collectTierStats(lb.primaryTags)
 
@@ -802,21 +852,13 @@ func TestToleranceWithinThreshold(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Current health: p1=48ms, p2=50ms, p3=55ms, p4=58ms
-	// Top-3 pure selection would be: p1, p2, p3
-	// Previous candidates included p4 at 58ms (within tolerance of p3=55ms + 5ms)
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 48})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 50})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 55})
-	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 58})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2", "p3", "p4"},
-		topNPrimary:     3,
-		tolerance:       5, // 5ms tolerance
-		interval:        time.Minute,
-		history:         history,
+		logger:      &mockLogger{},
+		primaryTags: []string{"p1", "p2", "p3", "p4"},
+		topNPrimary: 3,
+		tolerance:   5, // 5ms tolerance
+		interval:    time.Minute,
+		history:     history,
 		outbound: &mockOutboundManager{
 			outbounds: map[string]adapter.Outbound{
 				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -826,6 +868,14 @@ func TestToleranceWithinThreshold(t *testing.T) {
 			},
 		},
 	}
+
+	// Current health: p1=48ms, p2=50ms, p3=55ms, p4=58ms
+	// Top-3 pure selection would be: p1, p2, p3
+	// Previous candidates included p4 at 58ms (within tolerance of p3=55ms + 5ms)
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 48}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 55}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p4", &adapter.URLTestHistory{Time: now, Delay: 58}, lb)
 
 	stats := lb.collectTierStats(lb.primaryTags)
 
@@ -848,24 +898,13 @@ func TestToleranceExceedThreshold(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Current health: p1=40ms, p2=45ms, p3=50ms, p4=80ms, p5=85ms
-	// Top-3 pure: p1, p2, p3
-	// Previous candidates included p5
-	// With tolerance=20ms: cutoff=50ms, maxAllowed=70ms
-	// p4 (80ms) and p5 (85ms) both exceed tolerance
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 40})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 45})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 50})
-	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 80})
-	history.StoreURLTestHistory("p5", &adapter.URLTestHistory{Time: now, Delay: 85})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2", "p3", "p4", "p5"},
-		topNPrimary:     3,
-		tolerance:       20, // 20ms tolerance
-		interval:        time.Minute,
-		history:         history,
+		logger:      &mockLogger{},
+		primaryTags: []string{"p1", "p2", "p3", "p4", "p5"},
+		topNPrimary: 3,
+		tolerance:   20, // 20ms tolerance
+		interval:    time.Minute,
+		history:     history,
 		outbound: &mockOutboundManager{
 			outbounds: map[string]adapter.Outbound{
 				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -876,6 +915,17 @@ func TestToleranceExceedThreshold(t *testing.T) {
 			},
 		},
 	}
+
+	// Current health: p1=40ms, p2=45ms, p3=50ms, p4=80ms, p5=85ms
+	// Top-3 pure: p1, p2, p3
+	// Previous candidates included p5
+	// With tolerance=20ms: cutoff=50ms, maxAllowed=70ms
+	// p4 (80ms) and p5 (85ms) both exceed tolerance
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 40}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 45}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p4", &adapter.URLTestHistory{Time: now, Delay: 80}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p5", &adapter.URLTestHistory{Time: now, Delay: 85}, lb)
 
 	stats := lb.collectTierStats(lb.primaryTags)
 
@@ -895,19 +945,13 @@ func TestToleranceWithFailedPrevCandidate(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Current health: p1=40ms, p2=50ms, p3=60ms (p4 failed)
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 40})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 50})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 60})
-	// p4 has no history (failed)
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2", "p3", "p4"},
-		topNPrimary:     3,
-		tolerance:       100, // Large tolerance
-		interval:        time.Minute,
-		history:         history,
+		logger:      &mockLogger{},
+		primaryTags: []string{"p1", "p2", "p3", "p4"},
+		topNPrimary: 3,
+		tolerance:   100, // Large tolerance
+		interval:    time.Minute,
+		history:     history,
 		outbound: &mockOutboundManager{
 			outbounds: map[string]adapter.Outbound{
 				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -917,6 +961,12 @@ func TestToleranceWithFailedPrevCandidate(t *testing.T) {
 			},
 		},
 	}
+
+	// Current health: p1=40ms, p2=50ms, p3=60ms (p4 failed)
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 40}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 60}, lb)
+	// p4 has no history (failed)
 
 	stats := lb.collectTierStats(lb.primaryTags)
 
@@ -935,23 +985,13 @@ func TestToleranceRetainsPrevCandidate(t *testing.T) {
 	history := urltest.NewHistoryStorage()
 	now := time.Now()
 
-	// Current health: p1=40ms, p2=50ms, p3=51ms, p4=55ms
-	// Top-3 pure: p1, p2, p3
-	// Previous candidates included p4
-	// With tolerance=10ms: cutoff=51ms, maxAllowed=61ms
-	// p4 (55ms) is within tolerance, so eligible
-	history.StoreURLTestHistory("p1", &adapter.URLTestHistory{Time: now, Delay: 40})
-	history.StoreURLTestHistory("p2", &adapter.URLTestHistory{Time: now, Delay: 50})
-	history.StoreURLTestHistory("p3", &adapter.URLTestHistory{Time: now, Delay: 51})
-	history.StoreURLTestHistory("p4", &adapter.URLTestHistory{Time: now, Delay: 55})
-
 	lb := &LoadBalance{
-		logger:          &mockLogger{},
-		primaryTags:     []string{"p1", "p2", "p3", "p4"},
-		topNPrimary:     3,
-		tolerance:       10, // 10ms tolerance
-		interval:        time.Minute,
-		history:         history,
+		logger:      &mockLogger{},
+		primaryTags: []string{"p1", "p2", "p3", "p4"},
+		topNPrimary: 3,
+		tolerance:   10, // 10ms tolerance
+		interval:    time.Minute,
+		history:     history,
 		outbound: &mockOutboundManager{
 			outbounds: map[string]adapter.Outbound{
 				"p1": &mockOutbound{tag: "p1", network: []string{"tcp"}},
@@ -961,6 +1001,16 @@ func TestToleranceRetainsPrevCandidate(t *testing.T) {
 			},
 		},
 	}
+
+	// Current health: p1=40ms, p2=50ms, p3=51ms, p4=55ms
+	// Top-3 pure: p1, p2, p3
+	// Previous candidates included p4
+	// With tolerance=10ms: cutoff=51ms, maxAllowed=61ms
+	// p4 (55ms) is within tolerance, so eligible
+	storeLoadBalanceHistoryForConfig(history, "p1", &adapter.URLTestHistory{Time: now, Delay: 40}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p2", &adapter.URLTestHistory{Time: now, Delay: 50}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p3", &adapter.URLTestHistory{Time: now, Delay: 51}, lb)
+	storeLoadBalanceHistoryForConfig(history, "p4", &adapter.URLTestHistory{Time: now, Delay: 55}, lb)
 
 	stats := lb.collectTierStats(lb.primaryTags)
 
@@ -975,3 +1025,61 @@ func TestToleranceRetainsPrevCandidate(t *testing.T) {
 	assert.Equal(t, "p3", result[2].Tag())
 }
 
+func TestLoadBalanceResolvesNestedLeavesForCandidatesAndDispatch(t *testing.T) {
+	history := urltest.NewHistoryStorage()
+	now := time.Now()
+	manager := &mockOutboundManager{outbounds: make(map[string]adapter.Outbound)}
+	leaf := &mockOutbound{tag: "proxy-a", network: []string{"tcp", "udp"}}
+	selectorA := &Selector{Adapter: adapterOutbound.NewAdapter("selector", "selector-a", nil, []string{"proxy-a"}), outbound: manager, tags: []string{"proxy-a"}, outbounds: map[string]adapter.Outbound{"proxy-a": leaf}}
+	selectorA.selected.Store(leaf)
+	selectorB := &Selector{Adapter: adapterOutbound.NewAdapter("selector", "selector-b", nil, []string{"proxy-a"}), outbound: manager, tags: []string{"proxy-a"}, outbounds: map[string]adapter.Outbound{"proxy-a": leaf}}
+	selectorB.selected.Store(leaf)
+
+	manager.outbounds[leaf.Tag()] = leaf
+	manager.outbounds["selector-a"] = selectorA
+	manager.outbounds["selector-b"] = selectorB
+
+	lb := &LoadBalance{
+		logger:              &mockLogger{},
+		outbound:            manager,
+		history:             history,
+		primaryTags:         []string{"selector-a", "selector-b"},
+		topNPrimary:         2,
+		interval:            time.Minute,
+		tolerance:           50,
+		strategy:            strategyRandom,
+		emptyPoolAction:     emptyPoolActionError,
+		link:                urltest.DefaultLink,
+		timeout:             time.Second,
+		hystPrimaryFailures: 1,
+		hystBackupHoldTime:  time.Second,
+		close:               make(chan struct{}),
+	}
+
+	storeProbeHistory(history, selectorA, lb.probeConfig(), &adapter.URLTestHistory{Time: now, Delay: 10})
+	lb.tierState.Store(&tierStateSnapshot{activeTier: "primary"})
+	lb.initialCheckDone.Store(true)
+	lb.updateCandidates()
+
+	snapshot := lb.candidateState.Load().(*candidateSnapshot)
+	require.Len(t, snapshot.primaryCandidates, 1)
+	assert.Equal(t, "proxy-a", snapshot.primaryCandidates[0].Tag())
+
+	clientConn, serverConn := net.Pipe()
+	defer serverConn.Close()
+	leaf.dialConn = clientConn
+	leaf.packetConn = testPacketConn{}
+
+	conn, err := lb.DialContext(context.Background(), "tcp", M.ParseSocksaddr("1.1.1.1:80"))
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	_ = conn.Close()
+
+	packetConn, err := lb.ListenPacket(context.Background(), M.ParseSocksaddr("1.1.1.1:53"))
+	require.NoError(t, err)
+	require.NotNil(t, packetConn)
+	_ = packetConn.Close()
+
+	assert.Equal(t, 1, leaf.dialCount)
+	assert.Equal(t, 1, leaf.listenCount)
+}

@@ -26,25 +26,30 @@ type StructuredEvent struct {
 
 // ConnectionEvent represents a connection event
 type ConnectionEvent struct {
-	Direction     string   `json:"direction"` // "inbound" or "outbound"
-	Action        string   `json:"action"`    // "start", "success", "error", "close"
-	Source        string   `json:"source,omitempty"`
-	SourcePort    uint16   `json:"source_port,omitempty"`
-	Destination   string   `json:"destination,omitempty"`
-	DestPort      uint16   `json:"dest_port,omitempty"`
-	Domain        string   `json:"domain,omitempty"`
-	Network       string   `json:"network,omitempty"` // "tcp" or "udp"
-	Inbound       string   `json:"inbound,omitempty"`
-	InboundType   string   `json:"inbound_type,omitempty"`
-	Outbound      string   `json:"outbound,omitempty"`
-	OutboundType  string   `json:"outbound_type,omitempty"`
-	User          string   `json:"user,omitempty"`
-	Protocol      string   `json:"protocol,omitempty"`
-	Client        string   `json:"client,omitempty"`
-	Error         string   `json:"error,omitempty"`
-	UploadBytes   int64    `json:"upload_bytes,omitempty"`
-	DownloadBytes int64    `json:"download_bytes,omitempty"`
-	DestAddresses []string `json:"dest_addresses,omitempty"`
+	Direction            string   `json:"direction"` // "inbound" or "outbound"
+	Action               string   `json:"action"`    // "start", "success", "error", "close"
+	Source               string   `json:"source,omitempty"`
+	SourcePort           uint16   `json:"source_port,omitempty"`
+	Destination          string   `json:"destination,omitempty"`
+	DestPort             uint16   `json:"dest_port,omitempty"`
+	Domain               string   `json:"domain,omitempty"`
+	Network              string   `json:"network,omitempty"` // "tcp" or "udp"
+	Inbound              string   `json:"inbound,omitempty"`
+	InboundType          string   `json:"inbound_type,omitempty"`
+	Outbound             string   `json:"outbound,omitempty"`
+	OutboundType         string   `json:"outbound_type,omitempty"`
+	User                 string   `json:"user,omitempty"`
+	Protocol             string   `json:"protocol,omitempty"`
+	Client               string   `json:"client,omitempty"`
+	RouteRule            string   `json:"route_rule,omitempty"`
+	RouteAction          string   `json:"route_action,omitempty"`
+	ResolvedOutbound     string   `json:"resolved_outbound,omitempty"`
+	ResolvedOutboundType string   `json:"resolved_outbound_type,omitempty"`
+	OutboundChain        []string `json:"outbound_chain,omitempty"`
+	Error                string   `json:"error,omitempty"`
+	UploadBytes          int64    `json:"upload_bytes,omitempty"`
+	DownloadBytes        int64    `json:"download_bytes,omitempty"`
+	DestAddresses        []string `json:"dest_addresses,omitempty"`
 }
 
 // DNSEvent represents a DNS query/response event
@@ -64,33 +69,35 @@ type DNSEvent struct {
 
 // RouterMatchEvent represents a router rule matching event
 type RouterMatchEvent struct {
-	RuleIndex      int    `json:"rule_index"`
-	Rule           string `json:"rule"`
-	Action         string `json:"action"`
-	Outbound       string `json:"outbound,omitempty"`
-	Matched        bool   `json:"matched"`
-	MatchType      string `json:"match_type,omitempty"`      // "domain", "ip_cidr", "protocol", etc.
-	MatchValue     string `json:"match_value,omitempty"`     // The specific matched rule item description
-	PreMatch       bool   `json:"pre_match,omitempty"`       // Whether this is a pre-match event
+	RuleIndex        int      `json:"rule_index"`
+	Rule             string   `json:"rule"`
+	Action           string   `json:"action"`
+	Outbound         string   `json:"outbound,omitempty"`
+	ResolvedOutbound string   `json:"resolved_outbound,omitempty"`
+	OutboundChain    []string `json:"outbound_chain,omitempty"`
+	Matched          bool     `json:"matched"`
+	MatchType        string   `json:"match_type,omitempty"`  // "domain", "ip_cidr", "protocol", etc.
+	MatchValue       string   `json:"match_value,omitempty"` // The specific matched rule item description
+	PreMatch         bool     `json:"pre_match,omitempty"`   // Whether this is a pre-match event
 	// Connection context fields
-	Source         string `json:"source,omitempty"`
-	SourcePort     uint16 `json:"source_port,omitempty"`
-	Destination    string `json:"destination,omitempty"`
-	DestPort       uint16 `json:"dest_port,omitempty"`
-	Domain         string `json:"domain,omitempty"`
-	Network        string `json:"network,omitempty"`
-	Protocol       string `json:"protocol,omitempty"`
-	Inbound        string `json:"inbound,omitempty"`
+	Source      string `json:"source,omitempty"`
+	SourcePort  uint16 `json:"source_port,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	DestPort    uint16 `json:"dest_port,omitempty"`
+	Domain      string `json:"domain,omitempty"`
+	Network     string `json:"network,omitempty"`
+	Protocol    string `json:"protocol,omitempty"`
+	Inbound     string `json:"inbound,omitempty"`
 }
 
 // ProcessInfoEvent represents a process discovery event
 type ProcessInfoEvent struct {
-	Action           string `json:"action"` // "found", "error"
-	ProcessPath      string `json:"process_path,omitempty"`
+	Action             string `json:"action"` // "found", "error"
+	ProcessPath        string `json:"process_path,omitempty"`
 	AndroidPackageName string `json:"android_package_name,omitempty"`
-	UserName         string `json:"user_name,omitempty"`
-	UserId           int32  `json:"user_id,omitempty"`
-	Error            string `json:"error,omitempty"`
+	UserName           string `json:"user_name,omitempty"`
+	UserId             int32  `json:"user_id,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
 // TransferEvent represents data transfer progress
@@ -201,6 +208,29 @@ func (e *ConnectionEvent) WithProtocol(protocol, client string) *ConnectionEvent
 	return e
 }
 
+func (e *ConnectionEvent) WithRoute(rule, action string) *ConnectionEvent {
+	if rule != "" {
+		e.RouteRule = rule
+	}
+	if action != "" {
+		e.RouteAction = action
+	}
+	return e
+}
+
+func (e *ConnectionEvent) WithResolvedChain(outbound, outboundType string, chain []string) *ConnectionEvent {
+	if outbound != "" {
+		e.ResolvedOutbound = outbound
+	}
+	if outboundType != "" {
+		e.ResolvedOutboundType = outboundType
+	}
+	if len(chain) > 0 {
+		e.OutboundChain = append([]string(nil), chain...)
+	}
+	return e
+}
+
 // WithError sets the error
 func (e *ConnectionEvent) WithError(err error) *ConnectionEvent {
 	if err != nil {
@@ -282,6 +312,16 @@ func (e *DNSEvent) WithError(err error) *DNSEvent {
 func (e *RouterMatchEvent) WithOutbound(outbound string) *RouterMatchEvent {
 	if outbound != "" {
 		e.Outbound = outbound
+	}
+	return e
+}
+
+func (e *RouterMatchEvent) WithResolvedChain(outbound string, chain []string) *RouterMatchEvent {
+	if outbound != "" {
+		e.ResolvedOutbound = outbound
+	}
+	if len(chain) > 0 {
+		e.OutboundChain = append([]string(nil), chain...)
 	}
 	return e
 }
@@ -394,6 +434,21 @@ func (e *ConnectionEvent) ToMap() map[string]interface{} {
 	if e.Client != "" {
 		m["client"] = e.Client
 	}
+	if e.RouteRule != "" {
+		m["route_rule"] = e.RouteRule
+	}
+	if e.RouteAction != "" {
+		m["route_action"] = e.RouteAction
+	}
+	if e.ResolvedOutbound != "" {
+		m["resolved_outbound"] = e.ResolvedOutbound
+	}
+	if e.ResolvedOutboundType != "" {
+		m["resolved_outbound_type"] = e.ResolvedOutboundType
+	}
+	if len(e.OutboundChain) > 0 {
+		m["outbound_chain"] = e.OutboundChain
+	}
 	if e.Error != "" {
 		m["error"] = e.Error
 	}
@@ -446,6 +501,12 @@ func (e *RouterMatchEvent) ToMap() map[string]interface{} {
 	m["action"] = e.Action
 	if e.Outbound != "" {
 		m["outbound"] = e.Outbound
+	}
+	if e.ResolvedOutbound != "" {
+		m["resolved_outbound"] = e.ResolvedOutbound
+	}
+	if len(e.OutboundChain) > 0 {
+		m["outbound_chain"] = e.OutboundChain
 	}
 	m["matched"] = e.Matched
 	if e.MatchType != "" {

@@ -133,9 +133,10 @@ type consistentHashRing struct {
 
 // nodeStat holds health check result for a node
 type nodeStat struct {
-	tag     string
-	delay   uint16
-	failure bool
+	tag      string
+	outbound adapter.Outbound
+	delay    uint16
+	failure  bool
 }
 
 func RegisterLoadBalance(registry *outbound.Registry) {
@@ -181,24 +182,24 @@ func NewLoadBalance(
 	allTags = append(allTags, options.BackupOutbounds...)
 
 	lb := &LoadBalance{
-		Adapter:         outbound.NewAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, allTags),
-		ctx:             ctx,
-		router:          router,
-		outbound:        outboundManager,
-		logger:          logger,
-		primaryTags:     options.PrimaryOutbounds,
-		backupTags:      options.BackupOutbounds,
-		link:            options.URL,
-		interval:        time.Duration(options.Interval),
-		timeout:         time.Duration(options.Timeout),
-		idleTimeout:     time.Duration(options.IdleTimeout),
-		topNPrimary:     options.TopN.Primary,
-		topNBackup:      options.TopN.Backup,
-		tolerance:       options.Tolerance,
-		strategy:        options.Strategy,
-		emptyPoolAction: options.EmptyPoolAction,
+		Adapter:                      outbound.NewAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, allTags),
+		ctx:                          ctx,
+		router:                       router,
+		outbound:                     outboundManager,
+		logger:                       logger,
+		primaryTags:                  options.PrimaryOutbounds,
+		backupTags:                   options.BackupOutbounds,
+		link:                         options.URL,
+		interval:                     time.Duration(options.Interval),
+		timeout:                      time.Duration(options.Timeout),
+		idleTimeout:                  time.Duration(options.IdleTimeout),
+		topNPrimary:                  options.TopN.Primary,
+		topNBackup:                   options.TopN.Backup,
+		tolerance:                    options.Tolerance,
+		strategy:                     options.Strategy,
+		emptyPoolAction:              options.EmptyPoolAction,
 		interruptExternalConnections: options.InterruptExistConnections,
-		close: make(chan struct{}),
+		close:                        make(chan struct{}),
 	}
 
 	// Set defaults
@@ -460,16 +461,20 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 	if len(outbounds) == 0 {
 		return
 	}
+	effectiveOutbounds := uniqueEffectiveOutbounds(outbounds, lb.probeConfig())
+	if len(effectiveOutbounds) == 0 {
+		return
+	}
 
 	// Perform health checks with controlled concurrency
 	maxConcurrent := 10
 	semaphore := make(chan struct{}, maxConcurrent)
-	resultChan := make(chan nodeStat, len(outbounds))
+	resultChan := make(chan nodeStat, len(effectiveOutbounds))
 
 	var wg sync.WaitGroup
-	for _, detour := range outbounds {
+	for _, detour := range effectiveOutbounds {
 		wg.Add(1)
-		go func(d adapter.Outbound) {
+		go func(d effectiveOutbound) {
 			defer wg.Done()
 
 			// Acquire semaphore slot
@@ -480,17 +485,17 @@ func (lb *LoadBalance) performHealthCheck(ctx context.Context) {
 			testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
 			defer cancel()
 
-			t, err := urltest.URLTest(testCtx, lb.link, d)
+			t, err := urltest.URLTest(testCtx, lb.link, d.outbound)
 			if err != nil {
-				event := log.NewHealthCheckEvent("failed").WithOutbound(d.Tag()).WithError(err)
-				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check failed for ", d.Tag(), ": ", err)
-				resultChan <- nodeStat{tag: d.Tag(), failure: true}
+				event := log.NewHealthCheckEvent("failed").WithOutbound(d.configuredTag).WithError(err)
+				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check failed for ", d.configuredTag, ": ", err)
+				resultChan <- nodeStat{tag: d.outbound.Tag(), outbound: d.outbound, failure: true}
 			} else {
-				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+				storeProbeHistory(lb.history, d.outbound, lb.probeConfig(), &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: t,
 				})
-				resultChan <- nodeStat{tag: d.Tag(), delay: t}
+				resultChan <- nodeStat{tag: d.outbound.Tag(), outbound: d.outbound, delay: t}
 			}
 		}(detour)
 	}
@@ -612,6 +617,8 @@ func (lb *LoadBalance) updateCandidates() {
 // collectTierStats retrieves health stats for a tier's outbounds
 func (lb *LoadBalance) collectTierStats(tags []string) []nodeStat {
 	stats := make([]nodeStat, 0, len(tags))
+	probeConfig := lb.probeConfig()
+	seen := make(map[string]struct{}, len(tags))
 
 	for _, t := range tags {
 		detour, loaded := lb.outbound.Outbound(t)
@@ -619,20 +626,30 @@ func (lb *LoadBalance) collectTierStats(tags []string) []nodeStat {
 			continue
 		}
 
-		history := lb.history.LoadURLTestHistory(RealTag(detour))
+		effective := effectiveOutboundWithProbeConfig(detour, probeConfig)
+		identity := effective.historyKey
+		if identity == "" {
+			identity = effective.outbound.Tag()
+		}
+		if _, exists := seen[identity]; exists {
+			continue
+		}
+		seen[identity] = struct{}{}
+
+		history := loadProbeHistory(lb.history, effective.outbound, probeConfig)
 		if history == nil {
 			// No history = not yet probed, treat as failure
-			stats = append(stats, nodeStat{tag: t, failure: true})
+			stats = append(stats, nodeStat{tag: effective.outbound.Tag(), outbound: effective.outbound, failure: true})
 			continue
 		}
 
 		// Check if history is stale (older than interval * 2)
 		if time.Since(history.Time) > lb.interval*2 {
-			stats = append(stats, nodeStat{tag: t, failure: true})
+			stats = append(stats, nodeStat{tag: effective.outbound.Tag(), outbound: effective.outbound, failure: true})
 			continue
 		}
 
-		stats = append(stats, nodeStat{tag: t, delay: history.Delay})
+		stats = append(stats, nodeStat{tag: effective.outbound.Tag(), outbound: effective.outbound, delay: history.Delay})
 	}
 
 	return stats
@@ -720,9 +737,8 @@ func (lb *LoadBalance) takeTopN(sortedNodes []nodeStat, n int) []adapter.Outboun
 
 	result := make([]adapter.Outbound, 0, topN)
 	for i := 0; i < topN; i++ {
-		detour, loaded := lb.outbound.Outbound(sortedNodes[i].tag)
-		if loaded {
-			result = append(result, detour)
+		if sortedNodes[i].outbound != nil {
+			result = append(result, sortedNodes[i].outbound)
 		}
 	}
 
@@ -993,11 +1009,17 @@ func (lb *LoadBalance) buildHashKey(metadata *adapter.InboundContext) string {
 // selectOutboundBootstrap selects an outbound during bootstrap (before first health check)
 func (lb *LoadBalance) selectOutboundBootstrap(network string, metadata *adapter.InboundContext) (adapter.Outbound, error) {
 	// Collect all primary outbounds
-	candidates := make([]adapter.Outbound, 0, len(lb.primaryTags))
+	configured := make([]adapter.Outbound, 0, len(lb.primaryTags))
 	for _, t := range lb.primaryTags {
 		detour, loaded := lb.outbound.Outbound(t)
 		if loaded && common.Contains(detour.Network(), network) {
-			candidates = append(candidates, detour)
+			configured = append(configured, detour)
+		}
+	}
+	candidates := make([]adapter.Outbound, 0, len(configured))
+	for _, detour := range uniqueEffectiveOutbounds(configured, lb.probeConfig()) {
+		if common.Contains(detour.outbound.Network(), network) {
+			candidates = append(candidates, detour.outbound)
 		}
 	}
 
@@ -1106,11 +1128,17 @@ func (lb *LoadBalance) selectOutbound(network string, metadata *adapter.InboundC
 			lb.logger.Warn("both tiers empty, falling back to all outbounds")
 			allTags := append([]string{}, lb.primaryTags...)
 			allTags = append(allTags, lb.backupTags...)
+			configured := make([]adapter.Outbound, 0, len(allTags))
 
 			for _, t := range allTags {
 				detour, loaded := lb.outbound.Outbound(t)
 				if loaded && common.Contains(detour.Network(), network) {
-					candidates = append(candidates, detour)
+					configured = append(configured, detour)
+				}
+			}
+			for _, detour := range uniqueEffectiveOutbounds(configured, lb.probeConfig()) {
+				if common.Contains(detour.outbound.Network(), network) {
+					candidates = append(candidates, detour.outbound)
 				}
 			}
 
@@ -1378,17 +1406,21 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 	if len(outbounds) == 0 {
 		return result, nil
 	}
+	effectiveOutbounds := uniqueEffectiveOutbounds(outbounds, lb.probeConfig())
+	if len(effectiveOutbounds) == 0 {
+		return result, nil
+	}
 
 	// Perform health checks with controlled concurrency
 	maxConcurrent := 10
 	semaphore := make(chan struct{}, maxConcurrent)
-	resultChan := make(chan nodeStat, len(outbounds))
+	resultChan := make(chan nodeStat, len(effectiveOutbounds))
 	var resultAccess sync.Mutex
 
 	var wg sync.WaitGroup
-	for _, detour := range outbounds {
+	for _, detour := range effectiveOutbounds {
 		wg.Add(1)
-		go func(d adapter.Outbound) {
+		go func(d effectiveOutbound) {
 			defer wg.Done()
 
 			// Acquire semaphore slot
@@ -1399,23 +1431,23 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 			testCtx, cancel := context.WithTimeout(ctx, lb.timeout)
 			defer cancel()
 
-			t, err := urltest.URLTest(testCtx, lb.link, d)
+			t, err := urltest.URLTest(testCtx, lb.link, d.outbound)
 			if err != nil {
-				event := log.NewHealthCheckEvent("failed").WithOutbound(d.Tag()).WithError(err)
-				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check failed for ", d.Tag(), ": ", err)
-				resultChan <- nodeStat{tag: d.Tag(), failure: true}
-				lb.history.DeleteURLTestHistory(RealTag(d))
+				event := log.NewHealthCheckEvent("failed").WithOutbound(d.configuredTag).WithError(err)
+				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check failed for ", d.configuredTag, ": ", err)
+				resultChan <- nodeStat{tag: d.outbound.Tag(), outbound: d.outbound, failure: true}
+				deleteProbeHistory(lb.history, d.outbound, lb.probeConfig())
 			} else {
-				event := log.NewHealthCheckEvent("success").WithOutbound(d.Tag()).WithLatency(int64(t))
-				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check succeeded for ", d.Tag(), ": ", t, "ms")
-				lb.history.StoreURLTestHistory(RealTag(d), &adapter.URLTestHistory{
+				event := log.NewHealthCheckEvent("success").WithOutbound(d.configuredTag).WithLatency(int64(t))
+				log.WithHealthCheckEvent(lb.logger, testCtx, log.LevelDebug, event, "health check succeeded for ", d.configuredTag, ": ", t, "ms")
+				storeProbeHistory(lb.history, d.outbound, lb.probeConfig(), &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: t,
 				})
-				resultChan <- nodeStat{tag: d.Tag(), delay: t}
+				resultChan <- nodeStat{tag: d.outbound.Tag(), outbound: d.outbound, delay: t}
 
 				resultAccess.Lock()
-				result[d.Tag()] = t
+				result[d.configuredTag] = t
 				resultAccess.Unlock()
 			}
 		}(detour)
@@ -1427,6 +1459,10 @@ func (lb *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 	lb.updateCandidates()
 
 	return result, nil
+}
+
+func (lb *LoadBalance) probeConfig() urltest.ProbeConfig {
+	return loadBalanceProbeConfig(lb)
 }
 
 // extractTags extracts tags from a slice of outbounds

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing/common"
+	group "github.com/sagernet/sing-box/protocol/group"
 	"github.com/sagernet/sing/common/bufio"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/json"
@@ -91,6 +91,61 @@ type Tracker interface {
 	Close() error
 }
 
+func resolveTrackerChain(outboundManager adapter.OutboundManager, matchOutbound adapter.Outbound) (chain []string, outbound string, outboundType string) {
+	detour := matchOutbound
+	if detour == nil && outboundManager != nil {
+		detour = outboundManager.Default()
+	}
+	if detour == nil {
+		return
+	}
+
+	resolved, err := group.ResolveOutbound(detour)
+	if len(resolved.Chain) > 0 {
+		chain = append([]string(nil), resolved.Chain...)
+	}
+	if resolved.Leaf != nil {
+		outbound = resolved.Leaf.Tag()
+		outboundType = resolved.Leaf.Type()
+	}
+	if err == nil && resolved.Leaf != nil {
+		return
+	}
+
+	fallbackChain, fallbackOutbound, fallbackType := fallbackTrackerChain(outboundManager, detour)
+	if len(fallbackChain) > len(chain) {
+		chain = fallbackChain
+	}
+	if outbound == "" {
+		outbound = fallbackOutbound
+		outboundType = fallbackType
+	}
+	return
+}
+
+func fallbackTrackerChain(outboundManager adapter.OutboundManager, detour adapter.Outbound) (chain []string, outbound string, outboundType string) {
+	current := detour
+	for current != nil {
+		chain = append(chain, current.Tag())
+		outbound = current.Tag()
+		outboundType = current.Type()
+		outboundGroup, isGroup := current.(adapter.OutboundGroup)
+		if !isGroup || outboundManager == nil {
+			return
+		}
+		nextTag := outboundGroup.Now()
+		if nextTag == "" {
+			return
+		}
+		nextOutbound, loaded := outboundManager.Outbound(nextTag)
+		if !loaded {
+			return
+		}
+		current = nextOutbound
+	}
+	return
+}
+
 type TCPConn struct {
 	N.ExtendedConn
 	metadata TrackerMetadata
@@ -120,31 +175,7 @@ func (tt *TCPConn) WriterReplaceable() bool {
 
 func NewTCPTracker(conn net.Conn, manager *Manager, metadata adapter.InboundContext, outboundManager adapter.OutboundManager, matchRule adapter.Rule, matchOutbound adapter.Outbound) *TCPConn {
 	id, _ := uuid.NewV4()
-	var (
-		chain        []string
-		next         string
-		outbound     string
-		outboundType string
-	)
-	if matchOutbound != nil {
-		next = matchOutbound.Tag()
-	} else {
-		next = outboundManager.Default().Tag()
-	}
-	for {
-		detour, loaded := outboundManager.Outbound(next)
-		if !loaded {
-			break
-		}
-		chain = append(chain, next)
-		outbound = detour.Tag()
-		outboundType = detour.Type()
-		group, isGroup := detour.(adapter.OutboundGroup)
-		if !isGroup {
-			break
-		}
-		next = group.Now()
-	}
+	chain, outbound, outboundType := resolveTrackerChain(outboundManager, matchOutbound)
 	upload := new(atomic.Int64)
 	download := new(atomic.Int64)
 	tracker := &TCPConn{
@@ -161,7 +192,7 @@ func NewTCPTracker(conn net.Conn, manager *Manager, metadata adapter.InboundCont
 			CreatedAt:    time.Now(),
 			Upload:       upload,
 			Download:     download,
-			Chain:        common.Reverse(chain),
+			Chain:        chain,
 			Rule:         matchRule,
 			Outbound:     outbound,
 			OutboundType: outboundType,
@@ -201,31 +232,7 @@ func (ut *UDPConn) WriterReplaceable() bool {
 
 func NewUDPTracker(conn N.PacketConn, manager *Manager, metadata adapter.InboundContext, outboundManager adapter.OutboundManager, matchRule adapter.Rule, matchOutbound adapter.Outbound) *UDPConn {
 	id, _ := uuid.NewV4()
-	var (
-		chain        []string
-		next         string
-		outbound     string
-		outboundType string
-	)
-	if matchOutbound != nil {
-		next = matchOutbound.Tag()
-	} else {
-		next = outboundManager.Default().Tag()
-	}
-	for {
-		detour, loaded := outboundManager.Outbound(next)
-		if !loaded {
-			break
-		}
-		chain = append(chain, next)
-		outbound = detour.Tag()
-		outboundType = detour.Type()
-		group, isGroup := detour.(adapter.OutboundGroup)
-		if !isGroup {
-			break
-		}
-		next = group.Now()
-	}
+	chain, outbound, outboundType := resolveTrackerChain(outboundManager, matchOutbound)
 	upload := new(atomic.Int64)
 	download := new(atomic.Int64)
 	trackerConn := &UDPConn{
@@ -242,7 +249,7 @@ func NewUDPTracker(conn N.PacketConn, manager *Manager, metadata adapter.Inbound
 			CreatedAt:    time.Now(),
 			Upload:       upload,
 			Download:     download,
-			Chain:        common.Reverse(chain),
+			Chain:        chain,
 			Rule:         matchRule,
 			Outbound:     outbound,
 			OutboundType: outboundType,

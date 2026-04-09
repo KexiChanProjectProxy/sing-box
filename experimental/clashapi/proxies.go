@@ -70,7 +70,8 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 	info.Put("type", clashType)
 	info.Put("name", detour.Tag())
 	info.Put("udp", common.Contains(detour.Network(), N.NetworkUDP))
-	delayHistory := server.urlTestHistory.LoadURLTestHistory(adapter.OutboundTag(detour))
+	_, historyTag := resolveManualDelayTarget(server.outbound, detour)
+	delayHistory := server.urlTestHistory.LoadURLTestHistory(historyTag)
 	if delayHistory != nil {
 		info.Put("history", []*adapter.URLTestHistory{delayHistory})
 	} else {
@@ -202,13 +203,22 @@ func getProxyDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 		defer cancel()
 
-		delay, err := urltest.URLTest(ctx, url, proxy)
+		probeTarget, historyTag := resolveManualDelayTarget(server.outbound, proxy)
+		if probeTarget == nil {
+			render.Status(r, http.StatusServiceUnavailable)
+			render.JSON(w, r, newError("An error occurred in the delay test"))
+			return
+		}
+
+		delay, err := urltest.URLTest(ctx, url, probeTarget)
 		defer func() {
-			realTag := group.RealTag(proxy)
+			if historyTag == "" {
+				return
+			}
 			if err != nil {
-				server.urlTestHistory.DeleteURLTestHistory(realTag)
+				server.urlTestHistory.DeleteURLTestHistory(historyTag)
 			} else {
-				server.urlTestHistory.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
+				server.urlTestHistory.StoreURLTestHistory(historyTag, &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: delay,
 				})

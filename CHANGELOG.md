@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.2.4] - 2026-04-08
+
+### Changed
+
+- **Nested group routing**: Flattened nested `loadbalance`/`urltest` chains so group composition resolves consistently across selection and probing paths.
+- **URLTest probe lifecycle**: Reused probe workers/state across nested-group updates to reduce duplicate health checks and stabilize transition behavior.
+- **Route-chain observability**: Expanded route-chain logging to make multi-hop group resolution and final outbound decisions traceable in runtime logs.
+- **Clash API compatibility**: Hardened compatibility handling for grouped outbound interactions so selector/urltest behaviors stay aligned with Clash API expectations.
+
+### Fixed
+
+- **Verification coverage**: Extended and exercised targeted verification coverage for nested loadbalance/urltest flattening, probe reuse, route-chain logging, and Clash API compatibility paths before release.
+
 ## [1.13.2.3] - 2026-03-21
 
 ### Added

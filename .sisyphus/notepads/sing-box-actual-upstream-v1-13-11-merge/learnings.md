@@ -209,4 +209,43 @@ When adapting fork transports to upstream interface changes:
 - `.sisyphus/evidence/task-7-libbox.txt`: Build verification and extension inventory
 - `.sisyphus/evidence/task-7-libbox-edge.txt`: libbox_legacy_ipc duplicate method issue documentation
 
-(End of file - total 229 lines)
+## Group Runtime Reconciliation (Task 9)
+
+### Key Findings
+
+1. **Build and tests pass**: `go build ./protocol/group/...` and `go test ./protocol/group/...` both succeed without any modifications.
+
+2. **No local redefinition of shared contracts**: The protocol/group/ package properly consumes contracts from Task 8 core:
+   - `adapter.OutboundGroup` (Now(), All())
+   - `adapter.URLTestHistoryStorage` (Load/Store/Delete)
+   - `adapter.ASNReader`, `adapter.GeositeReader`
+   - `adapter.DirectRouteOutbound`
+
+3. **No option schema forks in group runtime**: Options (SelectorOutboundOptions, URLTestOutboundOptions, LoadBalanceOutboundOptions) are consumed from the option/ package without local redefinition.
+
+4. **Three group types properly implement OutboundGroup interface**:
+   - Selector: Simple tag-based selection with persistence
+   - URLTest: Health-check based selection with tolerance
+   - LoadBalance: Complex multi-tier selection with consistent hash, hysteresis, Top-N
+
+5. **Fork behaviors preserved where intended**:
+   - LoadBalance hysteresis (primary/backup failover)
+   - LoadBalance consistent hash ring with virtual nodes
+   - LoadBalance tolerance-based Top-N stabilization
+   - ASN/geosite-based hash key parts
+
+### Edge Cases Documented
+
+1. **groupOutboundManager type switch**: Must be updated if new group types are added
+2. **PreferDomainConfig delegation**: Gracefully handles nil selected outbound
+3. **LoadBalance bootstrap mode**: Uses all primaries with equal weight before first health check
+4. **Consistent hash ring membership**: Only rebuilt when membership changes
+5. **Probe history key collision**: Config parameters included in key generation
+6. **Tolerance-based stabilization**: Intentional churn reduction
+7. **Hysteresis timing**: Intentional stable failover behavior
+
+### Evidence Files
+- `.sisyphus/evidence/task-9-group-runtime.txt`: Build verification and contract analysis
+- `.sisyphus/evidence/task-9-group-runtime-edge.txt`: Edge case documentation
+
+(End of file - total 246 lines)

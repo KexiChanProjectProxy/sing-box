@@ -1,0 +1,90 @@
+# Task 9: Group Runtime Reconciliation Evidence
+
+## Build Verification
+
+```
+$ go build ./protocol/group/...
+(no output - SUCCESS)
+```
+
+```
+$ go test ./protocol/group/...
+ok  	github.com/sagernet/sing-box/protocol/group	(cached)
+```
+
+## Runtime Analysis
+
+### protocol/group/ Package Structure (10 files)
+
+| File | Purpose | Lines |
+|------|---------|-------|
+| selector.go | Selector outbound implementation | 207 |
+| loadbalance.go | Load-balance with consistent hash, hysteresis | 1506 |
+| urltest.go | URLTest group with health checking | 457 |
+| probe.go | Probe config generation for urltest/loadbalance | 116 |
+| resolver.go | Outbound resolution through group chains | 141 |
+| loadbalance_test.go | Load-balance tests (10 tests) | - |
+| probe_test.go | Probe history key tests | - |
+| urltest_test.go | URLTest group tests | - |
+| resolver_test.go | Outbound resolution tests | - |
+| loadbalance_hash_test.go | Consistent hash ring tests | - |
+
+## Contract Consumption Analysis
+
+### Interface Implementations (Verified)
+
+| Type | Implements | File |
+|------|------------|------|
+| Selector | adapter.OutboundGroup, adapter.ConnectionHandlerEx, adapter.PacketConnectionHandlerEx | selector.go:28-31 |
+| URLTest | adapter.OutboundGroup | urltest.go:32 |
+| LoadBalance | adapter.OutboundGroup | (embedded via Adapter) |
+
+### Shared Contracts Consumed
+
+1. **adapter.OutboundGroup** (adapter/experimental.go:130)
+   - `Now() string` - current selected tag
+   - `All() []string` - all available tags
+   - Consumed by: Selector, URLTest, LoadBalance
+
+2. **adapter.URLTestHistoryStorage** (adapter/experimental.go)
+   - Used for probe history persistence
+   - Load/Store/Delete operations
+
+3. **adapter.ASNReader** (adapter/router.go)
+   - Used by LoadBalance for `dst_asn` hash key
+   - Consumed from router.ASNReader()
+
+4. **adapter.GeositeReader** (adapter/router.go)
+   - Used by LoadBalance for `dst_geosite` hash key
+   - Consumed from router.GeositeReader()
+
+5. **adapter.DirectRouteOutbound** (adapter/outbound.go:42)
+   - NewDirectRouteConnection method
+   - Used in Selector and URLTest for TUN mode
+
+## Option Schema Analysis
+
+No local redefinition of option schema found in protocol/group/.
+
+Options consumed from `option.` package:
+- option.SelectorOutboundOptions
+- option.URLTestOutboundOptions
+- option.LoadBalanceOutboundOptions
+
+These are defined in option/ package and NOT locally redefined.
+
+## Fork Behaviors Preserved (Intended)
+
+1. **LoadBalance hysteresis**: Primary/backup tier failover mechanism
+2. **LoadBalance consistent hash**: NGINX-style ring with virtual nodes
+3. **LoadBalance Top-N**: Tolerance-based candidate stabilization
+4. **Interrupt group**: Connection interruption on outbound switch
+5. **ASN/geosite hash keys**: Fork-specific load-balance hash key parts
+
+## Verification Checklist
+
+- [x] Build passes: `go build ./protocol/group/...`
+- [x] Tests pass: `go test ./protocol/group/...`
+- [x] No local option schema redefinition
+- [x] Consumes Task 8 core contracts properly
+- [x] Fork behaviors explicitly preserved where intended

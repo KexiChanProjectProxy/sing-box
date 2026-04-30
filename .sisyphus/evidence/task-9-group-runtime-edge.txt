@@ -1,0 +1,94 @@
+# Task 9: Group Runtime Edge Cases
+
+## Edge Case 1: Type Switch in groupOutboundManager
+
+**File**: protocol/group/resolver.go:130-141
+
+```go
+func groupOutboundManager(detour adapter.Outbound) adapter.OutboundManager {
+	switch outbound := detour.(type) {
+	case *Selector:
+		return outbound.outbound
+	case *URLTest:
+		return outbound.outbound
+	case *LoadBalance:
+		return outbound.outbound
+	default:
+		return nil
+	}
+}
+```
+
+**Risk**: If a new group type is added implementing OutboundGroup, it must be added here or groupOutboundManager will return nil for that type, causing the resolution chain to break at that point.
+
+**Current Mitigations**: All three fork group types (Selector, URLTest, LoadBalance) are handled explicitly.
+
+## Edge Case 2: PreferDomainConfig Delegation
+
+**Files**: selector.go:122-134, urltest.go:112-127, loadbalance.go:1353-1376
+
+All three group types implement PreferDomainConfig by:
+1. Checking their own config first (via embedded Adapter)
+2. Delegating to the currently selected outbound
+
+**Risk**: If no outbound is selected yet, delegation returns nil. This is handled gracefully but worth noting.
+
+## Edge Case 3: LoadBalance Bootstrap Mode
+
+**File**: loadbalance.go:1009-1099
+
+When `candidateState.Load()` returns nil (before first health check), LoadBalance operates in "bootstrap mode" using all primary outbounds with equal weight rather than health-based selection.
+
+**Risk**: During bootstrap, consistent_hash strategy builds a temporary ring but has no delay data to guide selection.
+
+**Mitigations**:
+- Bootstrap mode is clearly logged: `"using bootstrap mode: all primary outbounds with equal weight"`
+- Initial health check is performed eagerly in PostStart()
+
+## Edge Case 4: Consistent Hash Ring Membership Change
+
+**File**: loadbalance.go:544-575
+
+The hash ring is rebuilt only when:
+- New snapshot is nil (first build)
+- Old ring is nil
+- Membership differs from current members
+
+**Risk**: If ring is reused but topology should have changed (e.g., all nodes replaced), stale ring could be used.
+
+**Mitigations**: Membership comparison via `sameMembership()` function catches membership changes.
+
+## Edge Case 5: LoadBalance URLTest History Key Collision
+
+**File**: probe.go:23-82
+
+LoadBalance generates probe config with strategy-specific parameters (top_n_primary, top_n_backup, hash keys, etc.). If parameters change but tag remains same, history may be mismatched.
+
+**Risk**: Configuration change could lead to incorrect history lookup.
+
+**Mitigations**: Probe config includes all relevant parameters in the key generation.
+
+## Edge Case 6: Tolerance-Based Stabilization
+
+**File**: loadbalance.go:658-729
+
+When tolerance > 0, previous candidates within tolerance are kept even if they're not in current Top-N. This prevents churn but could keep a slightly degraded node in the pool.
+
+**Risk**: A node that was previously good but is now marginal could be kept due to tolerance.
+
+**Design Decision**: This is intentional fork behavior to reduce candidate pool churn. Tolerance prevents flapping between nodes with similar delays.
+
+## Edge Case 7: Hysteresis Timing
+
+**File**: loadbalance.go:748-807
+
+Primary→Backup switch requires `hystPrimaryFailures` consecutive failures.
+Backup→Primary switch requires `hystBackupHoldTime` to elapse after primary recovers.
+
+**Risk**: If primary fails just as backup hold time completes, could see both switches in quick succession.
+
+**Design Decision**: This is intentional fork behavior for stable failover. The hysteresis prevents rapid oscillation between tiers.
+
+## Summary
+
+All edge cases are handled by intentional fork behaviors documented above. No schema forks or local contract redefinitions were introduced. The group runtime properly consumes Task 8 core contracts.

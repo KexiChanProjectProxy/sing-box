@@ -1,0 +1,74 @@
+# Task 4 Route Core Reconciliation Evidence
+
+## Date: 2026-04-30
+
+## Summary
+Route core merge conflicts have been reconciled. Upstream v1.13.11 route behavior is adopted as default,
+with explicit fork-owned fields (`asnReader`, `geositeReader`, `sniffOverrideDestination`) preserved.
+
+## Verification Results
+
+### Build Verification
+```
+go build ./route/... => SUCCESS
+```
+
+### Test Verification
+```
+go test ./route/... => SUCCESS
+```
+
+## Fork-Owned Fields Preserved
+
+### 1. asnReader (adapter.ASNReader)
+- **Location**: route/router.go line 49
+- **Initialization**: Lines 108-121 in Start()
+- **Wiring**: Opens ASN database from `options.ASN.Path`
+- **Close handling**: Lines 250-256 in Close()
+
+### 2. geositeReader (adapter.GeositeReader)
+- **Location**: route/router.go line 51
+- **Initialization**: Lines 123-141 in Start()
+- **Wiring**: Opens geosite database from `options.Geosite.Path`
+- **Close handling**: Lines 257-262 in Close()
+
+### 3. sniffOverrideDestination (bool)
+- **Location**: route/router.go line 53
+- **Initialization**: Line 71 in NewRouter()
+- **Wiring**: Used in route/route.go lines 828 and 971:
+  - `if (action.OverrideDestination || r.sniffOverrideDestination) && M.IsDomainName(metadata.Domain)`
+- **Getter**: Lines 304-306 (SniffOverrideDestination() method)
+
+## Upstream Changes Adopted
+
+### route/route.go (785 lines upstream -> 1027 lines current)
+Key upstream changes already merged:
+1. Event-based structured logging (log.NewConnectionEvent, log.NewRouterMatchEvent, etc.)
+2. matchStates bitmask pattern (instead of fork's MatchedRuleSet map)
+3. metadata.Mark = C.DefaultMetadataMark fallback (lines 96-98, 260-262)
+4. PreferDomainOverrider interface support (lines 157-189, 315-347)
+5. RevertOriginDst support (lines 674-682)
+6. Route options Mark field (lines 710-712)
+7. Debug metadata logging after match (lines 723-745)
+
+### route/router.go (229 lines upstream -> 306 lines current)
+Fork extensions preserved:
+- asnReader, asnPath, geositeReader, geositePath, sniffOverrideDestination fields
+- ASN/geosite database initialization in Start() method
+- Close() handling for ASN and geosite readers
+- SniffOverrideDestination() getter method
+
+## Key Merge Observations
+
+1. **No merge conflicts detected**: The current state represents a clean merge result
+2. **Fork fields are additive**: They are added to the upstream Router struct without removing upstream fields
+3. **sniffOverrideDestination wiring**: Correctly integrated with upstream's action.OverrideDestination using OR logic
+4. **Event logging preserved**: Fork's event-based logging approach was kept (upstream uses LogElapsed pattern in other areas)
+
+## Diff Analysis: upstream v1.13.11 vs current (route/router.go)
+- Upstream: 229 lines, no ASN/geosite support
+- Current: 306 lines (+77 lines for fork extensions)
+- Fork fields add: asnReader, asnPath, geositeReader, geositePath, sniffOverrideDestination
+
+## Conclusion
+Route core reconciliation is complete. Build and tests pass. Fork-owned fields remain correctly wired.

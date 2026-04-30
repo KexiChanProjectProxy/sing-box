@@ -1,0 +1,77 @@
+# Task 4 Route Core Reconciliation Edge Evidence
+
+## Date: 2026-04-30
+
+## Edge Cases and Observations
+
+### 1. ASN/Geosite Path Configuration
+- Paths are set from `options.ASN.Path` and `options.Geosite.Path` only if non-empty
+- If database file doesn't exist, Debug log is emitted (not an error)
+- If database exists but can't be opened, Warning with cause is logged
+- This is the expected graceful degradation behavior
+
+### 2. sniffOverrideDestination vs action.OverrideDestination
+The sniff override uses OR logic:
+```go
+if (action.OverrideDestination || r.sniffOverrideDestination) && M.IsDomainName(metadata.Domain)
+```
+This means:
+- If EITHER the rule action OR the router-level setting enables override, it's applied
+- This preserves fork's global sniff override while allowing upstream's per-rule control
+
+### 3. Close Error Handling
+ ASN and geosite closers use `E.Append` pattern which accumulates errors:
+```go
+if asnCloser, ok := r.asnReader.(interface{ Close() error }); ok {
+    monitor.Start("close ASN database")
+    err = E.Append(err, asnCloser.Close(), func(err error) error {
+        return E.Cause(err, "close ASN database")
+    })
+    monitor.Finish()
+}
+```
+This is consistent with upstream's error handling pattern for rules and rule-sets.
+
+### 4. Process Searcher Initialization Order
+Upstream initializes process searcher AFTER rule-sets in Start():
+- Lines 170-204 show process searcher init after rule-set initialization
+- Fork does not modify this ordering (ASN/geosite init happens before rule-sets)
+
+### 5. No matchStates Pattern Conflict
+- Fork used MatchedRuleSet map approach (historical)
+- Upstream v1.13.11 uses matchStates bitmask
+- Current code uses upstream's bitmask pattern (already reconciled in task 1)
+
+### 6. Event-Based Logging vs LogElapsed
+- Fork preserves event-based logging throughout route.go
+- Upstream uses LogElapsed in other parts but NOT in route core
+- No conflict detected - different logging patterns used in different subsystems
+
+## Pre-Existing State Verification
+The route package was already in a clean merged state:
+- No uncommitted changes in route/
+- Build passes without modifications
+- Tests pass without modifications
+- Fork fields present and wired correctly
+
+## Historical Context
+From learnings: The matchStates bitmask pattern was adopted from upstream over fork's MatchedRuleSet map
+approach during the initial merge (task 1). This was a type-incompatible change that required
+careful reconciliation.
+
+## Files Examined
+- route/router.go (306 lines)
+- route/route.go (1027 lines)
+- route/rule/match_state.go
+- route/route_log.go
+- route/rule/rule_action.go
+
+## Verification Commands Run
+```
+go build ./route/... => SUCCESS
+go test ./route/... => ok route, ok route/rule
+```
+
+## Conclusion
+Edge cases are handled correctly. The route core is in a clean, reconciled state with
+fork extensions properly preserved and integrated.

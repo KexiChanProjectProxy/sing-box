@@ -50,6 +50,9 @@ func (t *MockTransport) Dependencies() []string {
 	return nil
 }
 
+func (t *MockTransport) Reset() {
+}
+
 func (t *MockTransport) Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, error) {
 	time.Sleep(t.delay)
 	atomic.AddInt32(&t.calls, 1)

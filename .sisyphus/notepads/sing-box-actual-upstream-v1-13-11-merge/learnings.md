@@ -96,3 +96,32 @@ When preserving fork extensions in merged route code:
 ### No Conflicts with Upstream Patterns
 - matchStates bitmask (upstream) vs MatchedRuleSet map (fork historical): Already reconciled in task 1, current code uses bitmask
 - Event logging (fork) vs LogElapsed (upstream other areas): No conflict - different subsystems use different patterns
+
+## VLESS Outbound Pool Reconciliation (Task 5)
+
+### Key Findings
+
+1. **Connection pool explicitly removed**: Commit bd8d2078 removed pool support from VLESS, and the removal is properly preserved in the merged codebase.
+
+2. **Pool support NOT reintroduced**: Search for `connection_pool`, `connectionPool`, `ConnectionPool` in protocol/vless/ finds only:
+   - integration_test.go lines that test pool rejection
+   - NO matches in outbound.go, inbound.go, or other VLESS runtime files
+
+3. **Pool rejection via json.Decoder.DisallowUnknownFields**: The integration tests verify that any `connection_pool` config is rejected at parse time.
+
+4. **Upstream VLESS improvements adopted**: Two non-pool upstream changes were properly merged:
+   - Event-driven structured logging (commit 0929f2a66): All `logger.InfoContext` calls replaced with `log.NewConnectionEvent` + `log.WithConnectionEvent`
+   - `IsFqdn()` → `IsDomain()` rename (commit d2fa21d07): Allows potentially valid domain names
+
+5. **sing-vmess dependency**: Uses v0.2.8 (latest) which has no pool support - pool removal is upstream in the dependency chain
+
+6. **Build and tests pass**:
+   - `go build ./protocol/vless/...` succeeds
+   - `go test ./protocol/vless/...` succeeds with 4 tests passing
+
+### Pattern: Fork Feature Removal Preservation
+When preserving an explicit feature removal in merged code:
+- Verify no reintroduction via grep for related symbols
+- Maintain rejection tests to prevent accidental re-addition
+- Accept upstream improvements in other areas (logging, naming)
+- Dependencies should align with removal intent (sing-vmess v0.2.8 has no pool)

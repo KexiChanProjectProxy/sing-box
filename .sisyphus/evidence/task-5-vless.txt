@@ -1,0 +1,31 @@
+# VLESS Outbound Pool Removal Verification
+
+## Build Status
+`go build ./protocol/vless/...` passes.
+
+## Test Status
+`go test ./protocol/vless/...` passes (4 tests).
+
+## Pool Rejection Tests
+- TestLegacyConnectionPoolRejected: PASS
+- TestLegacyConnectionPoolRejectedMinimal: PASS
+- TestValidVLESSOutboundOptionsWithoutPool: PASS
+- TestMultiplexWithoutPoolStillWorks: PASS
+
+## Connection Pool Search
+Searched for `connection_pool`, `connectionPool`, `ConnectionPool` in protocol/vless/:
+- Found only in integration_test.go (tests that verify pool rejection)
+- No pool support reintroduced in outbound.go, inbound.go, or other VLESS files
+
+## Changes Since Fork (30cecec5..HEAD)
+Only one non-pool upstream change applied to outbound.go:
+- `IsFqdn()` renamed to `IsDomain()` (upstream improvement d2fa21d07)
+
+This represents the upstream v1.13.11 VLESS improvements being properly merged.
+
+## Conclusion
+VLESS outbound correctly:
+1. Has NO connection pool support re-introduced
+2. Properly rejects connection_pool config via json.Decoder.DisallowUnknownFields
+3. Has adopted upstream's IsDomain() improvement
+4. Builds and tests pass

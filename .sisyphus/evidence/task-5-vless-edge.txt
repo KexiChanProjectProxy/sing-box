@@ -1,0 +1,41 @@
+# VLESS Outbound Pool Removal - Edge Evidence
+
+## Complete VLESS File Analysis
+
+### Files in protocol/vless/
+1. outbound.go (228 lines) - outbound connection handling
+2. inbound.go (228 lines) - inbound connection handling
+3. integration_test.go (157 lines) - pool rejection tests
+
+### Connection Pool Search Results
+Pattern searched: `connection_pool|connectionPool|ConnectionPool`
+
+Results in protocol/vless/:
+- integration_test.go lines 11, 20, 36, 38, 43, 48, 58, 60 - ALL in rejection tests
+- outbound.go - NO matches
+- inbound.go - NO matches
+
+### Build & Test Verification
+```
+go build ./protocol/vless/...  EXIT_CODE: 0
+go test ./protocol/vless/...   EXIT_CODE: 0 (4 tests PASS)
+```
+
+### Upstream Changes Applied to VLESS
+
+**Event-driven logging (commit 0929f2a66):**
+- All logger.InfoContext calls replaced with log.NewConnectionEvent + log.WithConnectionEvent
+- Applies to DialContext, ListenPacket in both Outbound and vlessDialer
+- Pattern: event-based structured logging preserved over upstream's LogElapsed
+
+**IsFqdn → IsDomain rename (commit d2fa21d07):**
+- Lines 179, 217 in outbound.go changed from `destination.IsFqdn()` to `destination.IsDomain()`
+- This is an upstream improvement that allows potentially valid domain names
+
+### Pool Removal Confirmation
+The fork explicitly removed connection pool support in commit bd8d2078.
+The current merged code:
+- Does NOT contain any connection_pool, connectionPool, or ConnectionPool references in runtime code
+- Contains tests that verify pool config is rejected via json.Decoder.DisallowUnknownFields
+- Uses multiplex (mux.Client) instead of connection pool
+- sing-vmess library v0.2.8 is the latest with no pool support

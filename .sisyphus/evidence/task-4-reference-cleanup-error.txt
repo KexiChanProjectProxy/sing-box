@@ -1,0 +1,10 @@
+# Evidence: grep verification - no ConnectionPool matches
+# Date: 2026-04-30
+# Command: grep -n 'ConnectionPool\|connection_pool' CURRENT_ISSUES.md
+# Result: (no matches - exit code 1)
+
+$ grep -n 'ConnectionPool\|connection_pool' CURRENT_ISSUES.md
+# (no output - no matches found)
+
+This is the EXPECTED "error" outcome (grep exit code 1 = no matches).
+All VLESS ConnectionPool references successfully removed.

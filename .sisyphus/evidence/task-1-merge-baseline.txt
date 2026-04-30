@@ -1,0 +1,60 @@
+# Task 1 Merge Baseline Evidence
+
+## Merge Operation
+- **Command**: `git merge upstream-v1.13.11 --no-edit`
+- **Result**: Successful merge with conflicts resolved
+
+## Pre-Merge State
+- HEAD: 30cecec5f24c577f0c7a9d4ddabbd86bc90ba133
+- Message: docs: add CURRENT_ISSUES.md for known build/test issues
+- Merge base with upstream v1.13.11: 4e0a953b
+
+## Conflicted Files and Resolution
+
+### Text Conflicts Resolved (Upstream-first unless fork-owned modification):
+
+1. **adapter/endpoint/manager.go** - OURS (event-based logging preserved)
+2. **adapter/inbound/manager.go** - OURS (event-based logging preserved)
+3. **adapter/outbound/manager.go** - OURS (event-based logging preserved)
+4. **adapter/service/manager.go** - OURS (event-based logging preserved)
+5. **adapter/lifecycle.go** - OURS (contains LogElapsed + event-based logging)
+6. **dns/client.go** - Merged TTL calculation logic
+7. **route/route.go** - OURS (process search event logging preserved)
+8. **route/router.go** - OURS (ASN/geosite reader + process searcher close preserved)
+9. **common/dialer/default.go** - Merged (upstream DisableTCPKeepAlive + fork default keepalive)
+10. **route/rule/rule_item_rule_set.go** - UPSTREAM (matchStates pattern required by type system)
+11. **service/ocm/service.go** - OURS (removed contextWindow parameter)
+12. **docs/changelog.md** - UPSTREAM (v1.13.11 changelog)
+13. **docs/configuration/route/index.zh.md** - OURS (fork docs preserved)
+
+### Submodule Conflicts:
+- **clients/android** - Removed from index (not checked out, not needed for merge)
+- **clients/apple** - Removed from index (not checked out, not needed for merge)
+
+## Build Gate Verification
+```
+go build ./option/... ./route/... ./protocol/group/... ./protocol/vless/... ./experimental/libbox/...
+```
+**Result**: BUILD SUCCESS
+
+## Dependency Version Decisions
+
+| Module | Fork Version | Upstream v1.13.11 | Final Decision |
+|--------|-------------|-------------------|----------------|
+| github.com/sagernet/sing | v0.8.2 | v0.8.9 | **v0.8.9** (upstream) |
+| github.com/sagernet/sing-tun | v0.8.2 | v0.8.9 | **v0.8.9** (upstream) |
+| github.com/sagernet/sing-quic | v0.6.0 | v0.6.1 | **v0.6.1** (upstream) |
+
+**Replace Directive Preserved**:
+```
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13
+```
+
+## Code Fixes Applied Post-Merge
+1. **adapter/log_metadata.go**: Changed `AndroidPackageName` to `AndroidPackageNames[0]` to match sing v0.8.9 API
+2. **route/route.go**: Same AndroidPackageName fix + added `process` import
+3. **route/rule/rule_item_rule_set.go**: Fixed syntax error from malformed merge
+
+## Notes
+- quic-go/qpack mismatch error visible in full build but not in targeted build gate
+- This is a pre-existing blocker per task specification

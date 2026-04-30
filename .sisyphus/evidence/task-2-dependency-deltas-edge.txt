@@ -1,0 +1,198 @@
+# Task 2: Dependency Deltas EDGE CASES
+# Generated: 2026-04-30
+
+## EDGE CASE 1: sing-anytls Replace Directive
+
+### Issue
+The replace directive redirects `github.com/anytls/sing-anytls` to `github.com/KexiChanProjectProxy/sing-anytls v0.0.13`.
+
+This is NOT a standard fork dependency - it's a project-specific proxy/fork.
+
+### Current State
+- Direct require: `github.com/anytls/sing-anytls v0.0.11` (in both fork and upstream)
+- Replace directive: `github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13`
+
+### Why This Matters
+The replace directive means ANY code that imports `github.com/anytls/sing-anytls` will actually
+use the KexiChanProjectProxy fork at v0.0.13, NOT the official v0.0.11 release.
+
+This could be intentional (to get patched/modified behavior) or could be a mistake.
+The evidence file records this as-is since it was preserved through the merge.
+
+### Verification
+```
+$ grep -n "anytls" go.mod
+7:	github.com/anytls/sing-anytls v0.0.11
+195:	replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13
+```
+
+---
+
+## EDGE CASE 2: Tailscale Fork Version With Timestamp
+
+### Issue
+`github.com/sagernet/tailscale` uses a pseudo-version format with embedded timestamp.
+
+### Fork (pre-merge) version
+```
+v1.92.4-sing-box-1.13-mod.6.0.20260303140313-3bcf9a4b9349
+```
+
+### Upstream (v1.13.11) version
+```
+v1.92.4-sing-box-1.13-mod.7
+```
+
+### Why The Difference
+The `-mod.6.0.20260303140313-3bcf9a4b9349` format suggests a manual fork with a pseudo-version.
+The upstream simplified to `-mod.7` which is a release tag format.
+
+### Resolution
+Upstream's v1.92.4-sing-box-1.13-mod.7 was adopted (less verbose, proper release tag).
+
+---
+
+## EDGE CASE 3: cronet-go Timestamp Migration
+
+### Issue
+All cronet-go packages share the same timestamp migration (both direct and indirect).
+
+### Fork (pre-merge)
+```
+v0.0.0-20260303101018-cba7b9ac0399
+```
+
+### Upstream (v1.13.11) / Final
+```
+v0.0.0-20260413093659-e4926ba205fa
+```
+
+### Scope (35 packages)
+Direct:
+- github.com/sagernet/cronet-go
+- github.com/sagernet/cronet-go/all
+
+Indirect (per architecture):
+- android_386, android_amd64, android_arm, android_arm64
+- darwin_amd64, darwin_arm64
+- ios_amd64_simulator, ios_arm64, ios_arm64_simulator
+- linux_386, linux_386_musl, linux_amd64, linux_amd64_musl
+- linux_arm, linux_arm64, linux_arm64_musl, linux_arm_musl
+- linux_loong64, linux_loong64_musl, linux_mips64le, linux_mipsle, linux_mipsle_musl
+- linux_riscv64, linux_riscv64_musl
+- tvos_amd64_simulator, tvos_arm64, tvos_arm64_simulator
+- windows_amd64, windows_arm64
+
+---
+
+## EDGE CASE 4: quic-go Dual Appearance
+
+### Issue
+quic-go appears TWICE in go.mod - once as a direct dependency and once as indirect.
+
+### Direct (fork-modified)
+```
+github.com/sagernet/quic-go v0.59.0-sing-box-mod.4
+```
+
+### Indirect (added by sing-quic)
+```
+github.com/quic-go/quic-go v0.54.0 // indirect
+```
+
+### Why Two Versions
+- The fork-modified `github.com/sagernet/quic-go` is used for sing-box's QUIC implementation
+- The standard `github.com/quic-go/quic-go` is a transitive dependency from sing-quic
+- These are DIFFERENT packages (sagernet fork vs. original quic-go)
+
+### Verification
+```
+$ grep "quic-go" go.mod
+39:	github.com/sagernet/quic-go v0.59.0-sing-box-mod.4
+127:	github.com/quic-go/quic-go v0.54.0 // indirect
+```
+
+---
+
+## EDGE CASE 5: Fork-Only Direct Dependencies
+
+### Dependencies that exist in merged go.mod but NOT in upstream v1.13.11
+
+These were introduced by the fork and must be preserved:
+
+1. **github.com/cespare/xxhash/v2 v2.3.0** - xxhash algorithm implementation
+2. **github.com/gin-gonic/gin v1.11.0** - HTTP web framework
+3. **github.com/gorilla/websocket v1.5.3** - WebSocket implementation
+4. **github.com/metacubex/tfo-go v0.0.0-20251204144243-738de9e3cd15** - TFO support
+5. **github.com/metacubex/utls v1.8.4** - uTLS fingerprinting
+
+These are REQUIRED for fork functionality and should NOT be removed.
+
+---
+
+## EDGE CASE 6: nftables Version Format Change
+
+### Issue
+The nftables indirect dependency changed version format.
+
+### Fork (pre-merge)
+```
+v0.3.0-beta.4
+```
+
+### Upstream (v1.13.11) / Final
+```
+v0.3.0-mod.2
+```
+
+### Why
+The `-beta.4` suggests a beta release, while `-mod.2` suggests a modified release.
+Upstream's version was adopted.
+
+---
+
+## EDGE CASE 7: openai-go Version Upgraded
+
+### Issue
+The OpenAI SDK was upgraded from v3.24.0 (fork) to v3.26.0 (upstream).
+
+### Fork (pre-merge)
+```
+v3.24.0
+```
+
+### Upstream (v1.13.11) / Final
+```
+v3.26.0
+```
+
+### Why It Matters
+A minor version upgrade in a SDK could introduce API changes, but since upstream
+v1.13.11 uses v3.26.0, this was considered compatible.
+
+---
+
+## VERIFICATION COMMANDS
+
+```bash
+# Verify replace directive exists
+grep "replace.*anytls" go.mod
+
+# Verify sagernet module versions
+grep "sagernet/sing " go.mod
+grep "sagernet/sing-tun " go.mod
+grep "sagernet/sing-quic " go.mod
+grep "sagernet/tailscale " go.mod
+grep "sagernet/quic-go " go.mod
+
+# Verify fork-only additions exist
+grep "gin-gonic/gin " go.mod
+grep "gorilla/websocket " go.mod
+grep "metacubex/tfo-go " go.mod
+grep "metacubex/utls " go.mod
+grep "cespare/xxhash" go.mod
+
+# Verify indirect quic-go exists
+grep "quic-go/quic-go" go.mod
+grep "quic-go/qpack" go.mod
+```

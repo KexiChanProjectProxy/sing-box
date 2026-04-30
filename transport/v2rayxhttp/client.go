@@ -67,7 +67,7 @@ func (c *Client) createHTTPClient() *http.Client {
 
 	// Configure HTTP/2 if TLS is enabled
 	if c.tlsConfig != nil {
-		tlsConfig, err := c.tlsConfig.Config()
+		tlsConfig, err := c.tlsConfig.STDConfig()
 		if err == nil {
 			transport := httpClient.Transport.(*http.Transport)
 			transport.TLSClientConfig = tlsConfig
@@ -255,9 +255,9 @@ func (c *Client) buildRequestURL(sessionID string) string {
 		scheme = "http"
 	}
 
-	host := c.config.Host
-	if host == "" {
-		host = c.serverAddr.AddrString()
+	host := c.serverAddr.AddrString()
+	if len(c.config.Host) > 0 {
+		host = c.config.Host[0]
 	}
 
 	// Add port if not default

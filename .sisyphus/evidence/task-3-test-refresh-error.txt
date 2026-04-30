@@ -1,0 +1,4 @@
+=== VERIFICATION ===
+pool_test.go exists:
+ls: cannot access 'protocol/vless/pool_test.go': No such file or directory
+File does not exist (correctly deleted)

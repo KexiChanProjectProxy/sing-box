@@ -1,0 +1,39 @@
+# Task 6 Edge Cases: Fork-Only Transports
+
+## Known Pre-Existing Blockers (NOT introduced by this task)
+
+### quic-go/qpack mismatch
+This is a dependency-level issue inherited from the fork merge and is NOT related to transport interface reconciliation.
+
+### common/tlsfragment handshake failure
+This is a pre-existing issue in the fork's TLS implementation and is NOT related to transport interface reconciliation.
+
+## API Adaptation Edge Cases
+
+### 1. badoption.Listable[string] Host type
+The `Host` field in `V2RayHTTPOptions` (and thus `V2RayXHTTPOptions` via embedding) changed from `string` to `badoption.Listable[string]`.
+
+**Client adaptation:**
+- Empty Host list → use server address as fallback
+- Single Host → use that value
+- Multiple Hosts → use first value (current implementation)
+
+**Server adaptation:**
+- Empty Host list → skip Host validation
+- Non-empty Host list → check if request.Host is in the list using `slices.Contains()`
+
+### 2. tls.Config.STDConfig() error handling
+The `STDConfig()` method returns `(*tls.Config, error)` while the old `Config()` didn't exist. Error handling was added where needed.
+
+### 3. V2RayXHTTPOptions embedding V2RayHTTPOptions
+The fork-owned `V2RayXHTTPOptions` embeds the upstream `V2RayHTTPOptions`, so it automatically inherits the `Host` type change. No modifications needed to the option type itself.
+
+## Verification Commands
+```bash
+go build ./transport/v2rayxhttp/...
+go build ./transport/v2raycloudflared/...
+```
+
+## Files Changed
+- transport/v2rayxhttp/client.go
+- transport/v2rayxhttp/server.go

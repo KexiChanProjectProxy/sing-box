@@ -1,0 +1,94 @@
+# Task 2: Dependency Deltas After Merge Baseline
+# Generated: 2026-04-30
+# Merge commit e8e05d12 (HEAD) - parents: 30cecec5 (fork) and 553cfa1f (upstream v1.13.11)
+
+## AUTHORITATIVE DEPENDENCY DECISION RECORD
+
+The following dependency versions are FINAL and should be used by downstream agents without re-deciding:
+
+### CRITICAL SAGERNET MODULES (fork-modified)
+
+| Module | Final Version | Source | Notes |
+|--------|--------------|--------|-------|
+| github.com/sagernet/sing | v0.8.9 | UPSTREAM v1.13.11 | Fork had v0.8.2; upstream v0.8.9 adopted |
+| github.com/sagernet/sing-tun | v0.8.9 | UPSTREAM v1.13.11 | Fork had v0.8.2; upstream v0.8.9 adopted |
+| github.com/sagernet/sing-quic | v0.6.1 | UPSTREAM v1.13.11 | Fork had v0.6.0; upstream v0.6.1 adopted |
+| github.com/sagernet/tailscale | v1.92.4-sing-box-1.13-mod.7 | UPSTREAM v1.13.11 | Fork had -mod.6.0.20260303140313-3bcf9a4b9349; upstream mod.7 adopted |
+| github.com/sagernet/quic-go | v0.59.0-sing-box-mod.4 | BOTH AGREE | Identical in fork and upstream |
+
+### KEY DEPENDENCIES (fork-only additions)
+
+| Module | Final Version | Source | Notes |
+|--------|--------------|--------|-------|
+| github.com/anytls/sing-anytls | v0.0.11 | FORK | Present in both, but REPLACE directive uses fork proxy |
+| github.com/cespare/xxhash/v2 | v2.3.0 | FORK ONLY | Not in upstream, required by fork features |
+| github.com/gin-gonic/gin | v1.11.0 | FORK ONLY | Not in upstream, required by fork features |
+| github.com/gorilla/websocket | v1.5.3 | FORK ONLY | Not in upstream, required by fork features |
+| github.com/metacubex/tfo-go | v0.0.0-20251204144243-738de9e3cd15 | FORK ONLY | Not in upstream, TFO support |
+| github.com/metacubex/utls | v1.8.4 | FORK ONLY | Not in upstream, uTLS support |
+| github.com/openai/openai-go/v3 | v3.26.0 | UPSTREAM | Fork had v3.24.0, upstream v3.26.0 adopted |
+
+### REPLACE DIRECTIVES (MUST PRESERVE)
+
+```
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13
+```
+
+This replace directive MUST be preserved. It redirects anytls from the original
+github.com/anytls/sing-anytls to the fork proxy at github.com/KexiChanProjectProxy/sing-anytls.
+
+### CRONET-GO PACKAGES (updated timestamps)
+
+| Package Pattern | Old Timestamp | New Timestamp |
+|-----------------|---------------|---------------|
+| github.com/sagernet/cronet-go | 20260303101018-cba7b9ac0399 | 20260413093659-e4926ba205fa |
+| All arch-specific libs | Same migration | Same migration |
+
+### OTHER UPDATED DEPENDENCIES (from upstream)
+
+| Module | Fork Version | Upstream Version | Final |
+|--------|-------------|-------------------|-------|
+| github.com/sagernet/fswatch | v0.1.1 | v0.1.2 | v0.1.2 |
+| github.com/fsnotify/fsnotify | v1.7.0 | v1.9.0 | v1.9.0 |
+| github.com/sagernet/nftables | v0.3.0-beta.4 | v0.3.0-mod.2 | v0.3.0-mod.2 |
+
+### GIN-WEB FRAMEWORK TRANSITIVE DEPS (fork-only additions)
+
+These indirect dependencies were added by gin and must be preserved:
+- github.com/bytedance/sonic v1.14.0
+- github.com/bytedance/sonic/loader v0.3.0
+- github.com/cloudwego/base64x v0.1.6
+- github.com/gabriel-vasile/mimetype v1.4.8
+- github.com/gin-contrib/sse v1.1.0
+- github.com/go-playground/locales v0.14.1
+- github.com/go-playground/universal-translator v0.18.1
+- github.com/go-playground/validator/v10 v10.27.0
+- github.com/goccy/go-json v0.10.2
+- github.com/goccy/go-yaml v1.18.0
+- github.com/json-iterator/go v1.1.12
+- github.com/leodido/go-urn v1.4.0
+- github.com/mattn/go-isatty v0.0.20
+- github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421
+- github.com/modern-go/reflect2 v1.0.2
+- github.com/pelletier/go-toml/v2 v2.2.4
+- github.com/twitchyliquid64/golang-asm v0.15.1
+- github.com/ugorji/go/codec v1.3.0
+- golang.org/x/arch v0.20.0
+- go.uber.org/mock v0.5.2
+
+### VERIFICATION CHECKLIST
+
+- [x] sing v0.8.9 from upstream (not fork's v0.8.2)
+- [x] sing-tun v0.8.9 from upstream (not fork's v0.8.2)
+- [x] sing-quic v0.6.1 from upstream (not fork's v0.6.0)
+- [x] tailscale v1.92.4-sing-box-1.13-mod.7 from upstream (not fork's mod.6)
+- [x] sing-anytls replace directive preserved with KexiChanProjectProxy fork
+- [x] quic-go qpack v0.6.0 (indirect, identical in both)
+- [x] quic-go itself v0.54.0 (indirect)
+- [x] gin v1.11.0 (fork-only addition)
+- [x] metacubex/tfo-go (fork-only addition)
+- [x] cronet-go timestamp updated to 20260413093659
+- [x] No unexpected removal of fork-only direct dependencies
+- [x] No unexpected removal of replace directives
+
+### NO CODE CHANGES OUTSIDE DEPENDENCY-RELATED EVIDENCE FILES

@@ -1,0 +1,84 @@
+VLESS Connection Pool Removal - Verification Handoff Document
+=============================================================
+
+## 1. VLESS Pool Removal — Removed Files
+- protocol/vless/pool.go (441 lines) - Connection pool implementation DELETED
+- protocol/vless/pool_test.go (669 lines) - Pool tests DELETED
+
+## 2. VLESS Pool Removal — Modified Files
+- protocol/vless/integration_test.go (206 lines changed: 138 removed, 68 added)
+  - Removed 6 pool-positive tests
+  - Added 4 tests: 2 legacy rejection tests + 1 valid config test + 1 multiplex compatibility test
+
+## 3. Out-of-Scope Changes (User-Requested, Separate from VLESS Pool Removal)
+The following changes were made at the user's explicit request to update the sing-anytls
+dependency to use https://github.com/KexiChanProjectProxy/sing-anytls. These are NOT
+part of the VLESS pool removal plan:
+- go.mod — replace directive updated from pseudo-version to v0.0.13 tag
+- go.sum — checksums updated for sing-anytls v0.0.13
+- test/go.mod — replace directive changed from local path ../sing-anytls to github.com/KexiChanProjectProxy/sing-anytls v0.0.13
+- test/go.sum — checksums updated
+
+## 4. Unchanged Files (Confirmed Clean in HEAD)
+- protocol/vless/outbound.go — No pool references, already clean
+- option/vless.go — No ConnectionPoolOptions type, already clean
+- scripts/README.md — Generic changelog template, untouched
+- CURRENT_ISSUES.md — Stale pool sections already removed (untracked in git)
+
+## 5. Legacy Config Behavior
+VLESS configs containing `connection_pool` field are now REJECTED.
+
+Mechanism: json.Decoder.DisallowUnknownFields() causes decode error when unknown
+field "connection_pool" is encountered.
+
+Error message contains the string "connection_pool" for identification.
+
+Two tests verify this behavior:
+- TestLegacyConnectionPoolRejected
+- TestLegacyConnectionPoolRejectedMinimal
+
+## 6. Test Coverage
+Total: 4 integration tests (down from 10 original)
+
+Tests remaining:
+1. TestLegacyConnectionPoolRejected — Verifies rejection of legacy pool config
+2. TestLegacyConnectionPoolRejectedMinimal — Verifies rejection with minimal config
+3. TestValidVLESSOutboundOptionsWithoutPool — Verifies valid VLESS config still works
+4. TestMultiplexWithoutPoolStillWorks — Verifies multiplex compatibility without pool
+
+All 4 tests PASS.
+
+## 7. Pre-existing Issues (NOT caused by this change)
+These issues existed prior to the pool removal and are unrelated:
+- quic-go HTTP/3 API mismatch (affects protocol/router, transport/v2rayquic)
+- v2rayxhttp missing option types (affects transport/v2rayxhttp)
+- Tailscale missing tun/ping/gvisor symbols (affects protocol/tailscale, service/derp, protocol/router)
+- Tailscale/gvisor API mismatch (affects test/ integration build)
+- tlsfragment test failure (environment-dependent TLS handshake)
+- dns client_test.go mock missing Reset method (affects dns package build)
+
+## 8. VLESS Pool Removal Diff Scope (plan-intended changes only)
+```
+ protocol/vless/integration_test.go | 206 ++++--------
+ protocol/vless/pool.go             | 441 ------------------------
+ protocol/vless/pool_test.go        | 669 -------------------------------------
+ 3 files changed, 68 insertions(+), 1248 deletions(-)
+```
+
+Files NOT touched by VLESS pool removal: outbound.go, option/vless.go, scripts/README.md
+
+## 9. Verification Evidence
+Full evidence files available in .sisyphus/evidence/:
+- task-1-schema-removal.txt / task-1-schema-removal-error.txt
+- task-2-runtime-removal.txt / task-2-runtime-removal-error.txt
+- task-3-test-refresh.txt / task-3-test-refresh-error.txt
+- task-4-reference-cleanup.txt / task-4-reference-cleanup-error.txt
+- task-5-full-verification.txt (updated with go test ./... results)
+- task-5-full-test-suite.txt (raw go test ./... output)
+- task-5-vless-tests.txt (raw go test ./protocol/vless/ output)
+- task-5-integration-test.txt (raw cd test && go test output)
+- task-5-repo-scan.txt
+- task-6-handoff.txt / task-6-handoff-error.txt
+
+---
+Handoff prepared: 2026-04-30

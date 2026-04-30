@@ -1,0 +1,30 @@
+=== TASK 2 EVIDENCE: EXPECTED TEST FAILURE ===
+
+This file documents the expected test failure after deleting pool.go.
+
+EXPECTED BEHAVIOR:
+When pool.go is deleted but pool_test.go still references its types,
+go test will fail with "undefined" errors for:
+- ConnectionPoolConfig
+- NewConnectionPool
+- (and all the GetConn calls)
+
+ACTUAL TEST OUTPUT:
+# github.com/sagernet/sing-box/protocol/vless [github.com/sagernet/sing-box/protocol/vless.test]
+protocol/vless/pool_test.go:103:12: undefined: ConnectionPoolConfig
+protocol/vless/pool_test.go:112:10: undefined: NewConnectionPool
+protocol/vless/pool_test.go:144:12: undefined: ConnectionPoolConfig
+protocol/vless/pool_test.go:154:10: undefined: NewConnectionPool
+protocol/vless/pool_test.go:192:12: undefined: ConnectionPoolConfig
+protocol/vless/pool_test.go:211:10: undefined: NewConnectionPool
+protocol/vless/pool_test.go:236:12: undefined: ConnectionPoolConfig
+protocol/vless/pool_test.go:256:10: undefined: NewConnectionPool
+protocol/vless/pool_test.go:280:12: undefined: ConnectionPoolConfig
+protocol/vless/pool_test.go:291:10: undefined: NewConnectionPool
+protocol/vless/pool_test.go:291:10: too many errors
+FAIL	github.com/sagernet/sing-box/protocol/vless [build failed]
+
+RESOLUTION:
+Task 3 will delete pool_test.go, which will make the tests pass again.
+
+STATUS: EXPECTED AND INTENTIONAL

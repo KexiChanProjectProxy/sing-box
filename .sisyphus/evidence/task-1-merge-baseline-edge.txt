@@ -1,0 +1,41 @@
+# Task 1 Merge Baseline Edge Cases
+
+## Replace Directive Preservation
+
+The fork's critical replace directive was preserved:
+```
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13
+```
+
+**Justification**: This fork-only customization is required for the sing-anytls integration specific to this fork. No verified incompatibility was found that would require dropping this directive.
+
+## Event-Based Logging vs LogElapsed
+
+The fork uses a new event-based logging approach via `log.NewComponentLifecycleEvent` and `log.WithComponentLifecycleEvent`. This approach was preserved throughout the adapter managers.
+
+**Upstream uses**: `adapter.LogElapsed()` pattern
+**Fork uses**: Event-based structured logging
+
+Both approaches compile since `LogElapsed` is defined in `adapter/lifecycle.go` (taken from OURS).
+
+## Process Info API Change
+
+The sing v0.8.9 changed `AndroidPackageName` (singular) to `AndroidPackageNames` (slice). This required fixes in:
+- `adapter/log_metadata.go`
+- `route/route.go`
+
+## matchStates Pattern (rule_item_rule_set.go)
+
+The upstream v1.13.11 uses a complex `matchStates`/`matchStatesWithBase` pattern with `ruleMatchStateSet` bitmask. The fork's simpler `MatchedRuleSet` approach was NOT preserved because:
+1. The `ruleMatchStateSet` is a `uint16` bitmask type, not a map
+2. Fork's `map[string]int` approach was type-incompatible
+
+This means the fork's "matched ruleset tag for hash-based routing" feature in the `Match()` function was dropped. This is a behavioral change from the fork's perspective but aligns with upstream architecture.
+
+## TTL Calculation in dns/client.go
+
+Fork version used `extractMinTTL(response)` directly, while upstream computed TTL differently. Merged to use fork's approach which is more straightforward.
+
+## KeepAlive Configuration in common/dialer/default.go
+
+Merged approach: When `DisableTCPKeepAlive` is true, disable it. Otherwise, use fork's default keepalive interval logic combined with upstream's `KeepAliveConfig` structure.

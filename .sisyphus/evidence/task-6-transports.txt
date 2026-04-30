@@ -1,0 +1,43 @@
+# Task 6 Evidence: Fork-Only Transports Reconciliation
+
+## Build Status
+
+### v2rayxhttp
+```
+$ go build ./transport/v2rayxhttp/...
+BUILD SUCCESS
+```
+
+### v2raycloudflared
+```
+$ go build ./transport/v2raycloudflared/...
+BUILD SUCCESS
+```
+
+## Changes Made
+
+### transport/v2rayxhttp/client.go
+- Line 70: Changed `c.tlsConfig.Config()` to `c.tlsConfig.STDConfig()` to match upstream TLS Config interface
+- Lines 258-262: Updated `buildRequestURL()` to handle `badoption.Listable[string]` Host type:
+  - Changed `host := c.config.Host` (string) to `host := c.serverAddr.AddrString()` (string fallback)
+  - Changed `if host == ""` to `if len(c.config.Host) > 0` with `host = c.config.Host[0]`
+
+### transport/v2rayxhttp/server.go
+- Added `"slices"` import
+- Line 81: Changed `s.config.Host != ""` to `len(s.config.Host) > 0` for Listable check
+- Line 81: Changed `request.Host != s.config.Host` to `!slices.Contains(s.config.Host, request.Host)` for Listable comparison
+
+## API Changes Reconciled
+
+1. **tls.Config.Config() → tls.Config.STDConfig()**: Upstream renamed this method. The `STDConfig()` method returns `(*tls.Config, error)` instead of `Config()` which didn't exist.
+
+2. **Host field type change**: V2RayHTTPOptions.Host changed from `string` to `badoption.Listable[string]`. The V2RayXHTTPOptions inherits this change through embedding V2RayHTTPOptions.
+
+## No Blockers Remaining
+
+Both transport packages now compile successfully without any remaining API incompatibilities.
+
+## Edge Cases Documented
+
+- When `Host` is empty in V2RayXHTTPOptions, the server address is used as fallback (both client and server)
+- Multiple Host values are supported via Listable semantics but xhttp typically uses single host

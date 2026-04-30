@@ -1,0 +1,10 @@
+protocol/vless/integration_test.go:20:		"connection_pool": {
+protocol/vless/integration_test.go:36:		t.Fatal("Expected error when parsing config with connection_pool, but got nil")
+protocol/vless/integration_test.go:38:	if !strings.Contains(err.Error(), "connection_pool") {
+protocol/vless/integration_test.go:39:		t.Fatalf("Expected error to mention 'connection_pool', got: %v", err)
+protocol/vless/integration_test.go:48:		"connection_pool": {
+protocol/vless/integration_test.go:58:		t.Fatal("Expected error when parsing config with connection_pool, but got nil")
+protocol/vless/integration_test.go:60:	if !strings.Contains(err.Error(), "connection_pool") {
+protocol/vless/integration_test.go:61:		t.Fatalf("Expected error to mention 'connection_pool', got: %v", err)
+option/anytls.go:124:	EnsureIdleSession            int                    `json:"ensure_idle_session,omitempty"`
+option/anytls.go:125:	EnsureIdleSessionCreateRate  int                    `json:"ensure_idle_session_create_rate,omitempty"`

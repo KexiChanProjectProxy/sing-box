@@ -1,0 +1,24 @@
+Evidence Files for Tasks 1-5
+==============================
+
+Task 1 (Schema Removal):
+- .sisyphus/evidence/task-1-schema-removal.txt
+- .sisyphus/evidence/task-1-schema-removal-error.txt
+
+Task 2 (Runtime Removal):
+- .sisyphus/evidence/task-2-runtime-removal.txt
+- .sisyphus/evidence/task-2-runtime-removal-error.txt
+
+Task 3 (Test Refresh):
+- .sisyphus/evidence/task-3-test-refresh.txt
+- .sisyphus/evidence/task-3-test-refresh-error.txt
+
+Task 4 (Reference Cleanup):
+- .sisyphus/evidence/task-4-reference-cleanup.txt
+- .sisyphus/evidence/task-4-reference-cleanup-error.txt
+
+Task 5 (Full Verification):
+- .sisyphus/evidence/task-5-full-verification.txt
+- .sisyphus/evidence/task-5-full-verification-error.txt
+
+Total: 10 evidence files (5 tasks x 2 files each)

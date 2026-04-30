@@ -125,3 +125,45 @@ When preserving an explicit feature removal in merged code:
 - Maintain rejection tests to prevent accidental re-addition
 - Accept upstream improvements in other areas (logging, naming)
 - Dependencies should align with removal intent (sing-vmess v0.2.8 has no pool)
+
+## Fork-Only Transport Reconciliation (Task 6)
+
+### Key Findings
+
+1. **Both fork-only transports compile successfully after adaptation**:
+   - `go build ./transport/v2rayxhttp/...` succeeds
+   - `go build ./transport/v2raycloudflared/...` succeeds
+
+2. **Two API changes required adaptation**:
+   - `tls.Config.Config()` renamed to `tls.Config.STDConfig()` in upstream
+   - `V2RayHTTPOptions.Host` type changed from `string` to `badoption.Listable[string]`
+
+3. **v2raycloudflared required no changes**: The single-file transport had no API incompatibilities with upstream.
+
+4. **V2RayXHTTPOptions inherits upstream changes via embedding**: The fork-owned `V2RayXHTTPOptions` embeds `V2RayHTTPOptions`, so it automatically got the `Host` type change. Only the transport consumer code (client.go, server.go) needed adaptation.
+
+### Changes Made
+
+**transport/v2rayxhttp/client.go**:
+- Line 70: `c.tlsConfig.Config()` → `c.tlsConfig.STDConfig()`
+- `buildRequestURL()`: Handle `Listable[string]` Host:
+  - Default to server address when Host list is empty
+  - Use first Host value when list has entries
+
+**transport/v2rayxhttp/server.go**:
+- Added `"slices"` import
+- Host validation: `s.config.Host != ""` → `len(s.config.Host) > 0`
+- Host comparison: `request.Host != s.config.Host` → `!slices.Contains(s.config.Host, request.Host)`
+
+### Pattern: Fork Transport Adaptation to Upstream Interface Changes
+When adapting fork transports to upstream interface changes:
+- Identify type changes in embedded/imported upstream types
+- Update consumer code to handle new type semantics (e.g., `string` → `Listable[string]`)
+- Use standard library helpers (`slices.Contains()`) for Listable operations
+- Preserve fork-specific behavior (xmux, padding, etc.) unchanged
+
+### Pre-Existing Blockers (Not Introduced by This Task)
+- quic-go/qpack mismatch: Dependency-level issue from fork merge
+- common/tlsfragment handshake failure: Pre-existing TLS implementation issue
+
+(End of file - total 155 lines)

@@ -1,0 +1,4 @@
+# github.com/sagernet/tailscale/wgengine/netstack
+../../go/pkg/mod/github.com/sagernet/tailscale@v1.92.4-sing-box-1.13-mod.6.0.20260303140313-3bcf9a4b9349/wgengine/netstack/netstack.go:620:41: cannot use func(request *udp.ForwarderRequest) (handled bool) {…} (value of type func(request *udp.ForwarderRequest) (handled bool)) as func(*udp.ForwarderRequest) value in argument to udp.NewForwarder
+FAIL	test [build failed]
+FAIL

@@ -1,0 +1,38 @@
+=== TASK 2 EVIDENCE: RUNTIME REMOVAL ===
+
+1. DELETE pool.go:
+   STATUS: Already deleted in previous step
+   VERIFICATION: ls protocol/vless/pool.go -> No such file or directory
+
+2. VERIFY pool.go DELETED:
+   Command: ls protocol/vless/pool.go
+   Result: ls: cannot access 'protocol/vless/pool.go': No such file or directory
+   STATUS: CONFIRMED DELETED
+
+3. GREP FOR POOL REFERENCES IN outbound.go:
+   Command: grep -n "pool\|Pool" protocol/vless/outbound.go
+   Result: No matches found
+   STATUS: CLEAN (as expected from prior work)
+
+4. GREP FOR IMPORT/REFERENCE PATTERNS:
+   Patterns searched: "protocol/vless/pool" | h\.pool | pool\s*=
+   Command: grep -n '"protocol/vless/pool"\|h\.pool\|pool\s*=' protocol/vless/*.go
+   Result: No matches found
+   STATUS: CLEAN
+
+5. GO BUILD ./protocol/vless/:
+   Exit Code: 0 (success)
+   Output: (no output means success)
+   STATUS: BUILD PASSED
+
+6. GO TEST ./protocol/vless/:
+   Exit Code: Non-zero (expected failure)
+   Reason: pool_test.go still references deleted types (ConnectionPoolConfig, NewConnectionPool)
+   STATUS: EXPECTED FAILURE - Task 3 will handle pool_test.go deletion
+
+SUMMARY:
+- pool.go DELETED: YES
+- outbound.go pool references: ZERO
+- Other vless files import pool: NONE
+- Build passes: YES (exit 0)
+- Tests pass: NO (expected - pool_test.go needs deletion by Task 3)

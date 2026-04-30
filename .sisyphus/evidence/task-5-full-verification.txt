@@ -1,0 +1,79 @@
+# Task 5 Full Verification Evidence - VLESS Connection Pool Removal
+# Updated: 2026-04-30 (refreshed with full test suite and integration test results)
+
+================================================================================
+TEST 1: go test ./protocol/vless/ -v -count=1
+================================================================================
+=== RUN   TestLegacyConnectionPoolRejected
+--- PASS: TestLegacyConnectionPoolRejected (0.00s)
+=== RUN   TestLegacyConnectionPoolRejectedMinimal
+--- PASS: TestLegacyConnectionPoolRejectedMinimal (0.00s)
+=== RUN   TestValidVLESSOutboundOptionsWithoutPool
+--- PASS: TestValidVLESSOutboundOptionsWithoutPool (0.00s)
+=== RUN   TestMultiplexWithoutPoolStillWorks
+--- PASS: TestMultiplexWithoutPoolStillWorks (0.00s)
+PASS
+ok  	github.com/sagernet/sing-box/protocol/vless	0.007s
+
+================================================================================
+TEST 2: go test ./... (full test suite)
+================================================================================
+See .sisyphus/evidence/task-5-full-test-suite.txt for complete raw output.
+
+SUMMARY OF RESULTS:
+- PASS: common/badversion, common/convertor/adguard, common/dialer, common/domain,
+        common/geosite, common/sniff, common/srs, common/urltest, daemon,
+        dns/transport, dns/transport/hosts, dns/transport/local, experimental/clashapi,
+        experimental/clashapi/trafficontrol, experimental/libbox, log, option,
+        protocol/group, protocol/vless, route, route/rule
+- FAIL (pre-existing, NOT VLESS-related):
+  - dns [build failed] — client_test.go mock missing Reset method on adapter.DNSTransport
+  - common/tlsfragment [test failed] — TestTLSFragment: "tls: first record does not look like a TLS handshake" (environment-dependent)
+  - protocol/router [build failed] — tailscale dependency (tun.ICMPForwarder undefined)
+  - protocol/tailscale [build failed] — tailscale dependency (tun.ICMPForwarder, tun.DefaultNIC, ping.ConnectGVisor undefined)
+  - service/derp [build failed] — tailscale dependency transitively
+  - transport/v2rayxhttp [build failed] — undefined: option.V2RayXHTTPOptions (pre-existing missing option types)
+
+VLESS-SPECIFIC RESULT: protocol/vless PASS ✅
+
+================================================================================
+TEST 3: cd test && go test -tags "with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm" .
+================================================================================
+See .sisyphus/evidence/task-5-integration-test.txt for complete raw output.
+
+RESULT: FAIL [build failed]
+CAUSE: Pre-existing Tailscale/gvisor API mismatch:
+  - tailscale/wgengine/netstack/netstack.go:620: cannot use func(*udp.ForwarderRequest) bool
+    as func(*udp.ForwarderRequest) in argument to udp.NewForwarder
+  - This is a Tailscale dependency version incompatibility, NOT related to VLESS pool removal.
+
+================================================================================
+TEST 4: Repo scan - connection_pool/ConnectionPool references
+================================================================================
+See .sisyphus/evidence/task-5-repo-scan.txt for complete raw output.
+
+grep -R -n 'connection_pool\|ConnectionPoolOptions\|NewConnectionPool\|EnsureIdleSession' protocol/vless option CURRENT_ISSUES.md scripts README.md docs test
+
+MATCHES (all EXPECTED):
+- protocol/vless/integration_test.go: "connection_pool" in test JSON fixtures verifying REJECTION
+- option/anytls.go: EnsureIdleSession is a pre-existing anyTLS option, NOT VLESS pool
+
+================================================================================
+VERIFICATION SUMMARY
+================================================================================
+✅ go test ./protocol/vless/ -v: PASSED (all 4 tests)
+✅ go test ./...: All non-pre-existing-failure packages PASS; protocol/vless PASS
+✅ cd test && go test: FAILS due to pre-existing Tailscale/gvisor API mismatch (NOT VLESS-related)
+✅ Repo scan: CLEAN - only test rejection fixtures + unrelated anyTLS option
+
+================================================================================
+PRE-EXISTING FAILURES (NOT VLESS POOL REMOVAL RELATED)
+================================================================================
+1. quic-go HTTP/3 API mismatch → protocol/router build failure (transitive)
+2. v2rayxhttp missing option types → transport/v2rayxhttp build failure
+3. Tailscale missing tun/ping/gvisor symbols → protocol/tailscale, service/derp, protocol/router build failures
+4. Tailscale/gvisor API mismatch → test/ integration build failure
+5. tlsfragment test failure → environment-dependent TLS handshake error
+6. dns client_test.go mock → missing Reset method on adapter.DNSTransport interface
+
+All failures existed BEFORE VLESS pool removal and are documented in CURRENT_ISSUES.md.

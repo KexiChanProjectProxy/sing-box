@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,7 +79,7 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	// Validate host header
-	if s.config.Host != "" && request.Host != s.config.Host {
+	if len(s.config.Host) > 0 && !slices.Contains(s.config.Host, request.Host) {
 		event := log.NewTransportProtocolEvent("warning", "xhttp")
 		log.WithTransportProtocolEvent(s.logger, s.ctx, log.LevelWarn, event,
 			"xhttp: invalid host", "expected", s.config.Host, "got", request.Host)

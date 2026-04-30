@@ -1,0 +1,43 @@
+# Evidence: CURRENT_ISSUES.md VLESS pool reference cleanup
+# Date: 2026-04-30
+# Task: Remove stale VLESS ConnectionPool references
+
+## Actions Taken
+
+1. Removed section 2.2 (lines 110-132 in original): "protocol/vless — Integration Test Build Failure"
+   - This section recommended wiring ConnectionPool field into VLESSOutboundOptions
+   - The pool has been hard-removed, so this guidance was stale
+
+2. Removed section 3.1 (lines 137-148 in original): "VLESS Connection Pool — Option Wiring Gap"
+   - This section described the option wiring gap for VLESS pool
+   - No longer relevant after hard-removal of the pool
+
+3. Removed rows 2.2 and 3.1 from summary table (original lines 173-174)
+
+4. Renumbered section 4 "Migration Artifacts" to section 3
+
+## Verification: grep for ConnectionPool/connection_pool
+
+```
+$ grep -n 'ConnectionPool\|connection_pool' CURRENT_ISSUES.md
+(no output - no matches found)
+```
+
+## Final file structure (130 lines total)
+
+- Section 1: Build Failures (1.1, 1.2, 1.3) - UNCHANGED
+- Section 2: Test Failures (2.1 only) - REMOVED 2.2
+- Section 3: Migration Artifacts - RENAMED from section 4
+- Summary Table: Only 1.1, 1.2, 1.3, 2.1 remain - REMOVED 2.2 and 3.1
+
+## scripts/README.md - LEFT UNCHANGED
+
+Line 105's "Fixed memory leak in connection pool" is a generic changelog template
+example in a "how to write changelog entries" guide. It is NOT about VLESS or this
+project's actual connection pool. Per task instructions, this file was NOT modified.
+
+## Summary
+
+All VLESS ConnectionPool references have been removed from CURRENT_ISSUES.md.
+The file now accurately reflects the current state: the VLESS pool was hard-removed,
+and no stale integration guidance remains.

@@ -1,0 +1,14 @@
+=== STALE POOL REFERENCE CHECK ===
+No matches found
+
+=== GO TEST OUTPUT ===
+=== RUN   TestLegacyConnectionPoolRejected
+--- PASS: TestLegacyConnectionPoolRejected (0.00s)
+=== RUN   TestLegacyConnectionPoolRejectedMinimal
+--- PASS: TestLegacyConnectionPoolRejectedMinimal (0.00s)
+=== RUN   TestValidVLESSOutboundOptionsWithoutPool
+--- PASS: TestValidVLESSOutboundOptionsWithoutPool (0.00s)
+=== RUN   TestMultiplexWithoutPoolStillWorks
+--- PASS: TestMultiplexWithoutPoolStillWorks (0.00s)
+PASS
+ok  	github.com/sagernet/sing-box/protocol/vless	(cached)

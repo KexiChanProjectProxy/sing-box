@@ -1,0 +1,59 @@
+{
+  "active_plan": "/home/kexi/sing-box/.sisyphus/plans/sing-box-actual-upstream-v1-13-11-merge.md",
+  "started_at": "2026-04-30T17:26:09.592Z",
+  "session_ids": [
+    "ses_22092ca57ffeo3mmVjeSrDfAxr"
+  ],
+  "session_origins": {
+    "ses_22092ca57ffeo3mmVjeSrDfAxr": "direct"
+  },
+  "plan_name": "sing-box-actual-upstream-v1-13-11-merge",
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Establish merge baseline and reconcile dependency choke point",
+      "session_id": "ses_2208df2f4ffegMPr5IrbGmRR9C",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T17:46:42.355Z"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "Inventory upstream-vs-fork dependency deltas after merge baseline",
+      "session_id": "ses_2207a1742ffeBVaX8oLiFlnTdp",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T17:54:50.320Z"
+    },
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "Reconcile option schema conflicts and missing transport option types",
+      "session_id": "ses_220768b66ffeGO54SkirXiucbp",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:02:02.842Z"
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "Reconcile route core merge conflicts and preserve explicit fork router fields",
+      "session_id": "ses_2206f4444ffeCnFwoDLjHFqLt0",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:08:11.156Z"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "Reconcile VLESS outbound and preserve pool-removal decision",
+      "session_id": "ses_22069b93afferp1M0MWWqvkp34",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:13:57.387Z"
+    }
+  }
+}

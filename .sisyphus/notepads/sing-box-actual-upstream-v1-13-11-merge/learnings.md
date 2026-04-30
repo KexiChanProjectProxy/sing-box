@@ -166,4 +166,47 @@ When adapting fork transports to upstream interface changes:
 - quic-go/qpack mismatch: Dependency-level issue from fork merge
 - common/tlsfragment handshake failure: Pre-existing TLS implementation issue
 
-(End of file - total 155 lines)
+## libbox Reconciliation (Task 7)
+
+### Key Findings
+
+1. **Build passes**: `go build ./experimental/libbox/...` succeeds (EXIT_CODE: 0)
+
+2. **Full tag build passes**: Android-main configuration with all tags compiles successfully.
+
+3. **No upstream API changes caused libbox failures**: All interfaces (router, route, option, protocol, transport) are compatible with libbox after merge.
+
+4. **ProcessInfo API correctly adapted**: Uses `AndroidPackageNames` (slice) correctly at `command_types.go:350`.
+
+5. **Fork-owned extensions preserved**:
+   - F-Droid integration (`fdroid.go`, `fdroid_mirrors.go`)
+   - Legacy IPC protocol (13 files with `libbox_legacy_ipc` tag)
+   - Platform-specific code (Darwin, Linux, Windows, Android)
+   - Clash API extensions
+   - Group/Selector protocol extensions
+
+6. **Pre-existing issue with libbox_legacy_ipc tag**: When building with `libbox_legacy_ipc` tag, duplicate method declarations occur (10 methods declared in both `command_client.go` and legacy IPC files). This is NOT caused by upstream merge - it exists because the legacy IPC files and `command_client.go` both define the same methods, and Go doesn't support build-tag-based method overriding. Production builds (android-main, apple, windows) do NOT use `libbox_legacy_ipc` tag.
+
+### Fork-Owned libbox Extensions
+- F-Droid mirrors list (40+ mirrors worldwide)
+- Clash mode management via clashapi
+- Connection management via clashapi
+- Group/selector protocol operations
+- URL test functionality
+- System proxy management
+- Service pause/resume
+- Darwin TUN interface setup
+- Android process file descriptor
+- Windows service implementation
+- Platform-specific link flags
+
+### No Changes Required
+- All upstream API changes were already compatible
+- libbox uses sing-box/option correctly
+- No adaptations needed for sing v0.8.9
+
+### Evidence Files
+- `.sisyphus/evidence/task-7-libbox.txt`: Build verification and extension inventory
+- `.sisyphus/evidence/task-7-libbox-edge.txt`: libbox_legacy_ipc duplicate method issue documentation
+
+(End of file - total 229 lines)

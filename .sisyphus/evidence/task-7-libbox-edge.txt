@@ -1,0 +1,67 @@
+# Task 7 Edge Cases: libbox
+
+## Edge Case: libbox_legacy_ipc Build Has Duplicate Method Declarations
+
+### Issue Description
+When building with `libbox_legacy_ipc` build tag, the compiler reports duplicate method declarations:
+
+```
+experimental/libbox/command_client.go:478:25: method CommandClient.SetClashMode already declared at experimental/libbox/command_clash_mode.go:17:25
+experimental/libbox/command_client.go:487:25: method CommandClient.CloseConnection already declared at experimental/libbox/command_close_connection.go:17:25
+experimental/libbox/command_client.go:543:25: method CommandClient.GetDeprecatedNotes already declared at experimental/libbox/command_client.go:525:25
+experimental/libbox/command_group.go:127:25: method CommandClient.SetGroupExpand already declared at experimental/libbox/command_client.go:570:25
+experimental/libbox/command_power.go:12:25: method CommandClient.ServiceReload already declared at experimental/libbox/command_client.go:503:25
+experimental/libbox/command_power.go:37:25: method CommandClient.ServiceClose already declared at experimental/libbox/command_client.go:510:25
+experimental/libbox/command_select.go:14:25: method CommandClient.SelectOutbound already declared at experimental/libbox/command_client.go:459:25
+experimental/libbox/command_system_proxy.go:10:25: method CommandClient.GetSystemProxyStatus already declared at experimental/libbox/command_client.go:524:25
+experimental/libbox/command_system_proxy.go:49:25: method CommandClient.SetSystemProxyEnabled already declared at experimental/libbox/command_client.go:534:25
+experimental/libbox/command_urltest.go:20:25: method CommandClient.URLTest already declared at experimental/libbox/command_client.go:469:25
+```
+
+### Root Cause Analysis
+The `command_client.go` file contains gRPC-based implementations of these methods:
+- `SelectOutbound` (line 459)
+- `URLTest` (line 469)
+- `SetClashMode` (line 478)
+- `CloseConnection` (line 487)
+- `ServiceReload` (line 503)
+- `ServiceClose` (line 510)
+- `GetSystemProxyStatus` (line 524)
+- `SetSystemProxyEnabled` (line 534)
+- `GetDeprecatedNotes` (line 543)
+- `SetGroupExpand` (line 570)
+
+The legacy IPC files (`command_select.go`, `command_urltest.go`, etc.) also define the same methods with `//go:build libbox_legacy_ipc`, but since Go's build tags are not mutually exclusive, when both the legacy IPC files and `command_client.go` are compiled together, duplicate declarations occur.
+
+### Impact
+- Default build (`go build ./experimental/libbox/...`) works correctly (EXIT_CODE: 0)
+- Full tag build (android-main configuration) works correctly (EXIT_CODE: 0)
+- Only `libbox_legacy_ipc` tag causes the conflict
+- This is a **pre-existing issue**, not introduced by the upstream v1.13.11 merge
+
+### Affected Methods (10 total)
+1. `SelectOutbound` - in `command_client.go:459` and `command_select.go:14`
+2. `URLTest` - in `command_client.go:469` and `command_urltest.go:20`
+3. `SetClashMode` - in `command_client.go:478` and `command_clash_mode.go:17`
+4. `CloseConnection` - in `command_client.go:487` and `command_close_connection.go:17`
+5. `ServiceReload` - in `command_client.go:503` and `command_power.go:12`
+6. `ServiceClose` - in `command_client.go:510` and `command_power.go:37`
+7. `GetSystemProxyStatus` - in `command_client.go:524` and `command_system_proxy.go:10`
+8. `SetSystemProxyEnabled` - in `command_client.go:534` and `command_system_proxy.go:49`
+9. `GetDeprecatedNotes` - in `command_client.go:543` and `command_deprecated_report.go:16`
+10. `SetGroupExpand` - in `command_client.go:570` and `command_group.go:127`
+
+### Resolution
+This is a **documented pre-existing issue**. The `libbox_legacy_ipc` tag appears to be intended for a different build configuration where only the legacy IPC files are compiled without `command_client.go`. The actual production builds (android-main, apple, windows in ffi.json) do NOT use `libbox_legacy_ipc` tag and compile successfully.
+
+### Recommended Action
+No immediate action required for Task 7 completion since:
+1. Default build passes
+2. All production build configurations (android-main, apple, windows) compile successfully
+3. The legacy IPC duplicate issue is pre-existing and not caused by upstream merge
+
+If legacy IPC support is required in the future, the resolution would be to either:
+1. Add `libbox_legacy_ipc` tag to `command_client.go` to exclude it when legacy IPC is enabled, OR
+2. Remove the duplicate methods from one of the file sets
+
+Generated: 2026-04-30

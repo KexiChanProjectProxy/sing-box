@@ -6,7 +6,7 @@ require github.com/sagernet/sing-box v0.0.0
 
 replace github.com/sagernet/sing-box => ../
 
-replace github.com/anytls/sing-anytls => ../sing-anytls
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13
 
 require (
 	github.com/docker/docker v27.3.1+incompatible

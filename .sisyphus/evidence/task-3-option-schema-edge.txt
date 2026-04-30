@@ -1,0 +1,56 @@
+# Task 3 Edge Cases: Option Schema Edge Cases
+
+## Edge Case 1: V2RayXHTTPOptions embeds V2RayHTTPOptions
+
+**Situation**: V2RayXHTTPOptions embeds V2RayHTTPOptions (composition/inheritance)
+
+**Design Decision**: Use embedding rather than copying fields to maintain upstream HTTP transport semantics while extending with xhttp-specific fields.
+
+**Rationale**:
+- Avoids field duplication
+- xhttp is an extension of HTTP transport, so embedding is semantically correct
+- Changes to V2RayHTTPOptions automatically propagate to V2RayXHTTPOptions
+
+## Edge Case 2: V2RayHTTPOptions.Host type change
+
+**Situation**: Upstream changed V2RayHTTPOptions.Host from string to badoption.Listable[string]
+
+**Impact**: transport/v2rayxhttp/ code was written when Host was string, now fails with type mismatch
+
+**Current Status**: Fork-owned consumer (transport/v2rayxhttp/) needs to be updated to handle Listable[string] type
+
+**Not resolved in this task**: Per task constraints "Do NOT modify files outside option/"
+
+## Edge Case 3: tls.Config.Config() method removed
+
+**Situation**: transport/v2rayxhttp/client.go line 70 calls c.tlsConfig.Config() which no longer exists
+
+**Current Status**: Fork-owned consumer code issue
+
+**Not resolved in this task**: Per task constraints "Do NOT modify files outside option/"
+
+## Edge Case 4: No V2RayTransportTypeXHTTP constant
+
+**Situation**: The V2RayTransportOptions union type in option/v2ray_transport.go only handles known transport types (http, ws, quic, grpc, httpupgrade, cloudflared). xhttp is NOT registered.
+
+**Design Decision**: Do NOT register xhttp as a V2RayTransportType because:
+1. xhttp is a fork-only transport not recognized by upstream V2RayTransportOptions
+2. transport/v2rayxhttp/ implements adapter.V2RayClientTransport and adapter.V2RayServerTransport directly
+3. xhttp is instantiated directly by fork-specific code, not through the generic V2RayTransportOptions switch
+
+**Implication**: xhttp transport cannot be configured via the generic V2RayTransportOptions JSON schema - it requires fork-specific configuration paths.
+
+## Edge Case 5: Range Config Randomization
+
+**Situation**: V2RayXHTTPRangeConfig uses From/To range to generate random values
+
+**Design Decision**: Implemented as a simple struct with normalization in transport/v2rayxhttp/config.go getNormalizedValue()
+
+**Code ownership**: V2RayXHTTPRangeConfig schema lives in option/, normalization logic stays in transport/v2rayxhttp/
+
+## Summary
+The xhttp schema is a fork-only extension with:
+- Schema defined in option/ (fork-owned)
+- Transport implementation in transport/v2rayxhttp/ (fork-owned)
+- No upstream equivalent exists
+- No generic V2RayTransportOptions integration (by design)

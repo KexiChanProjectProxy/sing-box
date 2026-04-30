@@ -1,0 +1,83 @@
+# Task 3 Evidence: Option Schema Reconciliation
+
+## Goal
+Resolve schema conflicts in `option/` package created by upstream v1.13.11 merge.
+Determine whether upstream provides equivalents for V2RayXHTTP* fork-only types.
+
+## Build Status
+
+### `go build ./option/...`
+```
+(no output - PASSED)
+```
+
+### `go build ./transport/v2rayxhttp/...`
+```
+transport/v2rayxhttp/client.go:70:33: c.tlsConfig.Config undefined (type tls.Config has no field or method Config)
+transport/v2rayxhttp/client.go:259:13: invalid operation: host == "" (mismatched types badoption.Listable[string] and untyped string)
+transport/v2rayxhttp/client.go:260:10: cannot use c.serverAddr.AddrString() (value of type string) as badoption.Listable[string] value in assignment
+transport/v2rayxhttp/client.go:266:10: cannot use net.JoinHostPort(host, strconv.Itoa(int(port))) (value of type string) as badoption.Listable[string] value in assignment
+transport/v2rayxhttp/client.go:266:27: cannot use host (variable of slice type badoption.Listable[string]) as string value in argument to net.JoinHostPort
+transport/v2rayxhttp/client.go:277:11: cannot use host (variable of slice type badoption.Listable[string]) as string value in struct literal
+transport/v2rayxhttp/server.go:81:22: invalid operation: s.config.Host != "" (mismatched types badoption.Listable[string] and untyped string)
+transport/v2rayxhttp/server.go:81:44: invalid operation: request.Host != s.config.Host (mismatched types string and badoption.Listable[string])
+```
+
+## Schema Analysis
+
+### Upstream v1.13.11 provides:
+- V2RayHTTPOptions with Host as badoption.Listable[string]
+- V2RayWebsocketOptions, V2RayQUICOptions, V2RayGRPCOptions, V2RayHTTPUpgradeOptions, V2RayCloudflaredOptions
+- NO V2RayXHTTPOptions, V2RayXHTTPXmuxConfig, or V2RayXHTTPRangeConfig
+
+### Fork-only types needed by transport/v2rayxhttp:
+- V2RayXHTTPOptions (extends V2RayHTTPOptions with xhttp-specific fields)
+- V2RayXHTTPXmuxConfig (xmux connection pool configuration)
+- V2RayXHTTPRangeConfig (range-based int32 config for randomization)
+
+### Decision: Fork-owned schema contract
+Since upstream does NOT provide V2RayXHTTP* types, these are fork-only transport extensions.
+Ownership: `option/v2ray_transport.go` (fork-owned file)
+
+## Changes Made
+
+### `option/v2ray_transport.go`
+Added fork-only xhttp transport types:
+
+```go
+// V2RayXHTTPRangeConfig is a range config for xhttp parameters (fork-only extension)
+type V2RayXHTTPRangeConfig struct {
+	From int32 `json:"from"`
+	To   int32 `json:"to"`
+}
+
+// V2RayXHTTPXmuxConfig is the xmux configuration for xhttp (fork-only extension)
+type V2RayXHTTPXmuxConfig struct {
+	MaxConcurrency   *V2RayXHTTPRangeConfig `json:"max_concurrency,omitempty"`
+	MaxConnections   *V2RayXHTTPRangeConfig `json:"max_connections,omitempty"`
+	CMaxReuseTimes   *V2RayXHTTPRangeConfig `json:"c_max_reuse_times,omitempty"`
+	HMaxRequestTimes *V2RayXHTTPRangeConfig `json:"h_max_request_times,omitempty"`
+	HMaxReusableSecs *V2RayXHTTPRangeConfig `json:"h_max_reusable_secs,omitempty"`
+	HKeepAlivePeriod int32                  `json:"h_keep_alive_period,omitempty"`
+}
+
+// V2RayXHTTPOptions is the xhttp transport options (fork-only extension)
+type V2RayXHTTPOptions struct {
+	V2RayHTTPOptions
+	Mode               string                  `json:"mode,omitempty"`
+	XPaddingBytes      *V2RayXHTTPRangeConfig `json:"x_padding_bytes,omitempty"`
+	ScMaxEachPostBytes *V2RayXHTTPRangeConfig `json:"sc_max_each_post_bytes,omitempty"`
+	ScMinPostsIntervalMs *V2RayXHTTPRangeConfig `json:"sc_min_posts_interval_ms,omitempty"`
+	ScMaxBufferedPosts int32                  `json:"sc_max_buffered_posts,omitempty"`
+	NoGRPCHeader       bool                   `json:"no_grpc_header,omitempty"`
+	Xmux               *V2RayXHTTPXmuxConfig   `json:"xmux,omitempty"`
+}
+```
+
+## Result
+- `go build ./option/...` PASSES
+- `go build ./transport/v2rayxhttp/...` FAILS (but with different errors than before)
+  - Previous: "undefined: option.V2RayXHTTPOptions" etc.
+  - Current: Type mismatches from upstream schema changes (Host now badoption.Listable[string], tls.Config.Config() missing)
+- The option types are now defined, resolving the original "missing option-type" failures
+- Remaining failures are consumer-level type adaptations needed in transport/v2rayxhttp/

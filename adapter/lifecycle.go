@@ -118,3 +118,17 @@ func StartNamed(logger log.ContextLogger, stage StartStage, services []Lifecycle
 	}
 	return nil
 }
+
+func LogElapsed(logger log.ContextLogger, description ...any) func() {
+	prefix := F.ToString(description...)
+	startTime := time.Now()
+	timer := time.AfterFunc(time.Second, func() {
+		logger.Trace(prefix, "...")
+	})
+	return func() {
+		if timer.Stop() {
+			return
+		}
+		logger.Trace(prefix, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+	}
+}

@@ -421,7 +421,7 @@ func (r *Router) PreMatch(metadata adapter.InboundContext, routeContext tun.Dire
 		}
 		directRouteOutbound = defaultOutbound.(adapter.DirectRouteOutbound)
 	}
-	if metadata.Destination.IsFqdn() {
+	if metadata.Destination.IsDomain() {
 		if len(metadata.DestinationAddresses) == 0 {
 			var strategy C.DomainStrategy
 			if metadata.Source.IsIPv4() {
@@ -511,10 +511,10 @@ func (r *Router) matchRule(
 					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
 						"found process path: ", processInfo.ProcessPath)
 				}
-			} else if processInfo.AndroidPackageName != "" {
-				event := log.NewProcessInfoEvent("found").WithAndroidPackageName(processInfo.AndroidPackageName)
+			} else if len(processInfo.AndroidPackageNames) > 0 {
+				event := log.NewProcessInfoEvent("found").WithAndroidPackageName(processInfo.AndroidPackageNames[0])
 				log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
-					"found package name: ", processInfo.AndroidPackageName)
+					"found package name: ", processInfo.AndroidPackageNames[0])
 			} else if processInfo.UserId != -1 {
 				if processInfo.UserName != "" {
 					event := log.NewProcessInfoEvent("found").WithUserName(processInfo.UserName)
@@ -998,7 +998,7 @@ func (r *Router) actionSniff(
 }
 
 func (r *Router) actionResolve(ctx context.Context, metadata *adapter.InboundContext, action *R.RuleActionResolve) error {
-	if metadata.Destination.IsFqdn() {
+	if metadata.Destination.IsDomain() {
 		var transport adapter.DNSTransport
 		if action.Server != "" {
 			var loaded bool

@@ -2,17 +2,70 @@
 icon: material/alert-decagram
 ---
 
-#### 1.13.2.2
+#### 1.13.11
 
-* Rebrand Android APK package to `com.kexichan.sfa` for side-by-side installation with upstream SFA; user agent changed to `sing-box-android-mod/`
-* Add `build_android.sh` for automated arm64-v8a APK builds via gomobile/Gradle
-* Integrate Android APK into unified `build_releases.sh` build + checksum pipeline
+* Fix process searcher failure introduced in 1.13.9
+* Fixes and improvements
 
-#### 1.13.2.1
+#### 1.13.10
 
-* Merge upstream sing-box v1.13.2: fix v2ray HTTP transport server, fix DNS exchange failure and recursion deadlock in connector, revert domain name validation relaxation
+* Fix process searcher failure introduced in 1.13.9
+
+#### 1.13.9
+
+* Fixes and improvements
+
+#### 1.13.8
+
+* Update naiveproxy to v147.0.7727.49-1
+* Fix fake-ip DNS server should return SUCCESS when address type is not configured
+* Fixes and improvements
+
+#### 1.13.7
+
+* Fixes and improvements
+
+#### 1.13.6
+
+* Fixes and improvements
+
+#### 1.13.5
+
+* Fixes and improvements
+
+#### 1.13.4
+
+* Fixes and improvements
+
+#### 1.13.3
+
+* Add OpenWrt and Alpine APK packages to release **1**
+* Backport to macOS 10.13 High Sierra **2**
+* OCM service: Add WebSocket support for Responses API **3**
+* Fixes and improvements
+
+**1**:
+
+Alpine APK files use `linux` in the filename to distinguish from OpenWrt APKs which use the `openwrt` prefix:
+
+- OpenWrt: `sing-box_{version}_openwrt_{architecture}.apk`
+- Alpine: `sing-box_{version}_linux_{architecture}.apk`
+
+**2**:
+
+Legacy macOS binaries (with `-legacy-macos-10.13` suffix) now support
+macOS 10.13 High Sierra, built using Go 1.25 with patches
+from [SagerNet/go](https://github.com/SagerNet/go).
+
+**3**:
+
+See [OCM](/configuration/service/ocm).
 
 #### 1.13.2
+
+* Fixes and improvements
+
+#### 1.13.1
 
 * Fixes and improvements
 

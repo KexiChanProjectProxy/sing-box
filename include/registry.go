@@ -26,6 +26,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/mixed"
 	"github.com/sagernet/sing-box/protocol/naive"
 	"github.com/sagernet/sing-box/protocol/redirect"
+	"github.com/sagernet/sing-box/protocol/router"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/shadowtls"
 	"github.com/sagernet/sing-box/protocol/socks"
@@ -63,6 +64,7 @@ func InboundRegistry() *inbound.Registry {
 	shadowtls.RegisterInbound(registry)
 	vless.RegisterInbound(registry)
 	anytls.RegisterInbound(registry)
+	router.RegisterInbound(registry)
 
 	registerQUICInbounds(registry)
 	registerStubForRemovedInbounds(registry)

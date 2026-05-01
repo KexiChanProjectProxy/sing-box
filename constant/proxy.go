@@ -31,6 +31,7 @@ const (
 	TypeCCM          = "ccm"
 	TypeOCM          = "ocm"
 	TypeOOMKiller    = "oom-killer"
+	TypeRouter       = "router"
 )
 
 const (
@@ -101,6 +102,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "LoadBalance"
 	case TypeCloudflared:
 		return "Cloudflared"
+	case TypeRouter:
+		return "Router"
 	default:
 		return "Unknown"
 	}

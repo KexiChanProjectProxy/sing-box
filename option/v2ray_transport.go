@@ -109,31 +109,4 @@ type V2RayCloudflaredOptions struct {
 	CloudflaredVersion string `json:"cloudflared_version,omitempty"`
 }
 
-// V2RayXHTTPRangeConfig is a range config for xhttp parameters (fork-only extension)
-type V2RayXHTTPRangeConfig struct {
-	From int32 `json:"from"`
-	To   int32 `json:"to"`
-}
 
-// V2RayXHTTPXmuxConfig is the xmux configuration for xhttp (fork-only extension)
-type V2RayXHTTPXmuxConfig struct {
-	MaxConcurrency   *V2RayXHTTPRangeConfig `json:"max_concurrency,omitempty"`
-	MaxConnections   *V2RayXHTTPRangeConfig `json:"max_connections,omitempty"`
-	CMaxReuseTimes   *V2RayXHTTPRangeConfig `json:"c_max_reuse_times,omitempty"`
-	HMaxRequestTimes *V2RayXHTTPRangeConfig `json:"h_max_request_times,omitempty"`
-	HMaxReusableSecs *V2RayXHTTPRangeConfig `json:"h_max_reusable_secs,omitempty"`
-	HKeepAlivePeriod int32                  `json:"h_keep_alive_period,omitempty"`
-}
-
-// V2RayXHTTPOptions is the xhttp transport options (fork-only extension)
-// It extends V2RayHTTPOptions with xhttp-specific fields
-type V2RayXHTTPOptions struct {
-	V2RayHTTPOptions
-	Mode               string                  `json:"mode,omitempty"`
-	XPaddingBytes      *V2RayXHTTPRangeConfig `json:"x_padding_bytes,omitempty"`
-	ScMaxEachPostBytes *V2RayXHTTPRangeConfig `json:"sc_max_each_post_bytes,omitempty"`
-	ScMinPostsIntervalMs *V2RayXHTTPRangeConfig `json:"sc_min_posts_interval_ms,omitempty"`
-	ScMaxBufferedPosts int32                  `json:"sc_max_buffered_posts,omitempty"`
-	NoGRPCHeader       bool                   `json:"no_grpc_header,omitempty"`
-	Xmux               *V2RayXHTTPXmuxConfig   `json:"xmux,omitempty"`
-}

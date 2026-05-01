@@ -1,0 +1,67 @@
+# Task 11: Logging/Event Surfaces Reconciliation - Edge Cases
+
+## Edge Case 1: event_new.go Extension Events
+
+The log/event_new.go file contains 10 additional event types that are purely fork extensions:
+
+- EventTypeHealthCheck
+- EventTypeNetworkState
+- EventTypeRuleSet
+- EventTypeTLS
+- EventTypeComponentLifecycle
+- EventTypeServerLifecycle
+- EventTypeTransportProtocol
+- EventTypeHTTPRoute
+- EventTypeAuth
+- EventTypeService
+
+These have no upstream equivalent and represent fork-specific observability needs.
+
+## Edge Case 2: Structured Logging Pattern Compatibility
+
+The fork uses a builder pattern for events:
+
+```go
+log.NewConnectionEvent(direction, action).
+    WithSource(addr).
+    WithDestination(addr).
+    WithNetwork(network).
+    WithInbound(tag, inboundType)
+```
+
+This pattern is consistent with Go idioms and compatible with upstream's logging infrastructure.
+
+## Edge Case 3: Event Serialization
+
+Each event type has a ToMap() method for serialization. These are independent of upstream and do not conflict.
+
+## Edge Case 4: Observable Pattern
+
+Both fork and upstream use the observable pattern via `github.com/sagernet/sing/common/observable`.
+The log.Factory interface is compatible.
+
+## Edge Case 5: Event Bus Integration
+
+The log/event_bus.go file implements an in-memory event bus. This is fork-specific and does not conflict with upstream.
+
+## No Conflicts Found
+
+After analysis of upstream v1.13.11 (tag 553cfa1f9f99f4da6118f93d507294e580db00d7):
+- Upstream has no event.go file in log/
+- Upstream has no structured event types
+- Fork events are entirely additive and non-conflicting
+
+## Pre-existing Considerations
+
+The following are pre-existing patterns in the fork, not introduced by this task:
+
+1. Event types are serialized to JSON via ToMap() - consumers handle this
+2. Event bus is single-node in-memory - no distributed tracing
+3. Event buffering is handled by subscribers (subscriber_*.go files)
+
+## Verification
+
+Build passes: `go build ./log/...` (EXIT_CODE: 0)
+Tests pass: `go test ./log/...` (0.006s)
+
+No code changes were required.

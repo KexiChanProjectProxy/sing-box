@@ -1,0 +1,176 @@
+# Task 15: libbox Runtime Edge Cases
+
+## Edge Case 1: libbox_legacy_ipc Build Tag Issue
+
+### Description
+When building with the `libbox_legacy_ipc` tag, duplicate method declarations occur.
+
+### Root Cause
+The legacy IPC implementation in `command_*legacy*.go` files declares the same methods as the non-legacy versions in `command_client.go`. Go does not support build-tag-based method overriding within the same type.
+
+### Affected Methods
+10 methods declared in both:
+- Legacy files: `command_status.go`, `command_log.go`, `command_group.go`, etc.
+- Non-legacy: `command_client.go`
+
+### Production Impact
+- **android-main tag**: Does NOT include `libbox_legacy_ipc` - builds cleanly
+- **apple tag**: Does NOT include `libbox_legacy_ipc` - builds cleanly
+- **windows tag**: Does NOT include `libbox_legacy_ipc` - builds cleanly
+
+### Workaround
+Only build with `libbox_legacy_ipc` tag when specifically targeting legacy IPC protocol.
+
+## Edge Case 2: ProcessInfo API Slice vs String
+
+### Description
+Previous Task 7 noted `ProcessInfo.AndroidPackageNames` is a slice (`[]string`), not a string.
+
+### Location
+- `command_types.go:350`: `packageNames: conn.ProcessInfo.PackageNames` (correctly uses slice)
+- `daemon/started_service.pb.go:1463`: `PackageNames []string` (protobuf generated)
+- `service.go:221`: `AndroidPackageNames: result.androidPackageNames` (correctly propagates slice)
+
+### Verification
+This is correctly implemented - no issue.
+
+## Edge Case 3: PlatformInterface Method Signature Mismatch
+
+### Description
+The libbox `PlatformInterface` uses `int32` for file descriptors and connection owner ports, while the core `adapter.PlatformInterface` uses `int`.
+
+### Location
+- `platform.go:11`: `AutoDetectInterfaceControl(fd int32) error`
+- `service.go:48-49`: `return w.iif.AutoDetectInterfaceControl(int32(fd))`
+- `platform.go:14`: `FindConnectionOwner(ipProtocol int32, sourcePort int32, destinationPort int32)`
+
+### Mitigation
+The `platformInterfaceWrapper` in `service.go` handles conversions:
+```go
+func (w *platformInterfaceWrapper) AutoDetectInterfaceControl(fd int) error {
+    return w.iif.AutoDetectInterfaceControl(int32(fd))  // int→int32 conversion
+}
+```
+
+### Status
+This is an intentional design choice in libbox's API surface - not ABI drift.
+
+## Edge Case 4: WIFIState Pointer vs Value
+
+### Description
+libbox's platform returns `*WIFIState` while adapter's `ReadWIFIState()` returns `WIFIState`.
+
+### Location
+- `platform.go:20`: `ReadWIFIState() *WIFIState`
+- `adapter/platform.go:31`: `ReadWIFIState() WIFIState`
+- `service.go:169-175`: Converts pointer to value
+
+### Conversion
+```go
+func (w *platformInterfaceWrapper) ReadWIFIState() adapter.WIFIState {
+    wifiState := w.iif.ReadWIFIState()
+    if wifiState == nil {
+        return adapter.WIFIState{}
+    }
+    return (adapter.WIFIState)(*wifiState)
+}
+```
+
+### Status
+Properly handled via conversion.
+
+## Edge Case 5: ConnectionOwner ProcessID Field
+
+### Description
+libbox's `ConnectionOwner` (platform.go:26-31) does not expose `ProcessID` field, while `adapter.ConnectionOwner` has it.
+
+### Fields Comparison
+| Field | adapter.ConnectionOwner | libbox.platform.ConnectionOwner |
+|-------|------------------------|--------------------------------|
+| ProcessID | uint32 | NOT EXPOSED |
+| UserId | int32 | UserId |
+| UserName | string | UserName |
+| ProcessPath | string | ProcessPath |
+| AndroidPackageNames | []string | androidPackageNames (private) |
+
+### Status
+ProcessID is not exposed in libbox API - this is by design as the libbox platform API predates ProcessID addition to adapter.
+
+## Edge Case 6: gRPC Connection Management
+
+### Description
+The CommandClient uses gRPC client with retry logic and connection pooling.
+
+### Retry Configuration
+```go
+const (
+    commandClientDialAttempts = 10
+    commandClientDialBaseDelay = 100 * time.Millisecond
+    commandClientDialStepDelay = 50 * time.Millisecond
+)
+```
+
+### XPC Dialer
+Platform can provide custom XPC dialer via `SetXPCDialer()` for mobile platforms.
+
+### Status
+Working as designed.
+
+## Edge Case 7: TUN File Descriptor Handling
+
+### Description
+TUN file descriptor is duplicated and transferred between libbox and the platform interface.
+
+### Flow
+1. `OpenTun()` returns file descriptor (int32)
+2. `getTunnelName(tunFd)` queries the TUN name
+3. `dup(int(tunFd))` duplicates the fd for passing to tun.New
+4. `options.FileDescriptor = dupFd` stores the dup'd fd
+
+### Status
+Correctly implemented in `service.go:56-84`.
+
+## Edge Case 8: DNS Transport Registration
+
+### Description
+libbox registers a local DNS transport if platform provides one.
+
+### Location
+`config.go:26-38` in `baseContext()`:
+```go
+if localTransport := platformInterface.LocalDNSTransport(); localTransport != nil {
+    dns.RegisterTransport[option.LocalDNSServerOptions](...)
+}
+```
+
+### Status
+Correctly integrates with DNS registry.
+
+## Edge Case 9: Interface Monitor Stub
+
+### Description
+`platformInterfaceStub` in `config.go` provides nil implementations for interface monitor.
+
+### Methods
+```go
+func (s *interfaceMonitorStub) DefaultInterface() *control.Interface { return nil }
+func (s *interfaceMonitorStub) OverrideAndroidVPN() bool { return false }
+func (s *interfaceMonitorStub) AndroidVPNEnabled() bool { return false }
+```
+
+### Status
+Used for config checking (CheckConfig) where real platform interface is not needed.
+
+## Edge Case 10: Network Interface Filtering
+
+### Description
+`NetworkInterfaces()` filters out the TUN interface from available interfaces.
+
+### Location
+`service.go:127`:
+```go
+isDefault := netInterface.Name != w.myTunName && ...
+```
+
+### Status
+Correctly excludes the managed TUN interface from network interface list.

@@ -1,0 +1,96 @@
+# Task 7 Evidence: libbox Build Verification
+
+## Build Status: PASS
+
+### Default Build
+```
+go build ./experimental/libbox/...
+EXIT_CODE: 0
+```
+
+### Full Tag Build (android-main configuration)
+```
+go build -tags "with_gvisor with_quic with_wireguard with_utls with_naive_outbound with_clash_api badlinkname tfogo_checklinkname0 with_tailscale ts_omit_logtail ts_omit_ssh ts_omit_drive ts_omit_taildrop ts_omit_webclient ts_omit_doctor ts_omit_capture ts_omit_kube ts_omit_aws ts_omit_synology ts_omit_bird" ./experimental/libbox/...
+EXIT_CODE: 0
+```
+
+## Fork-Owned libbox Extensions Preserved
+
+### 1. F-Droid Integration
+- `fdroid.go`: F-Droid repository API client and update checker
+- `fdroid_mirrors.go`: List of 40+ F-Droid mirrors worldwide
+
+### 2. Legacy IPC Protocol
+- Files with `//go:build libbox_legacy_ipc` tag:
+  - `command_clash_mode.go`: SetClashMode handler
+  - `command_close_connection.go`: CloseConnection handler
+  - `command_connections.go`: Connections stream handler
+  - `command_deprecated_report.go`: GetDeprecatedNotes handler
+  - `command_group.go`: Group operations handler
+  - `command_log.go`: Log stream handler
+  - `command_power.go`: ServiceReload/ServiceClose handlers
+  - `command_select.go`: SelectOutbound handler
+  - `command_server.go`: Server-side command handling
+  - `command_status.go`: Status stream handler
+  - `command_system_proxy.go`: System proxy handlers
+  - `command_urltest.go`: URLTest handler
+  - `service_pause.go`: Service pause/resume
+- **Note**: Legacy IPC files have duplicate method declarations when compiled with `libbox_legacy_ipc` tag (pre-existing issue, not from upstream merge)
+
+### 3. Platform-Specific Code
+- `tun_darwin.go`: Darwin TUN interface setup
+- `tun_name_darwin.go`: Darwin TUN naming
+- `tun_name_linux.go`: Linux TUN naming
+- `tun_name_other.go`: Other platform TUN naming stubs
+- `connection_owner_darwin.go`: Darwin connection ownership
+- `pidfd_android.go`: Android process file descriptor
+- `service_windows.go`: Windows service implementation
+- `service_other.go`: Non-Windows service implementation
+- `link_flags_unix.go`: Unix-specific link flags
+- `link_flags_stub.go`: Stub for non-Unix platforms
+- `log.go`: Darwin/Linux logging setup
+
+### 4. Clash API Extensions
+- `command_clash_mode.go`: Clash mode management
+- `command_connections.go`: Connection management via clashapi
+- `command_status.go`: Status monitoring via clashapi
+- `command_close_connection.go`: Close connection via clashapi
+
+### 5. Group/Selector Protocol Extensions
+- `command_group.go`: Outbound group operations (selector, url-test, etc.)
+- `command_select.go`: Select outbound in selector
+- `command_urltest.go`: URL test operations
+- `protocol/group`: Group protocol implementations
+
+### 6. Build Configuration
+- `ffi.json`: Multi-platform build definitions for Android, Apple, Windows, C#
+- Java package: `io.nekohasekai.libbox`
+- C# namespace: `SagerNet`
+- C# entrypoint: `Libbox`
+
+## Upstream API Changes Adopted
+
+### ProcessInfo API Migration
+- **Change**: `AndroidPackageName` (string) → `AndroidPackageNames` ([]string)
+- **Location**: `command_types.go` line 350
+- **Adaptation**: Uses `PackageNames: conn.ProcessInfo.PackageNames` (slice assignment)
+
+### Sing-box v0.8.9 Integration
+- libbox correctly uses `sing-box/option` package for configuration
+- libbox uses `sing-tun` for TUN interface management
+- All imports from `github.com/sagernet/sing-*` are compatible
+
+## No Conflicts Detected
+
+- No API changes in consumed packages (router, route, option, protocol, transport) caused libbox compilation failures
+- Fork-owned extensions (F-Droid, Clash API, legacy IPC, group protocols) are preserved
+- Upstream changes to ProcessInfo API were properly adapted
+
+## Pre-Existing Blockers (Not in libbox)
+
+These known issues exist elsewhere and do NOT affect libbox compilation:
+- quic-go/qpack mismatch in HTTP/3 paths
+- protocol/tailscale/service/derp missing tun interfaces
+- common/tlsfragment handshake failure
+
+Generated: 2026-04-30

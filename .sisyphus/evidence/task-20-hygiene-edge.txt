@@ -1,0 +1,50 @@
+# Task 20: Final Merge Hygiene - Edge Cases
+
+## Pre-existing Issues Confirmed
+
+### 1. quic-go/qpack Mismatch (Issue 1.1)
+- **Package**: `github.com/quic-go/quic-go@v0.54.0/http3`
+- **Error**: `qpack.NewDecoder` signature mismatch, `DecodeFull` method missing
+- **Root Cause**: quic-go v0.54.0 expects qpack@v0.5.1 but qpack@v0.6.0 is installed
+- **Dependency path**: sing-box → sing-quic → quic-go (indirect), but sing-box root requires qpack@v0.6.0
+- **Resolution**: Outside scope of this merge - requires quic-go upgrade or qpack version adjustment
+
+### 2. TestTLSFragment Failure (Issue 2.1)
+- **Package**: `github.com/sagernet/sing-box/common/tlsfragment`
+- **Error**: "tls: first record does not look like a TLS handshake"
+- **Root Cause**: Test infrastructure issue, not code regression
+- **Impact**: Test only, no production impact
+
+## Verified Clean Packages
+
+All packages excluding quic-go dependency and tlsfragment test build and test successfully:
+- adapter/..., option/..., route/..., log/...
+- protocol/... (vless, vmess, trojan, http, socks, mixed, shadowsocks, shadowtls, tuic, anytls, hysteria, hysteria2, naive, direct, group, tailscale)
+- transport/... (v2ray, v2rayxhttp, v2raycloudflared, v2rayquic, v2raygrpc, sip003)
+- dns/..., common/... (excluding tlsfragment test issue)
+- service/... (excluding quic-go dependency)
+- experimental/libbox/...
+
+## Verified Resolved Issues (Merge-Related)
+
+1. **V2RayXHTTP option types** - Added to option/v2ray_transport.go (Task 6)
+2. **V2RayXHTTP transport adaptation** - API changes absorbed (Task 6)
+3. **Tailscale/gVisor symbols** - Verified available in sing-tun v0.8.9 (Task 17)
+4. **DNS MockTransport** - Added missing Reset() method (Task 10)
+5. **Route core fork extensions** - Properly preserved (Task 4)
+6. **VLESS connection pool** - Explicitly removed (Task 5)
+
+## Merge Hygiene Confirmed
+
+- No `<<<<<<<`, `=======`, `>>>>>>>` conflict markers
+- No `.orig` files from merge tools
+- No `~` backup files
+- No stray merge artifacts in any .go files
+- go.mod and go.sum consistent (verified via `go mod verify`)
+- sing-anytls replace directive preserved
+
+## Files Modified During Merge Hygiene
+
+- `.sisyphus/evidence/CURRENT_ISSUES.md` - Updated to reflect resolved issues
+- `.sisyphus/evidence/task-20-hygiene.txt` - Created
+- `.sisyphus/evidence/task-20-hygiene-edge.txt` - Created

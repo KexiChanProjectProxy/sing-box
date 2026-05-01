@@ -1,0 +1,94 @@
+V2Ray Transport Consumers Edge Cases - Task 13
+=============================================
+
+Edge Case 1: Naive Inbound uses v2rayhttp directly
+-------------------------------------------------
+protocol/naive/inbound.go imports:
+  "github.com/sagernet/sing-box/transport/v2rayhttp"
+
+Usage at line 231:
+  wrapper := v2rayhttp.NewHTTP2Wrapper(conn)
+
+This is NOT the v2ray transport.NewClientTransport() pattern - naive uses
+v2rayhttp as a utility for HTTP/2 connection wrapping, not as a protocol transport.
+
+No V2RayTransportOptions involved - this is internal to the naive protocol.
+
+Edge Case 2: AnyTLS uses v2ray transport differently
+---------------------------------------------------
+protocol/anytls/outbound.go uses:
+  v2ray.NewClientTransport(ctx, outboundDialer, outbound.server, *options.Transport, tlsConfig)
+
+The anytls protocol wraps the transport dialer, then does its own TLS handshake on top.
+This is the standard V2RayClientTransport pattern.
+
+Edge Case 3: V2RayXHTTPOptions embedding
+---------------------------------------
+V2RayXHTTPOptions embeds V2RayHTTPOptions:
+  type V2RayXHTTPOptions struct {
+      V2RayHTTPOptions
+      ...
+  }
+
+This means when Host changed from string to badoption.Listable[string],
+V2RayXHTTPOptions automatically inherits the new type. No additional changes
+needed in consumer code.
+
+Edge Case 4: Cloudflared transport in union but no fork consumer
+---------------------------------------------------------------
+V2RayTransportOptions union includes Cloudflared:
+  case C.V2RayTransportTypeCloudflared:
+      return v2raycloudflared.NewClient(...)
+
+But v2raycloudflared is a fork-only transport. The fork may use it but
+it's registered in the main switch. This is correct - it allows fork configs
+with cloudflared transport to work.
+
+Edge Case 5: GRPC has two implementations
+----------------------------------------
+transport/v2ray/grpc.go: Uses v2raygrpc (standard)
+transport/v2ray/grpc_lite.go: Uses v2raygrpclite (alternative)
+
+Both implement the same V2RayGRPCOptions interface. The grpc_lite.go is
+for situations where the full grpc implementation is not available.
+
+Edge Case 6: QUIC has stub mechanism
+------------------------------------
+include/quic_stub.go and include/quic.go use build tags:
+  quic_stub.go: //go:build !with_quic
+  quic.go:      //go:build with_quic
+
+transport/v2rayquic/init.go conditionally imports:
+  _ "github.com/sagernet/sing-box/transport/v2rayquic"
+
+This allows the QUIC transport to be excluded from builds that don't want it.
+
+Edge Case 7: TLS Config() vs STDConfig()
+---------------------------------------
+Task 6 noted: tls.Config.Config() renamed to tls.Config.STDConfig()
+
+Checked consumers:
+  - v2rayhttp/client.go:54 uses tls.STDConfig (correct)
+  - v2rayxhttp/client.go:70 uses c.tlsConfig.STDConfig() (already fixed in Task 6)
+  - v2raygrpc/tls_credentials.go: Uses internal_credentials which may have different APIs
+
+No duplicate compatibility shims found - the rename is properly propagated.
+
+Edge Case 8: HTTPOptions.Host coercion
+------------------------------------
+V2RayHTTPOptions.Host is badoption.Listable[string] (list of hosts)
+
+In v2rayhttp/client.go:
+  host: options.Host  // assigns Listable[string] to []string field
+
+The Listable[string] is directly coercible to []string in Go, so this works
+without explicit conversion.
+
+Summary
+-------
+All edge cases are properly handled:
+- No compatibility shims needed
+- No duplicate option type definitions
+- V2RayXHTTPOptions properly embeds V2RayHTTPOptions
+- Fork-only transports (xhttp, cloudflared) are correctly isolated
+- Build-tag based QUIC stub mechanism works correctly

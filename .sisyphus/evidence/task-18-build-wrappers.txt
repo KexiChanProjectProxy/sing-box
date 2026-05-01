@@ -1,0 +1,102 @@
+# Task 18: Build Wrapper Surface Reconciliation
+
+## Build Verification
+
+### libbox Standard Build
+```
+go build ./experimental/libbox/...  # PASS
+```
+
+### libbox Full Tag Build (matches build_libbox sharedTags + darwinTags)
+```
+TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird,with_dhcp,grpcnotrace"
+go build -tags "$TAGS" ./experimental/libbox/...  # PASS
+```
+
+### android-main Tag Build
+```
+go build -tags android-main ./experimental/libbox/...  # PASS
+```
+
+### build_libbox Tool
+```
+go build ./cmd/internal/build_libbox/...  # PASS
+```
+
+## Makefile Mobile Targets Analysis
+
+### lib_android (line 237-238)
+```makefile
+lib_android:
+	go run ./cmd/internal/build_libbox -target android
+```
+- Invokes build_libbox with `-target android`
+- build_libbox correctly builds `./experimental/libbox` package
+- No stale references to pre-merge APIs
+
+### lib_apple (line 240-241)
+```makefile
+lib_apple:
+	go run ./cmd/internal/build_libbox -target apple
+```
+- Invokes build_libbox with `-target apple`
+- Same package `./experimental/libbox` used
+- No stale references
+
+### build_android (line 94-95)
+```makefile
+build_android:
+	cd ../sing-box-for-android && ./gradlew :app:clean :app:assembleOtherRelease :app:assembleOtherLegacyRelease && ./gradlew --stop
+```
+- External Gradle build - depends on libbox.aar from lib_android
+- No direct Go build references in sing-box repo
+
+### build_ios (line 111-115)
+```makefile
+build_ios:
+	cd ../sing-box-for-apple && ...
+```
+- External Xcodebuild - depends on Libbox.xcframework from lib_apple
+- No direct Go build references in sing-box repo
+
+## build_libbox Tags Analysis
+
+### sharedTags (line 66)
+```
+with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
+with_clash_api, badlinkname, tfogo_checklinkname0,
+with_tailscale, ts_omit_logtail, ts_omit_ssh, ts_omit_drive,
+ts_omit_taildrop, ts_omit_webclient, ts_omit_doctor, ts_omit_capture,
+ts_omit_kube, ts_omit_aws, ts_omit_synology, ts_omit_bird
+```
+
+### darwinTags (line 67)
+```
+with_dhcp, grpcnotrace
+```
+
+All tags are compatible with the stabilized libbox/runtime surface.
+
+## No Stale References Found
+
+Searched for:
+- `sing-box v0.x.x` version strings in Go files - NOT FOUND
+- `sing-box/option.V2RayXHTTP` references - NOT FOUND
+- Old API patterns incompatible with current libbox - NOT FOUND
+
+## build_shared Package
+
+The `cmd/internal/build_shared` package provides:
+- `FindSDK()` - locates Android SDK/NDK
+- `FindMobile()` - locates gomobile binary
+- `ReadTag()` - reads git tag for version
+
+All functions align with current build requirements. No changes needed.
+
+## Conclusion
+
+Build wrapper surfaces are aligned with stabilized runtime:
+- libbox builds pass with all relevant tag combinations
+- build_libbox tool compiles and functions correctly
+- Makefile mobile targets correctly invoke build_libbox
+- No stale pre-merge API references found

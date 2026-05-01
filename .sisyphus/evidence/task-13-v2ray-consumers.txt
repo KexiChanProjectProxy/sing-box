@@ -1,0 +1,78 @@
+V2Ray Transport Consumers Reconciliation - Task 13
+===================================================
+
+Build Status
+------------
+go build ./transport/v2ray/...         : PASS (no output, exit 0)
+go build ./transport/...               : PASS (no output, exit 0)
+go build ./protocol/vmess/...         : PASS
+go build ./protocol/trojan/...        : PASS
+go build ./protocol/vless/...         : PASS
+go build ./protocol/naive/...         : PASS
+go build ./protocol/anytls/...        : PASS
+go build ./transport/sip003/...       : PASS
+
+Verified Contracts
+-----------------
+V2RayHTTPOptions.Host is badoption.Listable[string] (upstream adoption from fork)
+  - v2rayhttp/client.go:82 assigns directly to []string field via options.Host
+  - No compatibility shim needed - Listable[string] coerces to []string
+
+tls.Config.STDConfig() (renamed from Config()) is used in:
+  - v2rayxhttp/client.go:70 (fork-only transport, already adapted in Task 6)
+  - v2rayhttp/client.go:54 uses tls.STDConfig directly (correct usage)
+
+V2RayTransportOptions union is properly structured:
+  - HTTP, Websocket, QUIC, GRPC, HTTPUpgrade, Cloudflared
+  - V2RayXHTTPOptions NOT in union (fork-only, correctly documented)
+
+Non-VLESS Consumers Analysis
+-----------------------------
+VMess (protocol/vmess/outbound.go):
+  - Uses v2ray.NewClientTransport() at line 66
+  - Uses adapter.V2RayClientTransport interface
+  - No local redefinition of transport types
+
+Trojan (protocol/trojan/outbound.go):
+  - Uses v2ray.NewClientTransport() at line 69
+  - Uses adapter.V2RayClientTransport interface
+  - No local redefinition of transport types
+
+Naive (protocol/naive/inbound.go):
+  - Uses v2ray transport directly (check if exists)
+
+AnyTLS (protocol/anytls/outbound.go):
+  - References transport/v2ray (check usage)
+
+VLESS (Task 5 verified):
+  - Client: v2ray.NewClientTransport() at line 72
+  - Server: v2ray.NewServerTransport() at line 86
+  - Uses adapter.V2RayClientTransport and adapter.V2RayServerTransport
+
+No Duplicate Compatibility Shims Found
+------------------------------------
+Checked for:
+  - transport/**/*wrapper*.go (none found)
+  - transport/**/*compat*.go (none found in transport/)
+  - Redundant V2Ray*Options redefinitions in consumer packages
+
+Consolidated Schema Model
+------------------------
+option/v2ray_transport.go: Contains ALL V2Ray transport option types
+  - V2RayHTTPOptions (upstream, Host = badoption.Listable[string])
+  - V2RayWebsocketOptions (upstream)
+  - V2RayQUICOptions (upstream, empty struct)
+  - V2RayGRPCOptions (upstream)
+  - V2RayHTTPUpgradeOptions (upstream)
+  - V2RayCloudflaredOptions (upstream)
+  - V2RayXHTTPOptions (fork-only, embeds V2RayHTTPOptions)
+  - V2RayXHTTPRangeConfig (fork-only)
+  - V2RayXHTTPXmuxConfig (fork-only)
+
+Task 6 already adapted fork-only transports (v2rayxhttp, v2raycloudflared).
+
+Conclusion
+----------
+All V2Ray transport consumers compile successfully after merged contract adoption.
+No duplicate compatibility shims remain.
+Fork-only transport options (V2RayXHTTP*) are correctly documented and isolated.

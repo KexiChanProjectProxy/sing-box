@@ -33,49 +33,19 @@ includes `protocol/router` (which imports H2/H3 transports).
 
 ### 1.2 v2rayxhttp Transport — Missing Option Types
 
-**Affected packages**: `transport/v2rayxhttp`
-
-**Error**:
-```
-transport/v2rayxhttp/client.go:32:21: undefined: option.V2RayXHTTPOptions
-transport/v2rayxhttp/mux.go:45:22: undefined: option.V2RayXHTTPXmuxConfig
-transport/v2rayxhttp/config.go:10:36: undefined: option.V2RayXHTTPRangeConfig
-```
-
-**Root cause**: The `transport/v2rayxhttp/` package references `option.V2RayXHTTPOptions`,
-`option.V2RayXHTTPXmuxConfig`, and `option.V2RayXHTTPRangeConfig` types that do not exist
-in `option/`. These option types were either never added to the fork's `option/` schema,
-or were removed during a prior refactor and the transport package was not updated.
-
-**Impact**: The entire `v2rayxhttp` transport cannot compile. Any configuration or
-runtime path that would use this transport is dead code.
-
-**Status**: Pre-existing. Not caused by the v1.13.11 migration. Requires either adding
-the missing option types to `option/` or removing the `v2rayxhttp` transport entirely.
+**Status**: ✅ RESOLVED (Task 6, Task 14)
+- `V2RayXHTTPOptions`, `V2RayXHTTPXmuxConfig`, `V2RayXHTTPRangeConfig` types exist in `option/v2ray_transport.go`
+- `transport/v2rayxhttp/...` compiles successfully
+- No changes required
 
 ---
 
 ### 1.3 Tailscale Protocol — Missing `tun` and `ping` Symbols
 
-**Affected packages**: `protocol/tailscale`, `service/derp` (depends on `protocol/tailscale`)
-
-**Error**:
-```
-protocol/tailscale/endpoint.go:87:25: undefined: tun.ICMPForwarder
-protocol/tailscale/endpoint.go:348:34: undefined: tun.DefaultNIC
-protocol/tailscale/endpoint.go:356:23: undefined: tun.NewICMPForwarder
-protocol/tailscale/endpoint.go:685:27: undefined: ping.ConnectGVisor
-```
-
-**Root cause**: The `protocol/tailscale/` package references `tun.ICMPForwarder`,
-`tun.DefaultNIC`, `tun.NewICMPForwarder`, and `ping.ConnectGVisor` from external
-dependencies that are either not present in `go.mod` or have incompatible versions.
-These symbols come from the `gVisor` networking stack used by Tailscale.
-
-**Impact**: The Tailscale protocol and DERP service cannot compile.
-
-**Status**: Pre-existing. Not caused by the v1.13.11 migration. Requires aligning the
-Tailscale/gVisor dependency versions or adding the missing packages to `go.mod`.
+**Status**: ✅ RESOLVED (Task 17)
+- All referenced symbols (`tun.ICMPForwarder`, `tun.DefaultNIC`, `tun.NewICMPForwarder`, `ping.ConnectGVisor`) are available in sing-tun v0.8.9
+- `protocol/tailscale` and `service/derp` compile successfully with proper build tags (`with_gvisor,with_tailscale`)
+- No dependency changes required
 
 ---
 
@@ -122,9 +92,20 @@ they remain analysis documents, not implementation proof.
 
 ## Summary Table
 
-| # | Issue | Type | Package(s) | Pre-existing | Migration-Related |
-|---|-------|------|------------|-------------|-------------------|
-| 1.1 | quic-go HTTP/3 API mismatch | Build | protocol/router (transitive) | Yes | No |
-| 1.2 | Missing V2RayXHTTP option types | Build | transport/v2rayxhttp | Yes | No |
-| 1.3 | Missing tun/ping gVisor symbols | Build | protocol/tailscale, service/derp | Yes | No |
-| 2.1 | TestTLSFragment handshake failure | Test | common/tlsfragment | Yes | No |
+| # | Issue | Type | Package(s) | Pre-existing | Status |
+|---|-------|------|------------|-------------|--------|
+| 1.1 | quic-go HTTP/3 API mismatch | Build | protocol/router (transitive) | Yes | OPEN - External dependency conflict |
+| 1.2 | Missing V2RayXHTTP option types | Build | transport/v2rayxhttp | Yes | ✅ RESOLVED (Task 6, 14) |
+| 1.3 | Missing tun/ping gVisor symbols | Build | protocol/tailscale, service/derp | Yes | ✅ RESOLVED (Task 17) |
+| 2.1 | TestTLSFragment handshake failure | Test | common/tlsfragment | Yes | OPEN - Pre-existing test issue |
+
+## Resolved Issues (Merge Hygiene)
+
+The following issues were identified during the v1.13.11 merge and have been resolved:
+
+1. **V2RayXHTTP option types** - Added to `option/v2ray_transport.go` (Task 6)
+2. **V2RayXHTTP transport adaptation** - Updated for upstream API changes: `tls.Config.Config()` → `STDConfig()`, `string` Host → `badoption.Listable[string]` (Task 6)
+3. **Tailscale/gVisor symbols** - Verified available in sing-tun v0.8.9 (Task 17)
+4. **Route core fork extensions** - `asnReader`, `geositeReader`, `sniffOverrideDestination` properly preserved (Task 4)
+5. **VLESS connection pool** - Explicitly removed, no reintroduction (Task 5)
+6. **DNS MockTransport** - Added missing `Reset()` method (Task 10)

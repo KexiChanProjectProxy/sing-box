@@ -1,0 +1,86 @@
+# Task 17 Edge Cases: tailscale/derp Surface Analysis
+
+## Edge Case 1: Build Tag Requirements
+
+The tailscale and derp packages have compound build constraints that must be satisfied:
+
+### protocol/tailscale
+- `endpoint.go`: `//go:build with_gvisor`
+- `tun_device_unix.go`: `//go:build with_gvisor && !windows`
+- `tun_device_windows.go`: `//go:build with_gvisor && windows`
+- `dns_transport.go`: `//go:build with_gvisor`
+
+### service/derp
+- `service.go`: `//go:build with_gvisor`
+
+**Implication**: Users must build with BOTH `with_gvisor` AND `with_tailscale` tags to get tailscale/derp support. Without `with_gvisor`, the packages are excluded entirely.
+
+## Edge Case 2: sing-tun Version Dependency
+
+The sing-tun v0.8.9 API was validated for compatibility. However:
+
+1. The wireguard transport (`transport/wireguard/`) uses the same sing-tun APIs and compiles successfully
+2. If sing-tun were downgraded or removed, both wireguard and tailscale would break simultaneously
+3. This creates a tight coupling between wireguard and tailscale gVisor stack dependencies
+
+## Edge Case 3: CURRENT_ISSUES.md Staleness
+
+The documented issue in `CURRENT_ISSUES.md` Issue 1.3 shows incorrect line numbers:
+- Claims line 87: `undefined: tun.ICMPForwarder`
+- Claims line 348: `undefined: tun.DefaultNIC`
+- Claims line 356: `undefined: tun.NewICMPForwarder`
+- Claims line 685: `undefined: ping.ConnectGVisor`
+
+Current actual line numbers:
+- Line 90: `icmpForwarder *tun.ICMPForwarder` (type reference, not function call)
+- Line 308: `tun.CalculateInterfaceName`
+- Line 383: `tun.DefaultNIC`
+- Line 391: `tun.NewICMPForwarder`
+- Line 742: `ping.ConnectGVisor`
+
+**Root cause of staleness**: The CURRENT_ISSUES.md was likely generated during initial analysis before Task 8 core stabilization corrected the dependency versions.
+
+## Edge Case 4: DERP Dependency on Tailscale
+
+The `service/derp/service.go` imports `boxScale "github.com/sagernet/sing-box/protocol/tailscale"` at line 29. This creates a compile-time dependency where:
+- `service/derp` cannot compile without `protocol/tailscale`
+- Both require `with_gvisor` build tag
+
+## Edge Case 5: DNS Transport Dual Package Structure
+
+The `protocol/tailscale/dns_transport.go` registers a DNS transport via:
+```go
+func RegistryTransport(registry *dns.TransportRegistry) {
+    dns.RegisterTransport[option.TailscaleDNSServerOptions](registry, C.DNSTypeTailscale, NewDNSTransport)
+}
+```
+
+This is separate from the endpoint registration and requires the `with_gvisor` tag to be compiled.
+
+## Edge Case 6: ICMP Network Support
+
+The `protocol/tailscale/endpoint.go` advertises ICMP network capability at line 242:
+```go
+endpoint.NewAdapter(C.TypeTailscale, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, nil)
+```
+
+The ICMP handling is implemented via:
+- `tun.ICMPForwarder` - handles ICMP packet forwarding
+- `PrepareConnection` method - checks for ICMP network and handles `N.NetworkICMP` case
+- `NewDirectRouteConnection` - uses `ping.ConnectGVisor` for gVisor-based routing
+
+## Edge Case 7: Platform-Specific TUN Adapter
+
+The tailscale package provides platform-specific TUN adapters:
+- `tun_device_unix.go`: For Unix-like systems (Linux, macOS, etc.)
+- `tun_device_windows.go`: For Windows
+
+Both implement `wgTun.Device` interface for WireGuard integration with the Tailscale stack.
+
+## Edge Case 8: No Stub Implementation
+
+Unlike other optional features that have stub implementations (e.g., `include/tailscale_stub.go` provides a stub for when `with_tailscale` is not set), there's no stub for `with_gvisor`. If built without `with_gvisor`, the packages are simply excluded, not stubbed.
+
+This means:
+- No runtime error for missing gvisor - just compile-time exclusion
+- Users must explicitly enable gvisor to get tailscale support

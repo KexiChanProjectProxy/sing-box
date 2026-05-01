@@ -1,0 +1,36 @@
+Task 8: Core Merge Checkpoint Across Shared Choke Points
+========================================================
+
+## Verification Date: 2026-04-30
+## Commit: e8e05d124 (merge commit) + subsequent Wave 2 commits
+
+### Build Gate
+```
+go build ./adapter/... ./option/... ./route/... ./common/... ./log/...
+EXIT_CODE: 0
+```
+
+### Test Gate
+```
+go test ./adapter/... ./option/... ./route/...
+EXIT_CODE: 0
+```
+
+### Core Choke Points Stabilized
+1. **go.mod** — Manually resolved with upstream dependency versions + fork-only additions
+2. **option/** — Schema types reconciled (Task 3), V2RayXHTTPOptions added for fork transport
+3. **route/** — Route core merged, fork fields (asnReader, geositeReader, sniffOverrideDestination) preserved (Task 4)
+4. **adapter/** — DNSTransport interface updated, Reset() method required (fixed in Task 10)
+5. **service/ocm** — OCM service.go fixed for API changes (commit 5285c4329)
+
+### Key Decisions
+- Upstream dependency versions adopted (sing v0.8.9, sing-tun v0.8.9, sing-quic v0.6.1)
+- sing-anytls replace directive preserved
+- Fork-only deps preserved (gin, gorilla/websocket, metacubex/tfo-go, metacubex/utls, cespare/xxhash/v2)
+- Event-based logging adopted from upstream (all adapter managers)
+- MatchedRuleSet map approach NOT preserved (type incompatible with upstream bitmask)
+
+### Downstream Consumers
+- Task 9 (protocol/group): Consumes core contracts, no local redefinition
+- Task 10 (direct/dns): DNS MockTransport adapted for Reset() interface
+- Task 11-14: All consume stabilized core without reopening choke points

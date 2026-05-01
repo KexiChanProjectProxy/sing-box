@@ -1,0 +1,24 @@
+Task 8: Core Merge Checkpoint Edge Cases
+=========================================
+
+## Edge Case 1: OCM Service Fix
+- File: service/ocm/service.go
+- Issue: OCM service methods referenced pre-merge API signatures
+- Fix: Commit 5285c4329 adapted OCM service to merged contracts
+- Status: RESOLVED
+
+## Edge Case 2: DNSTransport Reset() Interface
+- File: dns/client_test.go
+- Issue: adapter.DNSTransport interface gained Reset() method from upstream
+- Fix: Added Reset() to MockTransport in Task 10
+- Status: RESOLVED (in downstream task)
+
+## Edge Case 3: AndroidPackageNames API Change
+- Upstream changed ProcessInfo.AndroidPackageName (string) to AndroidPackageNames ([]string)
+- Fix: Changed to AndroidPackageNames[0] for compatibility
+- Status: RESOLVED (in merge commit)
+
+## Edge Case 4: MatchedRuleSet Type Incompatibility
+- Fork used map-based MatchedRuleSet, upstream uses bitmask matchStates
+- Decision: NOT preserved — type incompatible, adopted upstream bitmask approach
+- Status: RESOLVED (upstream approach adopted)

@@ -1,0 +1,55 @@
+# Task 12 Evidence: Rule/Matcher Surfaces vs Merged Route Core
+
+## Build Verification
+
+```
+$ go build ./route/rule/... ./adapter/...
+(no output - SUCCESS)
+
+$ go test ./route/rule/...
+ok  	github.com/sagernet/sing-box/route/rule (cached)
+```
+
+## Analysis Summary
+
+### 1. matchStates Bitmask Architecture
+The bitmask architecture from Task 1 is properly implemented:
+- `ruleMatchState` uint8 with 4 bits: source address, source port, destination address, destination port
+- `ruleMatchStateSet` uint16 with helper methods: isEmpty, contains, add, merge, combine, withBase, filter
+- `ruleStateMatcher` and `ruleStateMatcherWithBase` interfaces in `match_state.go`
+
+### 2. Rule Package Structure
+- 46 Go files in `route/rule/`
+- Key files: rule_default.go, rule_abstract.go, match_state.go, rule_set.go
+- No direct usage of deprecated geosite in rules (returns error if used)
+
+### 3. Adapter Package Structure
+- `adapter/rule.go`: Core interfaces (HeadlessRule, Rule, RuleMatchInfo, DNSRule, RuleAction)
+- `adapter/inbound.go`: InboundContext struct with rule cache fields
+- `adapter/geosite.go`: GeositeReader interface (Lookup only)
+
+### 4. Router Integration
+- Router provides GeositeReader() and ASNReader() getters
+- GeositeReader used by loadbalance group, not by rule package directly
+- No stale pre-v1.13.11 patterns detected
+
+### 5. No Fork-Specific Matcher Surfaces
+The common/geosite/matcher.go implements a new geosite Matcher that:
+- Loads codes from geosite.db format
+- Implements Lookup(domain) string interface
+- No conflicts with route rule system
+
+### 6. Rule Item State Matching
+- `abstractDefaultRule.matchStates()` properly uses bitmask state tracking
+- `abstractLogicalRule.matchStates()` handles AND/OR modes
+- `matchHeadlessRuleStates()` and `matchRuleItemStates()` helper functions
+
+### 7. Metadata Coherence
+- InboundContext.ResetRuleCache() properly resets rule match state
+- MatchedRuleSet (string tag) is preserved for hash-based routing in loadbalance
+- Rule cache fields: SourceAddressMatch, SourcePortMatch, DestinationAddressMatch, DestinationPortMatch, DidMatch
+
+## Conclusion
+Rule/matcher packages compile and test successfully against merged route core.
+No stale pre-v1.13.11 route assumptions detected in matcher logic.
+matchStates bitmask properly adopted over old MatchedRuleSet map approach.

@@ -2,10 +2,20 @@
   "active_plan": "/home/kexi/sing-box/.sisyphus/plans/sing-box-actual-upstream-v1-13-11-merge.md",
   "started_at": "2026-04-30T17:26:09.592Z",
   "session_ids": [
-    "ses_22092ca57ffeo3mmVjeSrDfAxr"
+    "ses_22092ca57ffeo3mmVjeSrDfAxr",
+    "ses_2201d58dbffe4qXpdJB7EujauW",
+    "ses_2201d08d4ffed9vDP7kN7PiNMX",
+    "ses_2201c84fcffe2XrXTGE3MBI1Px",
+    "ses_2201c1707ffeQmx1tLU0rInOW9",
+    "ses_220171dc1ffevy0xKifBp267w3"
   ],
   "session_origins": {
-    "ses_22092ca57ffeo3mmVjeSrDfAxr": "direct"
+    "ses_22092ca57ffeo3mmVjeSrDfAxr": "direct",
+    "ses_2201d58dbffe4qXpdJB7EujauW": "appended",
+    "ses_2201d08d4ffed9vDP7kN7PiNMX": "appended",
+    "ses_2201c84fcffe2XrXTGE3MBI1Px": "appended",
+    "ses_2201c1707ffeQmx1tLU0rInOW9": "appended",
+    "ses_220171dc1ffevy0xKifBp267w3": "appended"
   },
   "plan_name": "sing-box-actual-upstream-v1-13-11-merge",
   "agent": "atlas",
@@ -54,6 +64,140 @@
       "agent": "Sisyphus-Junior",
       "category": "deep",
       "updated_at": "2026-04-30T18:13:57.387Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "Reconcile fork-only transports against upstream interfaces",
+      "session_id": "ses_2206523bdffenu7gyuRAAavNLx",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:20:40.600Z"
+    },
+    "todo:7": {
+      "task_key": "todo:7",
+      "task_label": "7",
+      "task_title": "Reconcile libbox and build-wrapper ownership boundaries",
+      "session_id": "ses_2205dfe31ffeRBqpKaJDrv7buT",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:27:59.437Z"
+    },
+    "todo:8": {
+      "task_key": "todo:8",
+      "task_label": "8",
+      "task_title": "Execute the core merge checkpoint across shared choke points",
+      "session_id": "ses_220533e19ffeeurma60kSdsZ2v",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:37:14.202Z"
+    },
+    "todo:9": {
+      "task_key": "todo:9",
+      "task_label": "9",
+      "task_title": "Reconcile protocol/group runtime against merged core contracts",
+      "session_id": "ses_2204b146fffe3928QrIZT2MDbG",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:47:38.901Z"
+    },
+    "todo:11": {
+      "task_key": "todo:11",
+      "task_label": "11",
+      "task_title": "Reconcile logging/event surfaces with merged upstream behavior",
+      "session_id": "ses_22046747fffeUU8pATg4Ovhc0g",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-30T18:52:20.832Z"
+    },
+    "todo:12": {
+      "task_key": "todo:12",
+      "task_label": "12",
+      "task_title": "Reconcile rule and matcher surfaces against merged route core",
+      "session_id": "ses_22043361affeoEWefLWdb3rtOm",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T18:55:54.272Z"
+    },
+    "todo:13": {
+      "task_key": "todo:13",
+      "task_label": "13",
+      "task_title": "Reconcile V2Ray transport consumers outside VLESS",
+      "session_id": "ses_220400800ffeF0AgtAyvPqC20b",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-30T18:59:34.049Z"
+    },
+    "todo:14": {
+      "task_key": "todo:14",
+      "task_label": "14",
+      "task_title": "Reconcile transport registration and adapter glue",
+      "session_id": "ses_2203c736cffe42IrQrwkPmV1LL",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-30T19:04:25.944Z"
+    },
+    "todo:15": {
+      "task_key": "todo:15",
+      "task_label": "15",
+      "task_title": "Reconcile libbox runtime with merged core and protocol surfaces",
+      "session_id": "ses_220375f2dffe96w7Pr9L4795R3",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T19:09:37.555Z"
+    },
+    "todo:16": {
+      "task_key": "todo:16",
+      "task_label": "16",
+      "task_title": "Reconcile inbound/auth/sniffer behavior integrations",
+      "session_id": "ses_22033349effexvDGFF88VNhFrq",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-30T19:14:36.794Z"
+    },
+    "todo:17": {
+      "task_key": "todo:17",
+      "task_label": "17",
+      "task_title": "Reconcile tailscale/derp blocker surfaces without broadening scope",
+      "session_id": "ses_2202ed631ffe1Q2qX0TFO2586u",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T19:20:22.779Z"
+    },
+    "todo:18": {
+      "task_key": "todo:18",
+      "task_label": "18",
+      "task_title": "Reconcile mobile/build wrapper surfaces after libbox stabilization",
+      "session_id": "ses_22028fcc7ffexHynosACMsYfYy",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-30T19:24:04.871Z"
+    },
+    "todo:19": {
+      "task_key": "todo:19",
+      "task_label": "19",
+      "task_title": "Run consolidated merge verification and isolate residual blockers",
+      "session_id": "ses_220248c55ffeQUjBx2QHMnug9H",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T19:28:52.729Z"
+    },
+    "todo:20": {
+      "task_key": "todo:20",
+      "task_label": "20",
+      "task_title": "Final merge hygiene and stale-conflict cleanup",
+      "session_id": "ses_2202181a2fferQig1UVtmyOtzJ",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-30T19:32:54.355Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "Plan Compliance Audit — oracle",
+      "session_id": "ses_220171dc1ffevy0xKifBp267w3",
+      "agent": "oracle",
+      "updated_at": "2026-04-30T19:42:36.218Z"
     }
   }
 }

@@ -1,0 +1,116 @@
+# Task 11: Logging/Event Surfaces Reconciliation - Main Evidence
+
+## Build Verification
+
+```
+$ go build ./log/...
+EXIT_CODE: 0
+(no output - success)
+
+$ go test ./log/...
+ok  	github.com/sagernet/sing-box/log	0.006s
+```
+
+## Event Model Analysis
+
+### Upstream v1.13.11 (tag 553cfa1f9f99f4da6118f93d507294e580db00d7)
+
+Upstream log/ package contains only:
+- log/export.go
+- log/factory.go
+- log/format.go
+- log/id.go
+- log/level.go
+- log/log.go
+- log/nop.go
+- log/observable.go
+- log/override.go
+- log/platform.go
+
+**NO event model in upstream log package.**
+
+### Fork Event Model
+
+The fork has two event files:
+
+#### log/event.go (Core Events)
+- EventTypeConnection
+- EventTypeDNS
+- EventTypeRouterMatch
+- EventTypeProcessInfo
+- EventTypeTransfer
+
+Event types:
+- ConnectionEvent
+- DNSEvent
+- RouterMatchEvent
+- ProcessInfoEvent
+- TransferEvent
+
+#### log/event_new.go (Extended Events)
+- EventTypeHealthCheck
+- EventTypeNetworkState
+- EventTypeRuleSet
+- EventTypeTLS
+- EventTypeComponentLifecycle
+- EventTypeServerLifecycle
+- EventTypeTransportProtocol
+- EventTypeHTTPRoute
+- EventTypeAuth
+- EventTypeService
+
+Event types:
+- HealthCheckEvent
+- NetworkStateEvent
+- RuleSetEvent
+- TLSEvent
+- ComponentLifecycleEvent
+- ServerLifecycleEvent
+- TransportProtocolEvent
+- HTTPRouteEvent
+- AuthEvent
+- ServiceEvent
+
+## Duplicate Check
+
+**Result: NO duplicates found**
+
+Upstream v1.13.11 has NO event model. The fork's entire event taxonomy is unique and intentional.
+
+## Integration Points
+
+Events are used by:
+- protocol/vless/ - ConnectionEvent for structured logging
+- protocol/direct/ - ConnectionEvent for structured logging
+- dns/ - DNSEvent for DNS query logging
+- route/ - RouterMatchEvent for rule matching
+- Any consumer of log.Factory that uses the event-based API
+
+## Fork Event Extensions Status
+
+| Event Type | Status | Notes |
+|------------|--------|-------|
+| ConnectionEvent | Preserved | Core event, widely used |
+| DNSEvent | Preserved | Core event, used in dns/ |
+| RouterMatchEvent | Preserved | Core event, used in route/ |
+| ProcessInfoEvent | Preserved | Fork extension |
+| TransferEvent | Preserved | Fork extension |
+| HealthCheckEvent | Preserved | Fork extension |
+| NetworkStateEvent | Preserved | Fork extension |
+| RuleSetEvent | Preserved | Fork extension |
+| TLSEvent | Preserved | Fork extension |
+| ComponentLifecycleEvent | Preserved | Fork extension |
+| ServerLifecycleEvent | Preserved | Fork extension |
+| TransportProtocolEvent | Preserved | Fork extension |
+| HTTPRouteEvent | Preserved | Fork extension |
+| AuthEvent | Preserved | Fork extension |
+| ServiceEvent | Preserved | Fork extension |
+
+All fork event extensions are preserved - they have no upstream equivalent to conflict with.
+
+## Conclusion
+
+The fork's event-based logging model is fully compatible with upstream v1.13.11. No reconciliation changes were needed because:
+1. Upstream has no event model in log/
+2. Fork events map cleanly to existing logging infrastructure
+3. Build and tests pass without modification

@@ -1,0 +1,63 @@
+# Task 12 Edge Cases: Rule/Matcher Surfaces vs Merged Route Core
+
+## Edge Case Analysis
+
+### 1. MatchedRuleSet in InboundContext
+- **Location**: `adapter/inbound.go:101`
+- **Type**: string tag for hash-based routing
+- **Used by**: loadbalance.go (protocol/group)
+- **Note**: This is NOT the old MatchedRuleSet map - it's a simple string field storing the matched ruleset tag for consistent hash key generation
+
+### 2. DNS Pre-Lookup Defers Address-Limit Checks
+- **Location**: `route/rule/rule_abstract.go:159-163`
+- **Pattern**: When invert=true and metadata.IgnoreDestinationIPCIDRMatch is set
+- **Purpose**: DNS pre-lookup defers destination address-limit checks until response phase
+- **Code**:
+```go
+if metadata.IgnoreDestinationIPCIDRMatch && stateSet == emptyRuleMatchState() && !metadata.DidMatch && len(r.destinationIPCIDRItems) > 0 {
+    return emptyRuleMatchState().withBase(inheritedBase)
+}
+```
+
+### 3. Logical Rule AND Mode with Nested Copy
+- **Location**: `route/rule/rule_abstract.go:258-269`
+- **Pattern**: When matching AND rules, a nested copy of metadata is created with ResetRuleCache()
+- **Purpose**: Each sub-rule gets a fresh rule cache state
+```go
+nestedMetadata := *metadata
+nestedMetadata.ResetRuleCache()
+nestedStateSet := matchHeadlessRuleStatesWithBase(rule, &nestedMetadata, evaluationBase)
+```
+
+### 4. Geosite Deprecation Error
+- **Location**: `route/rule/rule_default.go:129-130`
+- **Pattern**: Geosite options return explicit error since sing-box 1.12.0
+```go
+if len(options.Geosite) > 0 {
+    return nil, E.New("geosite database is deprecated in sing-box 1.8.0 and removed in sing-box 1.12.0")
+}
+```
+
+### 5. RuleSetItem State Matching
+- **Location**: `route/rule/rule_abstract.go:134-139`
+- **Pattern**: When ruleSetItem exists, state matching delegates to matchRuleItemStatesWithBase
+- **Purpose**: Rulesets have their own state matching logic
+
+### 6. IPCIDRMatchSource Cache Field
+- **Location**: `adapter/inbound.go:92`, `route/rule/rule_abstract.go:59,63`
+- **Purpose**: Controls whether IPCIDR rules match source or destination address
+- **Cache reset**: Part of ResetRuleCache() at line 107 of inbound.go
+
+### 7. ProcessInfo with AndroidPackageNames
+- **Location**: `route/route.go:514-517`
+- **Pattern**: Uses AndroidPackageNames[0] (slice access) not AndroidPackageName (string)
+- **Note**: This aligns with the ProcessInfo API change documented in learnings
+
+### 8. Pre-Match Reject Handling
+- **Location**: `route/route.go:619-644`
+- **Pattern**: For preMatch=true, only reject rules are processed
+- **Purpose**: TUN interface needs to check reject rules without full routing
+
+## No Issues Found
+All edge cases represent intentional design decisions, not stale assumptions.
+The rule/matcher system properly uses the merged route core's bitmask state tracking.

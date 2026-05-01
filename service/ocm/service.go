@@ -617,19 +617,21 @@ func (s *Service) handleResponseWithTracking(writer http.ResponseWriter, respons
 			}
 
 if inputTokens > 0 || outputTokens > 0 {
-				if responseModel != "" {
-					s.usageTracker.AddUsageWithCycleHint(
-						responseModel,
-						inputTokens,
-						outputTokens,
-						cachedTokens,
-						serviceTier,
-						username,
-						time.Now(),
-						weeklyCycleHint,
-					)
-				}
+			if responseModel != "" {
+				contextWindow := detectContextWindow(responseModel, serviceTier, inputTokens)
+				s.usageTracker.AddUsageWithCycleHint(
+					responseModel,
+					contextWindow,
+					inputTokens,
+					outputTokens,
+					cachedTokens,
+					serviceTier,
+					username,
+					time.Now(),
+					weeklyCycleHint,
+				)
 			}
+		}
 			return
 		}
 	}

@@ -1,0 +1,98 @@
+# Task 10: Direct and DNS-coupled Route Consumers - Evidence
+
+## Date: 2026-04-30
+
+## Packages Analyzed
+- `protocol/direct/` (3 files: outbound.go, loopback_detect.go, inbound.go)
+- `dns/` (44 files across main package and transport subpackages)
+
+## Build Verification
+
+### protocol/direct/
+```
+$ go build ./protocol/direct/...
+PASS (exit 0)
+```
+
+```
+$ go test ./protocol/direct/...
+?   	github.com/sagernet/sing-box/protocol/direct	[no test files]
+PASS (exit 0)
+```
+
+### dns/
+```
+$ go build ./dns/...
+PASS (exit 0)
+```
+
+```
+$ go test ./dns/...
+ok  	github.com/sagernet/sing-box/dns	8.169s
+ok  	github.com/sagernet/sing-box/dns/transport/hosts	0.005s
+ok  	github.com/sagernet/sing-box/dns/transport/local	0.006s
+PASS (exit 0)
+```
+
+## DNS Test Fix Applied
+
+**Issue**: `dns/client_test.go` MockTransport did not implement the `Reset()` method required by `adapter.DNSTransport` interface after Task 8 core stabilization.
+
+**Root Cause**: The merged `adapter.DNSTransport` interface (line 83-92 in `adapter/dns.go`) now includes:
+```go
+type DNSTransport interface {
+    Lifecycle
+    Type() string
+    Tag() string
+    Dependencies() []string
+    Reset()  // <-- Added in upstream v1.13.11
+    Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, error)
+}
+```
+
+**Fix**: Added `Reset()` method to `MockTransport` in `dns/client_test.go`:
+```go
+func (t *MockTransport) Reset() {
+}
+```
+
+## Contract Consumption Analysis
+
+### protocol/direct/
+The direct outbound properly consumes contracts from Task 8 core:
+- `adapter.DirectRouteOutbound` interface
+- `adapter.InboundContext` for metadata
+- `tun.DirectRouteContext`, `tun.DirectRouteDestination` from sing-tun
+- `dialer.ParallelInterfaceDialer` and related dialer contracts
+- `log.NewConnectionEvent` / `log.WithConnectionEvent` for event-based logging
+- `option.DirectOutboundOptions` from the merged option package
+
+No local redefinition of shared contracts detected.
+
+### dns/
+The DNS package properly consumes:
+- `adapter.DNSTransport` interface (with the added Reset method)
+- `adapter.DNSQueryOptions` for query configuration
+- Transport interfaces from the merged transport registry
+
+No local redefinition of shared contracts detected.
+
+## Fork Customizations Preserved
+
+The direct outbound preserves fork-specific behavior:
+- XLAT464 prefix support (RFC 6052 IPv6-to-IPv6 translation)
+- UseOriginDst option for preserving original destination
+- Override address/port options
+- Event-based logging with `log.NewConnectionEvent`
+- Parallel dialer support
+
+IPv6 source range functionality is implemented in `common/dialer/` package (separate from `protocol/direct/`).
+
+## Conclusion
+
+All acceptance criteria met:
+- [x] `go build ./protocol/direct/...` passes
+- [x] `go test ./protocol/direct/...` passes
+- [x] DNS-coupled route consumers compile without errors
+- [x] No local redefinition of shared contracts
+- [x] Fork customizations preserved

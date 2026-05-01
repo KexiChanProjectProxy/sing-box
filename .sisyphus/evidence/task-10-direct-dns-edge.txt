@@ -1,0 +1,94 @@
+# Task 10 Edge Cases: Direct and DNS-coupled Route Consumers
+
+## Date: 2026-04-30
+
+## IPv6 Source Range Preservation Analysis
+
+### Fork Customization Location
+IPv6 source range functionality is implemented in `common/dialer/` package:
+- `ipv6_source_address_selector.go`
+- `ipv6_source_address_range.go`
+- `ipv6_source_address_range_test.go`
+- `default_ipv6_source_address_selection_test.go`
+- `per_user_ipv6_test.go`
+
+### Protocol/Direct Package
+The `protocol/direct/outbound.go` does NOT directly implement IPv6 source range selection. Instead, it delegates to `common/dialer/` which provides:
+- `IPv6SourceAddressSelector` interface
+- `IPv6SourceAddressRange` interface
+- `DefaultIPv6SourceAddressSelector`
+
+### Key Finding
+IPv6 source range behavior is NOT directly in `protocol/direct/`. The direct outbound uses dialer contracts from `common/dialer/` which handle IPv6 source address selection. This is the correct architectural separation - direct protocol delegates to the dialer layer.
+
+### Verification
+```
+$ grep -l "ipv6.*source\|source.*ipv6" protocol/direct/*.go
+(no matches)
+```
+
+This confirms that `protocol/direct/` does not contain IPv6 source range logic directly - it is properly abstracted into the dialer layer.
+
+## DNS Transport Interface Evolution
+
+### Task 8 Change
+The `adapter.DNSTransport` interface gained a `Reset()` method in the Task 8 core stabilization:
+```go
+// adapter/dns.go:83-92
+type DNSTransport interface {
+    Lifecycle
+    Type() string
+    Tag() string
+    Dependencies() []string
+    Reset()  // Added in upstream v1.13.11 / Task 8
+    Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, error)
+}
+```
+
+### Impact on Tests Only
+This change only affected test code (`dns/client_test.go`), not production code. The MockTransport in tests needed the `Reset()` method to satisfy the interface.
+
+### Root Cause
+The DNS transport implementations in `dns/transport/` all implement `Reset()` properly. Only the test mock was missing this method after the interface was updated.
+
+## Direct Outbound Interface Compliance
+
+The direct outbound implements multiple interfaces:
+```go
+var (
+    _ N.ParallelDialer             = (*Outbound)(nil)
+    _ dialer.ParallelNetworkDialer = (*Outbound)(nil)
+    _ dialer.DirectDialer          = (*Outbound)(nil)
+    _ adapter.DirectRouteOutbound  = (*Outbound)(nil)
+)
+```
+
+All interfaces are satisfied and compile correctly with merged core contracts.
+
+## Event-Based Logging Consistency
+
+Both direct outbound and DNS client use the event-based logging pattern preserved from fork:
+- `log.NewConnectionEvent()` to create events
+- `log.WithConnectionEvent()` to emit with context
+
+This is consistent with Task 8's event-based logging adoption and the learnings from Task 7.
+
+## No Local Redefinition of Shared Contracts
+
+Verification via grep for any local type redefinitions in `protocol/direct/`:
+```
+$ grep "type.*interface\|type.*struct" protocol/direct/*.go
+(no meaningful matches - only standard Go types)
+```
+
+The direct package properly consumes contracts from:
+- `adapter/` package (types defined there)
+- `option/` package (DirectOutboundOptions defined there)
+- `common/dialer/` package (dialer interfaces defined there)
+
+## Conclusion
+
+- IPv6 source range logic is correctly separated in dialer layer, not protocol/direct
+- DNS test mock needed `Reset()` method to satisfy updated interface
+- All fork customizations (XLAT464, useOriginDst, etc.) preserved correctly
+- No duplicate or local redefinition of shared contracts

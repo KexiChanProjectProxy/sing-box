@@ -1,0 +1,75 @@
+# Task 18 Edge Cases: Build Wrapper Surface
+
+## Edge Case 1: libbox_legacy_ipc Tag - Pre-existing Duplicate Method Issue
+
+### Issue Description
+When building with `libbox_legacy_ipc` build tag, duplicate method declarations occur:
+
+```
+experimental/libbox/command_client.go:478:25: method CommandClient.SetClashMode already declared at experimental/libbox/command_clash_mode.go:17:25
+experimental/libbox/command_close_connection.go:17:25: method CommandClient.CloseConnection already declared at experimental/libbox/command_client.go:487:25
+experimental/libbox/command_deprecated_report.go:16:25: method CommandClient.GetDeprecatedNotes already declared at experimental/libbox/command_client.go:543:25
+experimental/libbox/command_group.go:127:25: method CommandClient.SetGroupExpand already declared at experimental/libbox/command_client.go:570:25
+experimental/libbox/command_power.go:12:25: method CommandClient.ServiceReload already declared at experimental/libbox/command_client.go:503:25
+experimental/libbox/command_power.go:37:25: method CommandClient.ServiceClose already declared at experimental/libbox/command_client.go:510:25
+experimental/libbox/command_select.go:14:25: method CommandClient.SelectOutbound already declared at experimental/libbox/command_client.go:459:25
+experimental/libbox/command_system_proxy.go:10:25: method CommandClient.GetSystemProxyStatus already declared at experimental/libbox/command_client.go:524:25
+experimental/libbox/command_system_proxy.go:49:25: method CommandClient.SetSystemProxyEnabled already declared at experimental/libbox/command_client.go:534:25
+experimental/libbox/command_urltest.go:20:25: method CommandClient.URLTest already declared at experimental/libbox/command_client.go:469:25
+```
+
+### Root Cause
+This is NOT caused by upstream merge. The issue exists because:
+1. `command_client.go` defines all CommandClient methods (the main implementation)
+2. Legacy IPC files (command_clash_mode.go, command_close_connection.go, etc.) ALSO define the same methods
+3. Go doesn't support build-tag-based method overriding - both sets of methods are compiled when `libbox_legacy_ipc` is used
+4. Result: 10 duplicate method declarations
+
+### Production Impact
+**NONE** - Production builds (android-main, apple, windows) do NOT use `libbox_legacy_ipc` tag:
+- android-main: Uses standard libbox build without libbox_legacy_ipc
+- apple: Uses standard libbox build without libbox_legacy_ipc
+- windows: Uses standard libbox build without libbox_legacy_ipc
+
+The libbox_legacy_ipc tag appears to be for a legacy IPC mechanism that is no longer in production use.
+
+### Investigation: External Toolchain Prerequisites
+
+The build_libbox tool requires:
+1. **gomobile** - Must be installed: `go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12`
+2. **gobind** - Must be installed: `go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12`
+3. **Android SDK** - Must be present at ANDROID_HOME or standard locations
+4. **Android NDK** - Version 28.0.13004108 or compatible
+5. **Java/OpenJDK 17+** - Required for Android builds
+
+If these prerequisites are missing, the error will be an external toolchain error, NOT a code-level wrapper failure.
+
+### Distinction: Code-Level vs Toolchain Failures
+
+| Failure Type | Example | Resolution |
+|-------------|---------|------------|
+| Code-level wrapper failure | Duplicate method declarations in libbox_legacy_ipc | NOT a wrapper issue - pre-existing design issue in legacy IPC |
+| Missing external toolchain | "gomobile not found" | Install gomobile: `go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12` |
+| Missing SDK/NDK | "android SDK not found" | Set ANDROID_HOME environment variable |
+| Missing Java | "java version should be openjdk 17" | Install OpenJDK 17+ |
+
+### Classification
+The libbox_legacy_ipc duplicate method issue is a **pre-existing design issue** with the legacy IPC implementation, NOT a build wrapper issue introduced by the upstream merge. It does not affect any production build targets.
+
+## Edge Case 2: Platform-Specific Code Isolation
+
+### Observation
+The libbox package has platform-specific files:
+- `connection_owner_darwin.go`
+- `fdroid.go` / `fdroid_mirrors.go`
+- `service*.go` variants
+
+These are properly gated with build constraints and do not affect cross-platform builds.
+
+## Summary
+
+All build wrapper surfaces are correctly aligned with the stabilized runtime. Any build failures would be due to:
+1. Missing external toolchain prerequisites (gomobile, SDK/NDK, Java)
+2. Pre-existing libbox_legacy_ipc design issue (non-production tag)
+
+Neither issue is a code-level wrapper failure introduced by the upstream merge.

@@ -336,7 +336,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(vless): merge upstream changes without restoring pool support` | Files: `protocol/vless/`, related tests
 
-- [ ] 6. Reconcile fork-only transports against upstream interfaces
+- [x] 6. Reconcile fork-only transports against upstream interfaces
 
   **What to do**: Reconcile `transport/v2rayxhttp/` and `transport/v2raycloudflared/` against the merged upstream interface contracts. Preserve these fork-only transports, but adapt them to upstream option, transport, and dialer interfaces so they no longer drift structurally.
   **Must NOT do**: Must NOT delete these directories because upstream lacks them. Must NOT force upstream abstractions backward to match stale fork code if the fork transport can be adapted locally.
@@ -375,7 +375,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(transport): adapt fork transports to merged upstream contracts` | Files: `transport/`, transport-owned consumers
 
-- [ ] 7. Reconcile libbox and build-wrapper ownership boundaries
+- [x] 7. Reconcile libbox and build-wrapper ownership boundaries
 
   **What to do**: Assess and reconcile the ABI/runtime surfaces under `experimental/libbox/` plus build wrapper hooks referenced by `Makefile`. This task is reconnaissance plus minimal adaptation ownership definition for downstream merge tasks; it must identify which libbox/build surfaces changed upstream and which are still fork-owned.
   **Must NOT do**: Must NOT mix dependency or route logic into this task. Must NOT make speculative ABI changes before core merge checkpoint Task 8.
@@ -412,7 +412,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: NO | Message: `n/a` | Files: evidence only unless minimal ABI alignment is required
 
-- [ ] 8. Execute the core merge checkpoint across shared choke points
+- [x] 8. Execute the core merge checkpoint across shared choke points
 
   **What to do**: Integrate the results of Tasks 2-7 into one stabilized checkpoint that resolves cross-cutting conflicts across `go.mod`, `option/`, `route/`, `protocol/vless/`, fork-only transports, and libbox boundary assumptions. This task decides final shared contracts so downstream tasks can run in parallel without reopening them.
   **Must NOT do**: Must NOT leave unresolved shared contract ambiguities. Must NOT defer `go.mod`, `option/`, or route-core decisions further downstream.
@@ -450,7 +450,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(core): stabilize shared contracts after upstream merge` | Files: shared core surfaces touched by 2-7
 
-- [ ] 9. Reconcile protocol/group runtime against merged core contracts
+- [x] 9. Reconcile protocol/group runtime against merged core contracts
 
   **What to do**: Merge/adapt `protocol/group/` runtime behavior to the stabilized core checkpoint, preserving fork load-balance/group behaviors only where explicitly intended.
   **Must NOT do**: Must NOT redefine option schema or route-core behavior locally.
@@ -487,7 +487,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(group): align runtime with merged upstream core` | Files: `protocol/group/`
 
-- [ ] 10. Reconcile direct and DNS-coupled route consumers
+- [x] 10. Reconcile direct and DNS-coupled route consumers
 
   **What to do**: Adapt direct outbound and DNS-coupled downstream consumers to the stabilized route/option contracts. Preserve fork IPv6 source range and related direct-path behavior where explicitly intended.
   **Must NOT do**: Must NOT reopen VLESS or route-core decisions.
@@ -525,7 +525,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(direct): adapt direct and dns consumers to merged contracts` | Files: `protocol/direct/`, `dns/`, related consumers
 
-- [ ] 11. Reconcile logging/event surfaces with merged upstream behavior
+- [x] 11. Reconcile logging/event surfaces with merged upstream behavior
 
   **What to do**: Reconcile fork structured logging/event surfaces against upstream `v1.13.11`, preserving the fork's tests and intentional event extensions where they still map cleanly.
   **Must NOT do**: Must NOT preserve a parallel event taxonomy if upstream now models the same signal.
@@ -562,7 +562,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(log): reconcile fork events with upstream v1.13.11` | Files: `log/`, event consumers
 
-- [ ] 12. Reconcile rule and matcher surfaces against merged route core
+- [x] 12. Reconcile rule and matcher surfaces against merged route core
 
   **What to do**: Adapt rule and matcher surfaces to the stabilized route core so route-time metadata and fork matcher behavior remain coherent after upstream merge.
   **Must NOT do**: Must NOT re-thread route order or add new metadata fields without explicit need.
@@ -598,7 +598,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(rule): align matcher surfaces with merged route core` | Files: rule and matcher surfaces
 
-- [ ] 13. Reconcile V2Ray transport consumers outside VLESS
+- [x] 13. Reconcile V2Ray transport consumers outside VLESS
 
   **What to do**: Adapt non-VLESS V2Ray transport consumers to the stabilized transport/option contracts after the main protocol checkpoint.
   **Must NOT do**: Must NOT reopen transport schema decisions from Tasks 3 or 6.
@@ -634,7 +634,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(transport): align downstream V2Ray consumers after merge` | Files: transport consumers outside VLESS
 
-- [ ] 14. Reconcile transport registration and adapter glue
+- [x] 14. Reconcile transport registration and adapter glue
 
   **What to do**: Align transport registration and adapter glue with merged upstream registration patterns, preserving fork-only transport registration where required.
   **Must NOT do**: Must NOT move protocol semantics into registration glue.
@@ -670,7 +670,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(adapter): align transport registration with merged upstream patterns` | Files: registration-oriented transport/protocol glue
 
-- [ ] 15. Reconcile libbox runtime with merged core and protocol surfaces
+- [x] 15. Reconcile libbox runtime with merged core and protocol surfaces
 
   **What to do**: Adapt `experimental/libbox/` runtime surfaces to the merged core/protocol contracts after Task 8.
   **Must NOT do**: Must NOT change wrapper/build surfaces that belong to Task 18.
@@ -706,7 +706,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(libbox): align runtime with merged upstream core` | Files: `experimental/libbox/`
 
-- [ ] 16. Reconcile inbound/auth/sniffer behavior integrations
+- [x] 16. Reconcile inbound/auth/sniffer behavior integrations
 
   **What to do**: Merge/adapt inbound and auth/sniffer-related protocol integrations to the stabilized route/adapter contracts.
   **Must NOT do**: Must NOT reopen route-core sequencing decisions.
@@ -742,7 +742,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `refactor(inbound): align auth and sniffer integrations after merge` | Files: inbound/protocol integration surfaces
 
-- [ ] 17. Reconcile tailscale/derp blocker surfaces without broadening scope
+- [x] 17. Reconcile tailscale/derp blocker surfaces without broadening scope
 
   **What to do**: Isolate and, if feasible within the merged dependency graph, reconcile `protocol/tailscale` and `service/derp` symbol/API mismatches. If full repair is out of scope for the upstream merge itself, convert the remaining failures into explicitly documented post-merge blockers with exact symbol-level evidence.
   **Must NOT do**: Must NOT let this task derail the main upstream merge if the failures remain pre-existing or upstream-external.
@@ -780,7 +780,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES/NO | Message: `fix(tailscale): reconcile merged dependency API drift` | Files: tailscale/derp surfaces if changed
 
-- [ ] 18. Reconcile mobile/build wrapper surfaces after libbox stabilization
+- [x] 18. Reconcile mobile/build wrapper surfaces after libbox stabilization
 
   **What to do**: Adapt build-wrapper/mobile targets in `Makefile` and related build helpers to the stabilized libbox/runtime surfaces.
   **Must NOT do**: Must NOT change runtime ABI here unless Task 15 documented the need.
@@ -817,7 +817,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: YES | Message: `build(libbox): align wrappers with merged runtime surface` | Files: build-wrapper surfaces
 
-- [ ] 19. Run consolidated merge verification and isolate residual blockers
+- [x] 19. Run consolidated merge verification and isolate residual blockers
 
   **What to do**: Execute the consolidated targeted verification suite, then run the broadest possible build/test commands without conflating residual pre-existing blockers with merge regressions. Produce one authoritative blocker ledger distinguishing fixed, merge-introduced, and pre-existing unresolved failures.
   **Must NOT do**: Must NOT claim success based only on narrow package checks if broader commands reveal new merge regressions.
@@ -856,7 +856,7 @@ Wave 4: integration and blocker accounting
 
   **Commit**: NO | Message: `n/a` | Files: evidence/reporting only
 
-- [ ] 20. Final merge hygiene and stale-conflict cleanup
+- [x] 20. Final merge hygiene and stale-conflict cleanup
 
   **What to do**: Remove any leftover temporary compatibility code, stale conflict comments, obsolete annotations contradicted by the merged result, and temporary evidence-side notes that no longer reflect the final merged state. Ensure the repository reflects one coherent post-merge architecture.
   **Must NOT do**: Must NOT perform opportunistic unrelated cleanup.
@@ -897,10 +897,10 @@ Wave 4: integration and blocker accounting
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 > **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback -> fix -> re-run -> present again -> wait for okay.
-- [ ] F1. Plan Compliance Audit — oracle
-- [ ] F2. Code Quality Review — unspecified-high
-- [ ] F3. Real Manual QA — unspecified-high (+ interactive_bash if CLI build flow needs live verification)
-- [ ] F4. Scope Fidelity Check — deep
+- [x] F1. Plan Compliance Audit — oracle
+- [x] F2. Code Quality Review — unspecified-high
+- [x] F3. Real Manual QA — unspecified-high (+ interactive_bash if CLI build flow needs live verification)
+- [x] F4. Scope Fidelity Check — deep
 
 ## Commit Strategy
 - Task 1 produces the authoritative merge commit / resolved merge baseline.

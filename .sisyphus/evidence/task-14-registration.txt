@@ -1,0 +1,82 @@
+Transport Registration and Adapter Glue Reconciliation - Task 14
+=============================================================
+
+Build Status
+------------
+go build ./adapter/...              : PASS
+go build ./transport/...           : PASS
+go build ./transport/v2ray/...      : PASS
+go build ./transport/v2raygrpc/...  : PASS
+go build ./transport/v2raygrpclite/ : PASS
+go build ./transport/v2raywebsocket/ : PASS
+go build ./transport/v2rayhttp/...   : PASS
+go build ./transport/v2rayhttpupgrade/ : PASS
+go build ./transport/v2rayquic/...   : PASS
+go build ./transport/v2rayxhttp/...  : PASS (fork-only)
+go build ./transport/v2raycloudflared/ : PASS (fork-only)
+go build ./transport/sip003/...      : PASS
+
+Registration Pattern Analysis
+----------------------------
+1. QUIC constructor registration (transport/v2rayquic/init.go):
+   - Uses v2ray.RegisterQUICConstructor() pattern
+   - Registers server + client constructors
+   - Correctly gated with //go:build with_quic
+
+2. GRPC build-tagged constructors (transport/v2ray/grpc.go, grpc_lite.go):
+   - grpc.go: //go:build with_grpc - uses v2raygrpc+v2raygrpclite
+   - grpc_lite.go: //go:build !with_grpc - uses v2raygrpclite only
+   - Both define NewGRPCServer and NewGRPCClient wrappers
+
+3. SIP003 plugin registration (transport/sip003/v2ray.go):
+   - Uses RegisterPlugin() pattern (not V2Ray registration)
+   - Plugin architecture, not transport registration
+
+Fork-Only Transport Registration (v2rayxhttp, v2raycloudflared)
+--------------------------------------------------------------
+v2rayxhttp (transport/v2rayxhttp/):
+  - No init() registration function
+  - Provides NewClient() and NewServer() directly
+  - Fork-only: not registered in v2ray.Transport switch
+  - Correctly NOT in V2RayTransportOptions union
+  - Wired via direct import in transport/v2ray/transport.go (import line 11)
+
+v2raycloudflared (transport/v2raycloudflared/):
+  - No init() registration function
+  - Provides NewClient() only (client transport only)
+  - Fork-only: registered in v2ray.Transport switch at line 66-67
+  - Has constant: C.V2RayTransportTypeCloudflared = "cloudflared"
+
+V2RayTransportOptions Union Structure
+-------------------------------------
+HTTP, Websocket, QUIC, GRPC, HTTPUpgrade, Cloudflared:
+  - All registered in transport/v2ray/transport.go switch statements
+  - All have corresponding option types in option/v2ray_transport.go
+
+V2RayXHTTPOptions (fork-only):
+  - NOT in V2RayTransportOptions union (by design)
+  - Has option type in option/v2ray_transport.go (lines 128-139)
+  - V2RayXHTTPOptions embeds V2RayHTTPOptions for HTTP semantics
+  - Transport implementation in transport/v2rayxhttp/ (standalone)
+
+Adapter Interface Compliance
+----------------------------
+V2RayServerTransport interface (adapter/v2ray.go):
+  - Network() []string
+  - Serve(listener net.Listener) error
+  - ServePacket(listener net.PacketConn) error
+  - Close() error
+
+V2RayClientTransport interface (adapter/v2ray.go):
+  - DialContext(ctx context.Context) (net.Conn, error)
+  - Close() error
+
+All transports implement these interfaces correctly.
+
+Conclusion
+---------
+- Registration-oriented packages compile with merged adapters
+- Fork-only transport registration remains explicit and minimal
+- v2rayxhttp: No registration (direct instantiation only)
+- v2raycloudflared: Registered via switch case, not init()
+- No init() registration functions in fork-only transports

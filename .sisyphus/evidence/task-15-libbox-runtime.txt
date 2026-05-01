@@ -1,0 +1,128 @@
+# Task 15: libbox Runtime Reconciliation Evidence
+
+## Build Verification
+
+```
+$ go build ./experimental/libbox/...
+BUILD_SUCCESS
+```
+
+```
+$ go test ./experimental/libbox/...
+ok      github.com/sagernet/sing-box/experimental/libbox (cached)
+?       github.com/sagernet/sing-box/experimental/libbox/internal/procfs   [no test files]
+?       github.com/sagernet/sing-box/experimental/libbox/platform          [no test files]
+TEST_SUCCESS
+```
+
+## Runtime Surface Analysis
+
+### 1. gRPC Contract Layer (daemon package)
+
+The libbox package uses gRPC to communicate with the sing-box daemon service.
+All protobuf messages in `daemon/started_service.pb.go` are aligned:
+
+- **Status**: Memory, Goroutines, ConnectionsIn, ConnectionsOut, TrafficAvailable, Uplink, Downlink, UplinkTotal, DownlinkTotal
+- **Connection**: Full metadata including ProcessInfo with AndroidPackageNames ([]string)
+- **Groups**: Tag, Type, Selectable, Selected, IsExpand, Items with UrlTestTime/UrlTestDelay
+- **ProcessInfo**: ProcessId (uint32), UserId, UserName, ProcessPath, PackageNames ([]string)
+
+### 2. Platform Interface Contract (adapter.PlatformInterface)
+
+The `platformInterfaceWrapper` in `service.go` properly implements `adapter.PlatformInterface`:
+
+| Method | Status |
+|--------|--------|
+| Initialize(NetworkManager) | ✓ Implemented |
+| UsePlatformAutoDetectInterfaceControl() | ✓ Delegates to iif |
+| AutoDetectInterfaceControl(fd int) | ✓ Converts int→int32 |
+| UsePlatformInterface() | ✓ Returns true |
+| OpenInterface(*tun.Options, TunPlatformOptions) | ✓ Full TUN setup with route ranges |
+| UsePlatformDefaultInterfaceMonitor() | ✓ Returns true |
+| CreateDefaultInterfaceMonitor(logger.Logger) | ✓ Returns platformDefaultInterfaceMonitor |
+| UsePlatformNetworkInterfaces() | ✓ Returns true |
+| NetworkInterfaces() | ✓ Maps to adapter.NetworkInterface |
+| UnderNetworkExtension() | ✓ Delegates to iif |
+| NetworkExtensionIncludeAllNetworks() | ✓ Delegates to iif |
+| ClearDNSCache() | ✓ Delegates to iif |
+| RequestPermissionForWIFIState() | ✓ Returns nil |
+| UsePlatformWIFIMonitor() | ✓ Returns true |
+| ReadWIFIState() adapter.WIFIState | ✓ Converts *WIFIState→WIFIState |
+| SystemCertificates() | ✓ Iterator to slice |
+| UsePlatformConnectionOwnerFinder() | ✓ Returns true |
+| FindConnectionOwner(*FindConnectionOwnerRequest) | ✓ ProcFS or iif fallback |
+| UsePlatformNotification() | ✓ Returns true |
+| SendNotification(*Notification) | ✓ Converts to libbox.Notification |
+| MyInterfaceAddress() []netip.Addr | ✓ Returns cached TUN addresses |
+
+### 3. OutboundGroup Contract (adapter.OutboundGroup)
+
+The daemon/started_service.go properly implements the OutboundGroup contract:
+
+```go
+type OutboundGroup interface {
+    Outbound
+    Now() string   // Currently selected outbound tag
+    All() []string  // All available outbound tags
+}
+```
+
+Usage in `readGroups()`:
+- `iGroup.Tag()` → g.Tag
+- `iGroup.Type()` → g.Type
+- `iGroup.Now()` → g.Selected
+- `iGroup.All()` → iterated for items
+- `*group.Selector` type assertion for Selectable flag
+
+### 4. URLTestHistoryStorage Contract
+
+The daemon uses `urltest.HistoryStorage` correctly:
+
+```go
+type URLTestHistoryStorage interface {
+    LoadURLTestHistory(tag string) *URLTestHistory
+    DeleteURLTestHistory(tag string)
+    StoreURLTestHistory(tag string, history *URLTestHistory)
+}
+```
+
+Usage in `readGroups()`:
+- `historyStorage.LoadURLTestHistory(adapter.OutboundTag(itemOutbound))` → item.UrlTestTime, item.UrlTestDelay
+
+### 5. ConnectionOwner Contract
+
+libbox platform's `ConnectionOwner` properly maps to adapter's `ConnectionOwner`:
+
+| Field | adapter. ConnectionOwner | libbox platform. ConnectionOwner |
+|-------|-------------------------|----------------------------------|
+| ProcessID | uint32 | - (not exposed in libbox API) |
+| UserId | int32 | UserId int32 |
+| UserName | string | UserName string |
+| ProcessPath | string | ProcessPath string |
+| AndroidPackageNames | []string | androidPackageNames []string |
+
+### 6. Event-Based Logging
+
+libbox uses event-based logging consistently:
+- `log.NewConnectionEvent` in clashapi traffic
+- `log.NewRouterMatchEvent` in route
+- Event observer pattern via `observable.Subscriber`
+
+## No ABI Drift Detected
+
+All runtime surfaces consume merged core/protocol contracts without ABI drift:
+
+1. **daemon → core**: Uses Instance()→Box()→Router/Outbound correctly
+2. **libbox → daemon**: gRPC messages fully aligned with protobuf definitions
+3. **platform wrapper → adapter**: All interface methods properly implemented
+4. **group protocol → adapter**: OutboundGroup.Now()/All() contract respected
+5. **urltest storage → adapter**: HistoryStorage interface properly used
+
+## Fork-Owned Extensions Preserved
+
+- F-Droid integration (fdroid.go, fdroid_mirrors.go)
+- Legacy IPC protocol (12 files with libbox_legacy_ipc tag)
+- Platform-specific code (Darwin, Linux, Windows, Android)
+- Clash API extensions
+- Group/Selector protocol extensions
+- Event-based logging (fork pattern)

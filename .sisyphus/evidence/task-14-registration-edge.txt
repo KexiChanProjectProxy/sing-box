@@ -1,0 +1,60 @@
+Transport Registration Edge Cases - Task 14
+==========================================
+
+1. V2RayXHTTPOptions Not in Transport Switch
+------------------------------------------
+Issue: V2RayXHTTPOptions is NOT registered in transport/v2ray/transport.go switch
+Resolution: By design - fork-only transport that instantiates directly
+Impact: v2rayxhttp cannot be used via generic V2RayTransportOptions config
+        Must be instantiated via direct NewClient/NewServer calls
+
+2. Cloudflared Registration vs XHTTP
+------------------------------------
+Cloudflared: Registered in transport switch (lines 66-67 of transport.go)
+  - Has C.V2RayTransportTypeCloudflared = "cloudflared" constant
+  - Has option.V2RayCloudflaredOptions in union
+
+XHTTP: NOT registered in transport switch
+  - No transport type constant for "xhttp"
+  - V2RayXHTTPOptions embeds V2RayHTTPOptions
+  - Transport provides NewClient and NewServer directly
+
+This is intentional - xhttp is a more specialized fork-only extension.
+
+3. QUIC Registration Build Tag
+------------------------------
+transport/v2rayquic/init.go:
+  - Uses //go:build with_quic
+  - Calls v2ray.RegisterQUICConstructor()
+  - Without with_quic tag, quic transport won't be registered
+
+4. GRPC Registration Build Tag
+------------------------------
+transport/v2ray/grpc.go (with_grpc):
+  - Imports both v2raygrpc and v2raygrpclite
+  - Selects based on options.ForceLite flag
+
+transport/v2ray/grpc_lite.go (!with_grpc):
+  - Imports only v2raygrpclite
+  - Simpler but less capable
+
+5. V2RayHTTPOptions.Host Type Change
+------------------------------------
+Upstream changed Host from string to badoption.Listable[string]
+V2RayXHTTPOptions embeds V2RayHTTPOptions, so it inherits this change
+v2rayxhttp code was adapted in Task 6 to handle Listable[string]
+
+6. Current Issues Status
+------------------------
+CURRENT_ISSUES.md 1.2 claims V2RayXHTTPOptions is missing - INCORRECT
+The type exists in option/v2ray_transport.go (lines 128-139)
+v2rayxhttp compiles successfully
+The issue in CURRENT_ISSUES.md is stale/pre-existing and should be updated
+
+7. sip003 Plugin Registration
+----------------------------
+transport/sip003/v2ray.go:
+  - Uses RegisterPlugin("v2ray-plugin", newV2RayPlugin)
+  - This is a plugin registration, NOT a transport registration
+  - Creates V2Ray transport via v2ray.NewClientTransport()
+  - Plugin pattern, not constructor registration pattern

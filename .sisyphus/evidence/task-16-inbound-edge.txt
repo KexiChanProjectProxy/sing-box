@@ -1,0 +1,80 @@
+# Task 16: Inbound/Auth/Sniffer Edge Cases
+
+## Date: 2026-04-30
+
+## Edge Case Analysis
+
+### 1. UOT Router Wrapper Pattern
+All protocols use `uot.NewRouter()` wrapper around the base router. The UOT router:
+- Detects MagicAddress and LegacyMagicAddress destinations
+- Converts connections to packet connections when needed
+- Delegates all other traffic to the base router
+
+This is a fork extension that properly wraps the upstream ConnectionRouterEx interface.
+
+### 2. MatchedRuleSet Scope
+The `MatchedRuleSet` field in InboundContext is correctly scoped:
+- Used ONLY by `protocol/group/loadbalance.go` for consistent hash routing
+- NOT used by any inbound protocol directly
+- NOT used by route core for routing decisions
+
+This is intentional fork behavior preserved from the merge.
+
+### 3. sniffOverrideDestination Integration
+The `sniffOverrideDestination` router field is correctly integrated:
+- Set from `options.SniffOverrideDestination` in router.go
+- Used in route/route.go with OR logic: `action.OverrideDestination || r.sniffOverrideDestination`
+- Inbound protocols do NOT set this field - it's a router-level configuration
+
+### 4. InboundContext Sniffer Fields
+The sniffer-related fields in InboundContext are properly populated by route core:
+- `Protocol`, `Domain`, `Client` - populated during sniffing
+- `SniffContext`, `SnifferNames`, `SniffError` - populated during sniffing
+- Inbound protocols read these fields but do not modify them
+
+### 5. Event Logging Consistency
+All inbound protocols use the same event logging pattern:
+- Type: "inbound"
+- Action: "start" or "error"
+- Context: source, destination, inbound, inboundType, user
+
+No protocol deviates from this pattern.
+
+### 6. Pre-existing Build Blocker (protocol/router)
+The `protocol/router` package has a build failure due to quic-go/qpack mismatch:
+```
+../go/pkg/mod/github.com/quic-go/quic-go@v0.54.0/http3/client.go:98:31:
+  too many arguments in call to qpack.NewDecoder
+```
+
+This is a pre-existing issue unrelated to Task 16 work - it affects QUIC/HTTP3 transport layer.
+
+### 7. Shadowsocks Dual Inbound Pattern
+Shadowsocks has two inbound variants:
+- `inbound.go`: Standard inbound
+- `inbound_multi.go`: Multi-user variant
+- `inbound_relay.go`: Relay variant
+
+Both use `uot.NewRouter()` and proper ConnectionRouterEx integration.
+
+### 8. Naive Inbound Special Case
+The Naive inbound uses `N.OnceClose()` for one of its connection paths:
+```go
+n.router.RouteConnectionEx(ctx, conn, metadata, N.OnceClose(func(it error) {
+    n.logger.Debug("connection closed: ", it)
+}))
+```
+
+This is a minor variation but still uses ConnectionRouterEx interface.
+
+## Verified No Stale Assumptions
+
+The following stale patterns were NOT found in inbound protocols:
+- No direct use of `RouteConnection()` / `RoutePacketConnection()` (deprecated)
+- No direct manipulation of `matchStates` bitmask
+- No direct setting of `MatchedRuleSet` in inbound code
+- No direct use of `sniffOverrideDestination` in inbound code
+
+## Conclusion
+No stale route-core assumptions found in inbound/auth/sniffer integration surfaces.
+All edge cases are properly handled by the stabilized contracts.

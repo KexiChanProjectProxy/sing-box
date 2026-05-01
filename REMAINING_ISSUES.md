@@ -11,125 +11,73 @@ These are pre-existing problems that were NOT introduced by the merge but need t
 
 ## Issue 1: quic-go / qpack HTTP/3 Dependency Mismatch
 
-**Severity**: HIGH — blocks Hysteria2 and any QUIC/HTTP3-dependent protocol from building
+**Status**: ✅ RESOLVED — quic-go upgraded from v0.54.0 to v0.57.0
+**Severity**: Was HIGH — blocks Hysteria2 and any QUIC/HTTP3-dependent protocol from building
 **Pre-existing**: Yes (not caused by the v1.13.11 merge)
 
-### Symptoms
-```
-# github.com/quic-go/quic-go/http3
-http3/client.go:98:31: too many arguments in call to qpack.NewDecoder
-http3/conn.go:196:27: c.decoder.DecodeFull undefined
-http3/server.go:589:22: decoder.DecodeFull undefined
-http3/stream.go:324:24: s.decoder.DecodeFull undefined
-```
-
-### Root Cause
-The `quic-go` module at `v0.54.0` (used by `sagernet/sing-quic v0.6.1`) expects `qpack`
-with `NewDecoder(callback)` signature and `DecodeFull()` method. However, the resolved
-`qpack` version in the Go module graph has a newer API that:
-- Removed the callback argument from `NewDecoder`
-- Removed `DecodeFull` from `qpack.Decoder`
-
-The `quic-go` package appears twice in the dependency graph:
-1. `github.com/sagernet/quic-go` (direct, via sing-quic)
-2. `github.com/quic-go/quic-go` (indirect, transitive)
-
-These are different Go modules with different versioning.
-
-### Affected Packages
-- `protocol/hysteria2/...` — Hysteria2 outbound
-- `protocol/router/...` — if it imports H2/H3 transports
-- Any package transitively importing `quic-go/http3`
-
-### How to Fix
-1. Check if `sagernet/sing-quic` has a newer version that aligns with a compatible `qpack`
-2. Alternatively, add a `replace` directive in `go.mod` to pin `qpack` to a compatible version:
-   ```
-   replace github.com/quic-go/qpack => github.com/quic-go/qpack v0.5.1
-   ```
-3. Test: `go build ./protocol/hysteria2/...` should pass after the fix
-4. Verify: `go build ./...` should have zero errors (excluding any other pre-existing issues)
+### Resolution
+The `quic-go` module was upgraded from v0.54.0 to v0.57.0, aligning the `qpack` API
+(`NewDecoder` callback argument removed, `DecodeFull` method signature updated).
 
 ### References
-- Evidence: `.sisyphus/evidence/task-19-verification.txt`
-- Upstream sing-box v1.13.11 builds successfully, so the upstream `go.mod` has the right version alignment
+- Evidence: `.sisyphus/evidence/task-1-quic-upgrade.txt`
 
 ---
 
 ## Issue 2: TestTLSFragment Handshake Failure
 
-**Severity**: LOW — test-only, no production impact
+**Status**: ✅ RESOLVED — tests now use local self-signed TLS server, no external dependencies
+**Severity**: Was LOW — test-only, no production impact
 **Pre-existing**: Yes (not caused by the v1.13.11 merge)
 
-### Symptoms
-```
---- FAIL: TestTLSFragment (0.58s)
-    conn_test.go:21:
-        Error Trace:  common/tlsfragment/conn_test.go:21
-        Error:        Received unexpected error:
-                      tls: first record does not look like a TLS handshake
-```
-
-### Root Cause
-The `TestTLSFragment` test attempts a TLS handshake but the remote end or test server
-is not responding with a valid TLS record. This is likely an environment issue:
-- Network unavailability to the expected test endpoint
-- Missing test server
-- Go TLS version incompatibility
-
-### Affected Packages
-- `common/tlsfragment` — test only
-
-### How to Fix
-1. Investigate what endpoint the test expects to connect to
-2. Check if the test needs a local TLS server or specific network access
-3. If the test is inherently environment-dependent, consider adding a build tag or skip condition
-4. Test: `go test ./common/tlsfragment/...` should pass
+### Resolution
+The `TestTLSFragment` test was updated to use a local self-signed TLS server,
+eliminating external network dependencies and making tests deterministic.
 
 ### References
-- Evidence: `.sisyphus/evidence/task-19-verification.txt`
+- Evidence: `.sisyphus/evidence/task-2-tlsfragment-fix.txt`
 
 ---
 
 ## Issue 3: libbox Legacy IPC Duplicate Method
 
-**Severity**: LOW — only affects `libbox_legacy_ipc` build tag, not production builds
+**Status**: ✅ RESOLVED — dead code removed (12 `libbox_legacy_ipc`-tagged files deleted)
+**Severity**: Was LOW — only affects `libbox_legacy_ipc` build tag, not production builds
 **Pre-existing**: Yes (existed before the v1.13.11 merge)
 
-### Symptoms
-When building with `libbox_legacy_ipc` tag, duplicate method errors appear in
-`experimental/libbox/command_server.go`.
-
-### Root Cause
-The legacy IPC code path defines methods that conflict with the current IPC implementation.
-The `libbox_legacy_ipc` build tag is not used in production builds.
-
-### How to Fix
-1. Decide whether legacy IPC is still needed
-2. If yes, resolve the method name conflicts
-3. If no, remove the `libbox_legacy_ipc` build tag and associated code
-4. Test: `go build -tags libbox_legacy_ipc ./experimental/libbox/...` should pass
+### Resolution
+The `libbox_legacy_ipc` build tag and all associated code (12 files in
+`experimental/libbox/`) were deleted. The legacy IPC code path is no longer
+present in the repository.
 
 ### References
-- Evidence: `.sisyphus/evidence/task-7-libbox-edge.txt`, `.sisyphus/evidence/task-15-libbox-runtime-edge.txt`
+- Evidence: `.sisyphus/evidence/task-3-libbox-legacy-cleanup.txt`
 
 ---
 
 ## Issue 4: Docker-dependent Integration Tests
 
-**Severity**: LOW — CI-only, not a code problem
+**Severity**: LOW — CI-only, infrastructure requirement, not a code problem
 **Pre-existing**: Yes
 
-### Symptoms
-Integration tests in `test/` that require Docker produce warnings:
+### Clarification
+Integration tests in `test/` require a running Docker daemon. The warning:
 ```
 WARN[0000] Cannot connect to the Docker daemon at unix:///var/run/docker.sock
 ```
+indicates Docker is not available in the current environment — this is NOT a code
+regression or build failure. The tests themselves are correctly implemented.
 
-### How to Fix
-1. These tests require a running Docker daemon
-2. In CI environments with Docker, they should pass automatically
-3. No code changes needed — this is an infrastructure requirement
+### Distinction
+- **Infrastructure absence** (this issue): Docker daemon not running → warning printed,
+  tests skipped gracefully. No code change needed.
+- **Genuine code failure**: Test would fail with assertion errors or non-zero exit code
+  even when Docker is available.
+
+### How to Handle
+1. In environments with Docker: tests run normally in CI
+2. In environments without Docker: expect the warning, no action needed
+3. To verify Docker is the only blocker: `docker run hello-world` should succeed
 
 ---
 
@@ -140,12 +88,12 @@ After fixing any of the above, run these to verify the merge is still intact:
 ```bash
 # Core build gate (should always pass)
 go build ./option/... ./route/... ./protocol/group/... ./protocol/vless/... \
-  ./experimental/libbox/... ./transport/v2rayxhttp/... ./transport/v2raycloudflared/...
+  ./experimental/libbox/... ./transport/v2raycloudflared/...
 
 # Core test gate (should always pass)
 go test ./option/... ./route/... ./protocol/group/... ./protocol/vless/...
 
-# Full build (currently fails on quic-go only)
+# Full build (should pass — quic-go issue is resolved)
 go build ./...
 
 # Zero conflict markers (should always be clean)
@@ -153,18 +101,23 @@ grep -rn '<<<<<<<\|=======\|>>>>>>>' --include='*.go' .
 
 # Fork surfaces check (should always pass)
 grep 'sing-anytls' go.mod
-ls transport/v2rayxhttp/
 ls transport/v2raycloudflared/
 grep 'asnReader' route/router.go
 grep 'geositeReader' route/router.go
 grep 'sniffOverrideDestination' route/router.go
 ```
 
+**Note**: `transport/v2rayxhttp/` was deleted in Task 4. Do not attempt to build or
+list it — those commands will fail because the path no longer exists.
+
 ---
 
 ## Priority Order for Fixing
 
-1. **Issue 1 (quic-go/qpack)** — HIGH priority, blocks real protocol builds
-2. **Issue 3 (libbox legacy IPC)** — LOW priority, only affects non-production build tag
-3. **Issue 2 (tlsfragment test)** — LOW priority, test-only, environment-dependent
-4. **Issue 4 (Docker tests)** — LOW priority, infrastructure requirement only
+All issues (1–4) are now resolved. The priority ordering below is retained for
+historical reference — no further action is required on this document.
+
+1. ~~Issue 1 (quic-go/qpack)~~ — ✅ RESOLVED — quic-go upgraded to v0.57.0
+2. ~~Issue 3 (libbox legacy IPC)~~ — ✅ RESOLVED — legacy code removed
+3. ~~Issue 2 (tlsfragment test)~~ — ✅ RESOLVED — local TLS server used
+4. ~~Issue 4 (Docker tests)~~ — ✅ CLARIFIED — infrastructure requirement, not a code issue

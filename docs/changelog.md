@@ -2,58 +2,37 @@
 icon: material/alert-decagram
 ---
 
-#### 1.13.2.2
+#### 1.13.3
 
-* Rebrand Android APK package to `com.kexichan.sfa` for side-by-side installation with upstream SFA; user agent changed to `sing-box-android-mod/`
-* Add `build_android.sh` for automated arm64-v8a APK builds via gomobile/Gradle
-* Integrate Android APK into unified `build_releases.sh` build + checksum pipeline
+* Add OpenWrt and Alpine APK packages to release **1**
+* Backport to macOS 10.13 High Sierra **2**
+* OCM service: Add WebSocket support for Responses API **3**
+* Fixes and improvements
 
-#### 1.13.2.1
+**1**:
 
-* Merge upstream sing-box v1.13.2: fix v2ray HTTP transport server, fix DNS exchange failure and recursion deadlock in connector, revert domain name validation relaxation
+Alpine APK files use `linux` in the filename to distinguish from OpenWrt APKs which use the `openwrt` prefix:
+
+- OpenWrt: `sing-box_{version}_openwrt_{architecture}.apk`
+- Alpine: `sing-box_{version}_linux_{architecture}.apk`
+
+**2**:
+
+Legacy macOS binaries (with `-legacy-macos-10.13` suffix) now support
+macOS 10.13 High Sierra, built using Go 1.25 with patches
+from [SagerNet/go](https://github.com/SagerNet/go).
+
+**3**:
+
+See [OCM](/configuration/service/ocm).
 
 #### 1.13.2
 
 * Fixes and improvements
 
-#### 1.13.1.2
-
-* Add `cloudflared` V2Ray transport type: tunnels vmess/vless/trojan/anytls connections through a Cloudflare Access hostname via WebSocket (`wss://`) using the official cloudflared binary framing protocol
-* Add `transport` field to AnyTLS outbound: enables V2Ray transports (including `cloudflared`) on AnyTLS connections
-* Add `skip_auth_prefixes` option to SOCKS/HTTP/Mixed inbounds: connections from matching source IP prefixes bypass authentication
-* Update documentation (EN + ZH) for V2Ray transport and AnyTLS outbound
-
-#### 1.13.1.1
-
-* Merge upstream sing-box v1.13.1 fixes and improvements **1**
-* Update dependency versions (dhcp, acmez, miekg/dns, openai-go, zerossl, mdlayher/netlink, oauth2)
-* OCM: Add pricing entries for `gpt-5.3-codex` and `gpt-5-codex-mini` models **2**
-* CCM/OCM: Add weekly billing cycle tracking via `week_start_unix` in usage JSON output **3**
-* Fix `prefer_domain` incorrectly treating raw IP strings as domain names (IsDomainName guard)
-* Remove deprecated legacy WireGuard outbound shim (`LegacyWireGuardOutboundOptions` removed upstream)
-* Remove deprecated `conntrack` package (replaced by `adapter.ConnectionManager`)
-
-**1**:
-
-Upstream v1.13.1 fixes: darwin TUN batch loop not exit on EBADF, `rule_set_ip_cidr_accept_empty` not working,
-Tailscale netstack TCP connections with system interface, fake-ip address allocation, naive client close,
-IPv6 local DNS on Windows, per-outbound `bind_interface`, clash-api websocket not closed after config reload via SIGHUP.
-Also enforces hard errors for overdue deprecated features (`override_address`, `override_port`, old TUN address fields).
-
-**2**:
-
-`gpt-5.3-codex` and `gpt-5-codex-mini` are now recognized model families in the OCM pricing table.
-`gpt-5.3-codex` uses the same pricing tier as `gpt-5.2-codex`. Variant suffixes (e.g. `-2025-05-01`) are matched automatically.
-
-**3**:
-
-The `week_start_unix` field in the usage JSON records the Unix timestamp of the start of the current
-weekly billing cycle, derived from the API's rate-limit reset response header. This allows clients to
-correctly attribute usage to the right billing week when parsing the statistics file.
-
 #### 1.13.1
 
-* Add advertise tags support for Tailscale endpoint
+* Fixes and improvements
 
 #### 1.12.14
 

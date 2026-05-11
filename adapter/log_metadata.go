@@ -103,8 +103,8 @@ func extractInboundContextMetadata(ctx context.Context) map[string]interface{} {
 		if metadata.ProcessInfo.ProcessID > 0 {
 			result["process_id"] = metadata.ProcessInfo.ProcessID
 		}
-		if metadata.ProcessInfo.AndroidPackageName != "" {
-			result["android_package_name"] = metadata.ProcessInfo.AndroidPackageName
+		if len(metadata.ProcessInfo.AndroidPackageNames) > 0 {
+			result["android_package_names"] = metadata.ProcessInfo.AndroidPackageNames
 		}
 		if metadata.ProcessInfo.UserName != "" {
 			result["user_name"] = metadata.ProcessInfo.UserName

@@ -15,12 +15,12 @@ import (
 )
 
 type MockTransport struct {
-	response  *dns.Msg
-	delay     time.Duration
-	calls     int32
-	err       error
+	response   *dns.Msg
+	delay      time.Duration
+	calls      int32
+	err        error
 	exchangeFn func(ctx context.Context, message *dns.Msg) (*dns.Msg, error)
-	tag       string
+	tag        string
 }
 
 func (t *MockTransport) Name() string {
@@ -49,6 +49,8 @@ func (t *MockTransport) Close() error {
 func (t *MockTransport) Dependencies() []string {
 	return nil
 }
+
+func (t *MockTransport) Reset() {}
 
 func (t *MockTransport) Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, error) {
 	time.Sleep(t.delay)
@@ -147,7 +149,7 @@ func TestClient_LazyRefresh(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "1.1.1.1", resp.Answer[0].(*dns.A).A.String()) // Stale data
-	assert.Less(t, duration, 20*time.Millisecond)                 // Should be immediate (no transport delay)
+	assert.Less(t, duration, 20*time.Millisecond)                  // Should be immediate (no transport delay)
 
 	// Wait for background refresh to complete
 	time.Sleep(100 * time.Millisecond)
@@ -750,15 +752,15 @@ func TestClient_TTLAdjustmentNoUnderflow(t *testing.T) {
 
 func TestClient_ComputeHoldTTL(t *testing.T) {
 	tests := []struct {
-		name          string
-		rcode         int
-		hasAnswer     bool
-		holdValid     time.Duration
-		holdNX        time.Duration
-		holdRefused   time.Duration
-		holdOther     time.Duration
-		nativeTTL     uint32
-		expectedTTL   uint32
+		name        string
+		rcode       int
+		hasAnswer   bool
+		holdValid   time.Duration
+		holdNX      time.Duration
+		holdRefused time.Duration
+		holdOther   time.Duration
+		nativeTTL   uint32
+		expectedTTL uint32
 	}{
 		{
 			name:        "SUCCESS with HoldValid",
@@ -945,10 +947,10 @@ func TestClient_HoldDurationForResponse(t *testing.T) {
 			expected:  5 * time.Second,
 		},
 		{
-			name:     "NOTIMP uses HoldOther",
-			rcode:    dns.RcodeNotImplemented,
+			name:      "NOTIMP uses HoldOther",
+			rcode:     dns.RcodeNotImplemented,
 			holdOther: 3 * time.Second,
-			expected: 3 * time.Second,
+			expected:  3 * time.Second,
 		},
 	}
 

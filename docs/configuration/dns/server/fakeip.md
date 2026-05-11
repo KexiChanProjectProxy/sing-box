@@ -30,6 +30,6 @@ icon: material/new-box
 
 IPv4 address range for FakeIP.
 
-#### inet6_address
+#### inet6_range
 
 IPv6 address range for FakeIP.

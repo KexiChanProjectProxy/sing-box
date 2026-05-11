@@ -39,6 +39,7 @@ icon: material/alert-decagram
 |----------|-------------------------|
 | `server` | 一组 [DNS 服务器](./server/) |
 | `rules`  | 一组 [DNS 规则](./rule/)    |
+| `fakeip` | [FakeIP](./fakeip/)        |
 
 #### final
 

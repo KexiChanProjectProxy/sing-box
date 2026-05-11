@@ -6,7 +6,8 @@ require github.com/sagernet/sing-box v0.0.0
 
 replace github.com/sagernet/sing-box => ../
 
-replace github.com/anytls/sing-anytls => ../sing-anytls
+// Match the root module's protected AnyTLS fork; ../sing-anytls is not vendored here.
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13-0.20260202185322-24deedf1ce8c
 
 require (
 	github.com/docker/docker v27.3.1+incompatible

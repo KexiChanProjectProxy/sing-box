@@ -192,4 +192,6 @@ require (
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
+// Protected AnyTLS fork: outbound depends on fork-specific client behavior.
+// Do not remove without proving equivalence with upstream github.com/anytls/sing-anytls.
 replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13-0.20260202185322-24deedf1ce8c

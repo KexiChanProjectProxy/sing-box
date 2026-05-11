@@ -57,7 +57,6 @@ func NewSelector(ctx context.Context, router adapter.Router, logger log.ContextL
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: options.InterruptExistConnections,
 	}
-	outbound.ApplyPreferDomain(options.PreferDomain)
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
 	}
@@ -114,23 +113,6 @@ func (s *Selector) Now() string {
 		return s.tags[0]
 	}
 	return selected.Tag()
-}
-
-// PreferDomainConfig implements adapter.PreferDomainOverrider.
-// If the selector itself has prefer_domain configured, use that.
-// Otherwise, delegate to the currently selected child outbound.
-func (s *Selector) PreferDomainConfig() *adapter.PreferDomainConfig {
-	if config := s.Adapter.PreferDomainConfig(); config != nil {
-		return config
-	}
-	selected := s.selected.Load()
-	if selected == nil {
-		return nil
-	}
-	if overrider, ok := selected.(adapter.PreferDomainOverrider); ok {
-		return overrider.PreferDomainConfig()
-	}
-	return nil
 }
 
 func (s *Selector) All() []string {
@@ -203,5 +185,8 @@ func (s *Selector) NewDirectRouteConnection(metadata adapter.InboundContext, rou
 }
 
 func RealTag(detour adapter.Outbound) string {
-	return resolveRealTag(detour)
+	if group, isGroup := detour.(adapter.OutboundGroup); isGroup {
+		return group.Now()
+	}
+	return detour.Tag()
 }

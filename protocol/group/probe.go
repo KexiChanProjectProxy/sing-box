@@ -3,22 +3,10 @@ package group
 import (
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	commonurltest "github.com/sagernet/sing-box/common/urltest"
-	C "github.com/sagernet/sing-box/constant"
 )
-
-func urlTestProbeConfig(link string, interval time.Duration, tolerance uint16) commonurltest.ProbeConfig {
-	return commonurltest.NewProbeConfig(
-		"urltest",
-		link,
-		C.TCPTimeout,
-		"interval="+interval.String(),
-		"tolerance="+strconv.FormatUint(uint64(tolerance), 10),
-	)
-}
 
 func loadBalanceProbeConfig(lb *LoadBalance) commonurltest.ProbeConfig {
 	link := lb.link

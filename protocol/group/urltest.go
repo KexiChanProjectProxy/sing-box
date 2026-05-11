@@ -62,7 +62,6 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
 		idleTimeout:                  time.Duration(options.IdleTimeout),
 		interruptExternalConnections: options.InterruptExistConnections,
 	}
-	outbound.ApplyPreferDomain(options.PreferDomain)
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
 	}
@@ -106,26 +105,6 @@ func (s *URLTest) Now() string {
 	return ""
 }
 
-// PreferDomainConfig implements adapter.PreferDomainOverrider.
-// If URLTest itself has prefer_domain configured, use that.
-// Otherwise, delegate to the currently selected child outbound.
-func (s *URLTest) PreferDomainConfig() *adapter.PreferDomainConfig {
-	if config := s.Adapter.PreferDomainConfig(); config != nil {
-		return config
-	}
-	selected := s.group.selectedOutboundTCP
-	if selected == nil {
-		selected = s.group.selectedOutboundUDP
-	}
-	if selected == nil {
-		return nil
-	}
-	if overrider, ok := selected.(adapter.PreferDomainOverrider); ok {
-		return overrider.PreferDomainConfig()
-	}
-	return nil
-}
-
 func (s *URLTest) All() []string {
 	return s.tags
 }
@@ -160,7 +139,7 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 		return s.group.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
 	}
 	s.logger.ErrorContext(ctx, err)
-	deleteProbeHistory(s.group.history, outbound, s.group.probeConfig())
+	s.group.history.DeleteURLTestHistory(outbound.Tag())
 	return nil, err
 }
 
@@ -178,7 +157,7 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 		return s.group.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
 	}
 	s.logger.ErrorContext(ctx, err)
-	deleteProbeHistory(s.group.history, outbound, s.group.probeConfig())
+	s.group.history.DeleteURLTestHistory(outbound.Tag())
 	return nil, err
 }
 
@@ -213,7 +192,7 @@ type URLTestGroup struct {
 	outbound                     adapter.OutboundManager
 	pause                        pause.Manager
 	pauseCallback                *list.Element[pause.Callback]
-	logger                       log.ContextLogger
+	logger                       log.Logger
 	outbounds                    []adapter.Outbound
 	link                         string
 	interval                     time.Duration
@@ -232,7 +211,7 @@ type URLTestGroup struct {
 	lastActive                   common.TypedValue[time.Time]
 }
 
-func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.ContextLogger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
+func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
 	if interval == 0 {
 		interval = C.DefaultURLTestInterval
 	}
@@ -306,45 +285,43 @@ func (g *URLTestGroup) Close() error {
 }
 
 func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
-	probeConfig := g.probeConfig()
-	effectiveOutbounds := uniqueEffectiveOutbounds(g.outbounds, probeConfig)
 	var minDelay uint16
 	var minOutbound adapter.Outbound
 	switch network {
 	case N.NetworkTCP:
 		if g.selectedOutboundTCP != nil {
-			if history := loadProbeHistory(g.history, g.selectedOutboundTCP, probeConfig); history != nil {
+			if history := g.history.LoadURLTestHistory(RealTag(g.selectedOutboundTCP)); history != nil {
 				minOutbound = g.selectedOutboundTCP
 				minDelay = history.Delay
 			}
 		}
 	case N.NetworkUDP:
 		if g.selectedOutboundUDP != nil {
-			if history := loadProbeHistory(g.history, g.selectedOutboundUDP, probeConfig); history != nil {
+			if history := g.history.LoadURLTestHistory(RealTag(g.selectedOutboundUDP)); history != nil {
 				minOutbound = g.selectedOutboundUDP
 				minDelay = history.Delay
 			}
 		}
 	}
-	for _, detour := range effectiveOutbounds {
-		if !common.Contains(detour.outbound.Network(), network) {
+	for _, detour := range g.outbounds {
+		if !common.Contains(detour.Network(), network) {
 			continue
 		}
-		history := loadProbeHistory(g.history, detour.outbound, probeConfig)
+		history := g.history.LoadURLTestHistory(RealTag(detour))
 		if history == nil {
 			continue
 		}
 		if minDelay == 0 || minDelay > history.Delay+g.tolerance {
 			minDelay = history.Delay
-			minOutbound = detour.outbound
+			minOutbound = detour
 		}
 	}
 	if minOutbound == nil {
-		for _, detour := range effectiveOutbounds {
-			if !common.Contains(detour.outbound.Network(), network) {
+		for _, detour := range g.outbounds {
+			if !common.Contains(detour.Network(), network) {
 				continue
 			}
-			return detour.outbound, false
+			return detour, false
 		}
 		return nil, false
 	}
@@ -390,34 +367,33 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 	}
 	defer g.checking.Store(false)
 	b, _ := batch.New(ctx, batch.WithConcurrencyNum[any](10))
-	probeConfig := g.probeConfig()
-	effectiveOutbounds := uniqueEffectiveOutbounds(g.outbounds, probeConfig)
+	checked := make(map[string]bool)
 	var resultAccess sync.Mutex
-	for _, detour := range effectiveOutbounds {
-		tag := detour.configuredTag
-		historyKey := detour.historyKey
-		if historyKey == "" {
+	for _, detour := range g.outbounds {
+		tag := detour.Tag()
+		realTag := RealTag(detour)
+		if checked[realTag] {
 			continue
 		}
-		history := g.history.LoadURLTestHistory(historyKey)
+		history := g.history.LoadURLTestHistory(realTag)
 		if !force && history != nil && time.Since(history.Time) < g.interval {
-			resultAccess.Lock()
-			result[tag] = history.Delay
-			resultAccess.Unlock()
 			continue
 		}
-		b.Go(historyKey, func() (any, error) {
+		checked[realTag] = true
+		p, loaded := g.outbound.Outbound(realTag)
+		if !loaded {
+			continue
+		}
+		b.Go(realTag, func() (any, error) {
 			testCtx, cancel := context.WithTimeout(g.ctx, C.TCPTimeout)
 			defer cancel()
-			t, err := urltest.URLTest(testCtx, g.link, detour.outbound)
+			t, err := urltest.URLTest(testCtx, g.link, p)
 			if err != nil {
-				event := log.NewHealthCheckEvent("failed").WithOutbound(tag).WithError(err)
-				log.WithHealthCheckEvent(g.logger, testCtx, log.LevelDebug, event, "outbound ", tag, " unavailable: ", err)
-				g.history.DeleteURLTestHistory(historyKey)
+				g.logger.Debug("outbound ", tag, " unavailable: ", err)
+				g.history.DeleteURLTestHistory(realTag)
 			} else {
-				event := log.NewHealthCheckEvent("success").WithOutbound(tag).WithLatency(int64(t))
-				log.WithHealthCheckEvent(g.logger, testCtx, log.LevelDebug, event, "outbound ", tag, " available: ", t, "ms")
-				g.history.StoreURLTestHistory(historyKey, &adapter.URLTestHistory{
+				g.logger.Debug("outbound ", tag, " available: ", t, "ms")
+				g.history.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: t,
 				})
@@ -431,10 +407,6 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 	b.Wait()
 	g.performUpdateCheck()
 	return result, nil
-}
-
-func (g *URLTestGroup) probeConfig() urltest.ProbeConfig {
-	return urlTestProbeConfig(g.link, g.interval, g.tolerance)
 }
 
 func (g *URLTestGroup) performUpdateCheck() {

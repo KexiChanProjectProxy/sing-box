@@ -49,7 +49,6 @@ func TestResolveNestedLeafAndChain(t *testing.T) {
 	require.NotNil(t, resolved.Leaf)
 	assert.Equal(t, "proxy-a", resolved.Leaf.Tag())
 	assert.Equal(t, []string{"selector-a", "urltest-a", "lb-a", "proxy-a"}, resolved.Chain)
-	assert.Equal(t, "proxy-a", RealTag(selector))
 }
 
 func TestResolveCycle(t *testing.T) {
@@ -77,7 +76,6 @@ func TestResolveCycle(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, errOutboundResolveCycle))
 	assert.Equal(t, []string{"selector-a", "urltest-a"}, resolved.Chain)
-	assert.Equal(t, "", RealTag(selector))
 }
 
 func TestResolveDepth(t *testing.T) {
@@ -113,5 +111,4 @@ func TestResolveDepth(t *testing.T) {
 	assert.Len(t, resolved.Chain, maxOutboundResolveDepth)
 	assert.Equal(t, "selector-0", resolved.Chain[0])
 	assert.Equal(t, fmt.Sprintf("selector-%d", maxOutboundResolveDepth-1), resolved.Chain[len(resolved.Chain)-1])
-	assert.Equal(t, "", RealTag(manager.outbounds["selector-0"]))
 }

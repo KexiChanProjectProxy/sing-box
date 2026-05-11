@@ -31,6 +31,7 @@ icon: material/alert-decagram
     "rules": [],
     "rule_set": [],
     "final": "",
+    "find_process": false,
     "auto_detect_interface": false,
     "override_android_vpn": false,
     "default_interface": "",
@@ -72,6 +73,18 @@ List of [rule-set](/configuration/rule-set/)
 #### final
 
 Default outbound tag. the first outbound will be used if empty.
+
+#### find_process
+
+!!! quote ""
+
+    Only supported on Linux and Windows.
+
+Enable routing by process detection. Requires `rule_set` with process rules or DNS rules with process rules to function properly.
+
+When enabled, the router will track which process initiated each connection, enabling rules that match by `process_name`, `process_path`, `process_path_regex`, `package_name`, `user`, or `user_id`.
+
+Automatically enabled when process-based rules are present.
 
 #### auto_detect_interface
 

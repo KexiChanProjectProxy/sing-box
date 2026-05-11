@@ -153,6 +153,10 @@ DNS 查询类型。值可以为整数或者类型名称字符串。
 
 #### ip_cidr
 
+!!! info ""
+
+    当在路由/DNS 规则中启用 `rule_set_ipcidr_match_source` 时，`ip_cidr` 是 `source_ip_cidr` 的别名。
+
 匹配 IP CIDR。
 
 #### source_port

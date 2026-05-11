@@ -32,6 +32,18 @@
 
 VMess 用户。
 
+#### users.name
+
+用户名。
+
+#### users.uuid
+
+==必填==
+
+VMess 用户 ID。
+
+#### users.alterId
+
 | Alter ID | 描述    |
 |----------|-------|
 | 0        | 禁用旧协议 |

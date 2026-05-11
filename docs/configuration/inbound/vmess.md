@@ -32,6 +32,18 @@ See [Listen Fields](/configuration/shared/listen/) for details.
 
 VMess users.
 
+#### users.name
+
+User name.
+
+#### users.uuid
+
+==Required==
+
+VMess user id.
+
+#### users.alterId
+
 | Alter ID | Description             |
 |----------|-------------------------|
 | 0        | Disable legacy protocol |

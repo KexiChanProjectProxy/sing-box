@@ -32,6 +32,10 @@ See [Listen Fields](/configuration/shared/listen/) for details.
 
 VLESS users.
 
+#### users.name
+
+User name.
+
 #### users.uuid
 
 ==Required==

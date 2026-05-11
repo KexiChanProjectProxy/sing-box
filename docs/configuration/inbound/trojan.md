@@ -41,6 +41,16 @@ See [Listen Fields](/configuration/shared/listen/) for details.
 
 Trojan users.
 
+#### users.name
+
+User name.
+
+#### users.password
+
+==Required==
+
+User password.
+
 #### tls
 
 TLS configuration, see [TLS](/configuration/shared/tls/#inbound).

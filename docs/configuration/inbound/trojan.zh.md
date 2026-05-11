@@ -41,6 +41,16 @@
 
 Trojan 用户。
 
+#### users.name
+
+用户名。
+
+#### users.password
+
+==必填==
+
+用户密码。
+
 #### tls
 
 TLS 配置，参阅 [TLS](/zh/configuration/shared/tls/#入站)。

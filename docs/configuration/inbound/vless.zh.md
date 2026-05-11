@@ -32,6 +32,10 @@
 
 VLESS 用户。
 
+#### users.name
+
+用户名。
+
 #### users.uuid
 
 ==必填==

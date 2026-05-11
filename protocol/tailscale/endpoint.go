@@ -847,3 +847,4 @@ func (c *dnsConfigurtor) GetBaseConfig() (tsDNS.OSConfig, error) {
 func (c *dnsConfigurtor) Close() error {
 	return nil
 }
+

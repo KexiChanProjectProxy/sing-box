@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"context"
 	"reflect"
 	"strings"
 	"time"
@@ -75,46 +74,36 @@ func getServiceName(service any) string {
 	return strings.ToLower(t.Name())
 }
 
-func getComponentTypeAndTag(service any) (componentType string, tag string) {
-	if named, ok := service.(interface {
-		Type() string
-		Tag() string
-	}); ok {
-		return named.Type(), named.Tag()
-	}
-	t := reflect.TypeOf(service)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return strings.ToLower(t.Name()), ""
-}
-
 func Start(logger log.ContextLogger, stage StartStage, services ...Lifecycle) error {
 	for _, service := range services {
 		name := getServiceName(service)
-		componentType, tag := getComponentTypeAndTag(service)
-		event := log.NewComponentLifecycleEvent(stage.String(), componentType).WithTag(tag)
-		log.WithComponentLifecycleEvent(logger, context.Background(), log.LevelTrace, event, stage, " ", name)
+		logger.Trace(stage, " ", name)
 		startTime := time.Now()
 		err := service.Start(stage)
 		if err != nil {
 			return err
 		}
-		log.WithComponentLifecycleEvent(logger, context.Background(), log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		LogElapsed(logger, startTime, stage, " ", name)
 	}
 	return nil
 }
 
 func StartNamed(logger log.ContextLogger, stage StartStage, services []LifecycleService) error {
 	for _, service := range services {
-		event := log.NewComponentLifecycleEvent(stage.String(), service.Name())
-		log.WithComponentLifecycleEvent(logger, context.Background(), log.LevelTrace, event, stage, " ", service.Name())
+		logger.Trace(stage, " ", service.Name())
 		startTime := time.Now()
 		err := service.Start(stage)
 		if err != nil {
 			return E.Cause(err, stage.String(), " ", service.Name())
 		}
-		log.WithComponentLifecycleEvent(logger, context.Background(), log.LevelTrace, event, stage, " ", service.Name(), " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		LogElapsed(logger, startTime, stage, " ", service.Name())
 	}
 	return nil
+}
+
+func LogElapsed(logger log.ContextLogger, startTime time.Time, description ...any) {
+	duration := time.Since(startTime)
+	if duration > time.Second {
+		logger.Trace(append(description, " completed (", F.Seconds(duration.Seconds()), "s)")...)
+	}
 }

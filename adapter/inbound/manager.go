@@ -12,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 )
 
 var _ adapter.InboundManager = (*Manager)(nil)
@@ -48,14 +47,13 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	m.access.Unlock()
 	for _, inbound := range inbounds {
 		name := "inbound/" + inbound.Type() + "[" + inbound.Tag() + "]"
-		event := log.NewComponentLifecycleEvent(stage.String(), "inbound").WithTag(inbound.Tag())
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name)
+		m.logger.Trace(stage, " ", name)
 		startTime := time.Now()
 		err := adapter.LegacyStart(inbound, stage)
 		if err != nil {
 			return E.Cause(err, stage, " ", name)
 		}
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		adapter.LogElapsed(m.logger, startTime, stage, " ", name)
 	}
 	return nil
 }
@@ -73,15 +71,14 @@ func (m *Manager) Close() error {
 	var err error
 	for _, inbound := range inbounds {
 		name := "inbound/" + inbound.Type() + "[" + inbound.Tag() + "]"
-		event := log.NewComponentLifecycleEvent("close", "inbound").WithTag(inbound.Tag())
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name)
+		m.logger.Trace("close ", name)
 		startTime := time.Now()
 		monitor.Start("close ", name)
 		err = E.Append(err, inbound.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
 		})
 		monitor.Finish()
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		adapter.LogElapsed(m.logger, startTime, "close ", name)
 	}
 	return nil
 }
@@ -135,14 +132,13 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if m.started {
 		name := "inbound/" + inbound.Type() + "[" + inbound.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			event := log.NewComponentLifecycleEvent(stage.String(), "inbound").WithTag(inbound.Tag())
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name)
+			m.logger.Trace(stage, " ", name)
 			startTime := time.Now()
 			err = adapter.LegacyStart(inbound, stage)
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			adapter.LogElapsed(m.logger, startTime, stage, " ", name)
 		}
 	}
 	if existsInbound, loaded := m.inboundByTag[tag]; loaded {

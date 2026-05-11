@@ -12,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 )
 
 var _ adapter.ServiceManager = (*Manager)(nil)
@@ -46,14 +45,13 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	m.access.Unlock()
 	for _, service := range services {
 		name := "service/" + service.Type() + "[" + service.Tag() + "]"
-		event := log.NewComponentLifecycleEvent(stage.String(), "service").WithTag(service.Tag())
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name)
+		m.logger.Trace(stage, " ", name)
 		startTime := time.Now()
 		err := adapter.LegacyStart(service, stage)
 		if err != nil {
 			return E.Cause(err, stage, " ", name)
 		}
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		adapter.LogElapsed(m.logger, startTime, stage, " ", name)
 	}
 	return nil
 }
@@ -71,15 +69,14 @@ func (m *Manager) Close() error {
 	var err error
 	for _, service := range services {
 		name := "service/" + service.Type() + "[" + service.Tag() + "]"
-		event := log.NewComponentLifecycleEvent("close", "service").WithTag(service.Tag())
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name)
+		m.logger.Trace("close ", name)
 		startTime := time.Now()
 		monitor.Start("close ", name)
 		err = E.Append(err, service.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
 		})
 		monitor.Finish()
-		log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		adapter.LogElapsed(m.logger, startTime, "close ", name)
 	}
 	return nil
 }
@@ -130,14 +127,13 @@ func (m *Manager) Create(ctx context.Context, logger log.ContextLogger, tag stri
 	if m.started {
 		name := "service/" + service.Type() + "[" + service.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			event := log.NewComponentLifecycleEvent(stage.String(), "service").WithTag(service.Tag())
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name)
+			m.logger.Trace(stage, " ", name)
 			startTime := time.Now()
 			err = adapter.LegacyStart(service, stage)
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			adapter.LogElapsed(m.logger, startTime, stage, " ", name)
 		}
 	}
 	if existsService, loaded := m.serviceByTag[tag]; loaded {

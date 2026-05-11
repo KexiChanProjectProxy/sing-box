@@ -14,7 +14,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/logger"
 )
 
@@ -84,14 +83,13 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 		m.access.Unlock()
 		for _, outbound := range outbounds {
 			name := "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
-			event := log.NewComponentLifecycleEvent(stage.String(), "outbound").WithTag(outbound.Tag())
-			log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name)
+			m.logger.Trace(stage, " ", name)
 			startTime := time.Now()
 			err := adapter.LegacyStart(outbound, stage)
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			adapter.LogElapsed(m.logger, startTime, stage, " ", name)
 		}
 	}
 	return nil
@@ -118,8 +116,7 @@ func (m *Manager) startOutbounds(outbounds []adapter.Outbound) error {
 			canContinue = true
 			name := "outbound/" + outboundToStart.Type() + "[" + outboundTag + "]"
 			if starter, isStarter := outboundToStart.(adapter.Lifecycle); isStarter {
-				event := log.NewComponentLifecycleEvent("start", "outbound").WithTag(outboundTag)
-				log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "start ", name)
+				m.logger.Trace("start ", name)
 				startTime := time.Now()
 				monitor.Start("start ", name)
 				err := starter.Start(adapter.StartStateStart)
@@ -127,12 +124,11 @@ func (m *Manager) startOutbounds(outbounds []adapter.Outbound) error {
 				if err != nil {
 					return E.Cause(err, "start ", name)
 				}
-				log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "start ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+				adapter.LogElapsed(m.logger, startTime, "start ", name)
 			} else if starter, isStarter := outboundToStart.(interface {
 				Start() error
 			}); isStarter {
-				event := log.NewComponentLifecycleEvent("start", "outbound").WithTag(outboundTag)
-				log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "start ", name)
+				m.logger.Trace("start ", name)
 				startTime := time.Now()
 				monitor.Start("start ", name)
 				err := starter.Start()
@@ -140,7 +136,7 @@ func (m *Manager) startOutbounds(outbounds []adapter.Outbound) error {
 				if err != nil {
 					return E.Cause(err, "start ", name)
 				}
-				log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "start ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+				adapter.LogElapsed(m.logger, startTime, "start ", name)
 			}
 		}
 		if len(started) == len(outbounds) {
@@ -188,15 +184,14 @@ func (m *Manager) Close() error {
 	for _, outbound := range outbounds {
 		if closer, isCloser := outbound.(io.Closer); isCloser {
 			name := "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
-			event := log.NewComponentLifecycleEvent("close", "outbound").WithTag(outbound.Tag())
-			log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name)
+			m.logger.Trace("close ", name)
 			startTime := time.Now()
 			monitor.Start("close ", name)
 			err = E.Append(err, closer.Close(), func(err error) error {
 				return E.Cause(err, "close ", name)
 			})
 			monitor.Finish()
-			log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelTrace, event, "close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			adapter.LogElapsed(m.logger, startTime, "close ", name)
 		}
 	}
 	return nil
@@ -243,8 +238,7 @@ func (m *Manager) Remove(tag string) error {
 	if m.defaultOutbound == outbound {
 		if len(m.outbounds) > 0 {
 			m.defaultOutbound = m.outbounds[0]
-			event := log.NewComponentLifecycleEvent("update", "outbound").WithTag(m.defaultOutbound.Tag())
-			log.WithComponentLifecycleEvent(m.logger, context.Background(), log.LevelInfo, event, "updated default outbound to ", m.defaultOutbound.Tag())
+			m.logger.Info("updated default outbound to ", m.defaultOutbound.Tag())
 		} else {
 			m.defaultOutbound = nil
 		}
@@ -280,14 +274,13 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if m.started {
 		name := "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			event := log.NewComponentLifecycleEvent(stage.String(), "outbound").WithTag(outbound.Tag())
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name)
+			m.logger.Trace(stage, " ", name)
 			startTime := time.Now()
 			err = adapter.LegacyStart(outbound, stage)
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelTrace, event, stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			adapter.LogElapsed(m.logger, startTime, stage, " ", name)
 		}
 	}
 	m.access.Lock()
@@ -316,8 +309,7 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if tag == m.defaultTag || (m.defaultTag == "" && m.defaultOutbound == nil) {
 		m.defaultOutbound = outbound
 		if m.started {
-			event := log.NewComponentLifecycleEvent("update", "outbound").WithTag(outbound.Tag())
-			log.WithComponentLifecycleEvent(m.logger, ctx, log.LevelInfo, event, "updated default outbound to ", outbound.Tag())
+			m.logger.Info("updated default outbound to ", outbound.Tag())
 		}
 	}
 	return nil

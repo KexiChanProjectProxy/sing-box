@@ -2,7 +2,11 @@
 icon: material/alert-decagram
 ---
 
-#### 1.13.3-beta.1
+#### 1.13.4
+
+* Fixes and improvements
+
+#### 1.13.3
 
 * Add OpenWrt and Alpine APK packages to release **1**
 * Backport to macOS 10.13 High Sierra **2**

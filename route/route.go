@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/sniff"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -421,7 +420,7 @@ func (r *Router) PreMatch(metadata adapter.InboundContext, routeContext tun.Dire
 		}
 		directRouteOutbound = defaultOutbound.(adapter.DirectRouteOutbound)
 	}
-	if metadata.Destination.IsFqdn() {
+	if metadata.Destination.IsDomain() {
 		if len(metadata.DestinationAddresses) == 0 {
 			var strategy C.DomainStrategy
 			if metadata.Source.IsIPv4() {
@@ -487,7 +486,7 @@ func (r *Router) matchRule(
 		} else if metadata.Destination.IsIP() {
 			originDestination = metadata.Destination.AddrPort()
 		}
-		processInfo, fErr := process.FindProcessInfo(r.processSearcher, ctx, metadata.Network, metadata.Source.AddrPort(), originDestination)
+		processInfo, fErr := r.findProcessInfoCached(ctx, metadata.Network, metadata.Source.AddrPort(), originDestination)
 		if fErr != nil {
 			event := log.NewProcessInfoEvent("error").WithError(fErr)
 			log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
@@ -511,10 +510,8 @@ func (r *Router) matchRule(
 					log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
 						"found process path: ", processInfo.ProcessPath)
 				}
-			} else if processInfo.AndroidPackageName != "" {
-				event := log.NewProcessInfoEvent("found").WithAndroidPackageName(processInfo.AndroidPackageName)
-				log.WithProcessInfoEvent(r.logger, ctx, log.LevelInfo, event,
-					"found package name: ", processInfo.AndroidPackageName)
+			} else if len(processInfo.AndroidPackageNames) > 0 {
+				r.logger.InfoContext(ctx, "found package name: ", strings.Join(processInfo.AndroidPackageNames, ", "))
 			} else if processInfo.UserId != -1 {
 				if processInfo.UserName != "" {
 					event := log.NewProcessInfoEvent("found").WithUserName(processInfo.UserName)
@@ -998,7 +995,7 @@ func (r *Router) actionSniff(
 }
 
 func (r *Router) actionResolve(ctx context.Context, metadata *adapter.InboundContext, action *R.RuleActionResolve) error {
-	if metadata.Destination.IsFqdn() {
+	if metadata.Destination.IsDomain() {
 		var transport adapter.DNSTransport
 		if action.Server != "" {
 			var loaded bool

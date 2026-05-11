@@ -41,16 +41,27 @@ func (r *RuleSetItem) Start() error {
 }
 
 func (r *RuleSetItem) Match(metadata *adapter.InboundContext) bool {
-	metadata.IPCIDRMatchSource = r.ipCidrMatchSource
-	metadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
+	return !r.matchStates(metadata).isEmpty()
+}
+
+func (r *RuleSetItem) matchStates(metadata *adapter.InboundContext) ruleMatchStateSet {
+	return r.matchStatesWithBase(metadata, 0)
+}
+
+func (r *RuleSetItem) matchStatesWithBase(metadata *adapter.InboundContext, base ruleMatchState) ruleMatchStateSet {
+	var stateSet ruleMatchStateSet
 	for _, ruleSet := range r.setList {
-		if ruleSet.Match(metadata) {
-			// Store the first matched ruleset tag for hash-based routing
+		nestedMetadata := *metadata
+		nestedMetadata.ResetRuleMatchCache()
+		nestedMetadata.IPCIDRMatchSource = r.ipCidrMatchSource
+		nestedMetadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
+		nestedStateSet := matchHeadlessRuleStatesWithBase(ruleSet, &nestedMetadata, base)
+		if !nestedStateSet.isEmpty() && metadata.MatchedRuleSet == "" {
 			metadata.MatchedRuleSet = ruleSet.Name()
-			return true
 		}
+		stateSet = stateSet.merge(nestedStateSet)
 	}
-	return false
+	return stateSet
 }
 
 func (r *RuleSetItem) ContainsDestinationIPCIDRRule() bool {

@@ -4,6 +4,8 @@ icon: material/delete-alert
 
 # 废弃功能列表
 
+## 1.12.0
+
 #### 旧的 DNS 服务器格式
 
 DNS 服务器已重构，

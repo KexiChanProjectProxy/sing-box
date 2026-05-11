@@ -163,7 +163,10 @@ func NewDefault(ctx context.Context, options option.DialerOptions, loggers ...bo
 	} else {
 		dialer.Timeout = C.TCPConnectTimeout
 	}
-	if !options.DisableTCPKeepAlive {
+	if options.DisableTCPKeepAlive {
+		dialer.KeepAlive = -1
+		dialer.KeepAliveConfig.Enable = false
+	} else {
 		var defaultKeepAlive, defaultKeepAliveInterval time.Duration
 		if networkManager != nil {
 			defaultOpts := networkManager.DefaultOptions()

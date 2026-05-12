@@ -138,6 +138,7 @@ func ServiceRegistry() *service.Registry {
 	registerCCMService(registry)
 	registerOCMService(registry)
 	registerOOMKillerService(registry)
+	registerQUICServices(registry)
 
 	return registry
 }

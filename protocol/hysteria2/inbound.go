@@ -30,12 +30,15 @@ func RegisterInbound(registry *inbound.Registry) {
 
 type Inbound struct {
 	inbound.Adapter
-	router       adapter.Router
-	logger       log.ContextLogger
-	listener     *listener.Listener
-	tlsConfig    tls.ServerConfig
-	service      *hysteria2.Service[int]
-	userNameList []string
+	ctx           context.Context
+	router        adapter.Router
+	logger        log.ContextLogger
+	listener      *listener.Listener
+	listenOptions option.ListenOptions
+	realmPorts    []uint16
+	tlsConfig     tls.ServerConfig
+	service       *hysteria2.Service[int]
+	userNameList  []string
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.Hysteria2InboundOptions) (adapter.Inbound, error) {
@@ -98,6 +101,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 	}
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeHysteria2, tag),
+		ctx:     ctx,
 		router:  router,
 		logger:  logger,
 		listener: listener.New(listener.Options{
@@ -105,13 +109,27 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 			Logger:  logger,
 			Listen:  options.ListenOptions,
 		}),
-		tlsConfig: tlsConfig,
+		listenOptions: options.ListenOptions,
+		tlsConfig:     tlsConfig,
 	}
 	var udpTimeout time.Duration
 	if options.UDPTimeout != 0 {
 		udpTimeout = time.Duration(options.UDPTimeout)
 	} else {
 		udpTimeout = C.UDPTimeout
+	}
+	var realmConfig *option.Hysteria2Realm
+	if options.Realm != nil {
+		realmConfig = &options.Realm.Hysteria2Realm
+		if len(options.Realm.ListenPorts) > 0 {
+			inbound.realmPorts = options.Realm.ListenPorts
+		} else if len(options.Realm.Hysteria2Realm.ListenPorts) > 0 {
+			inbound.realmPorts = options.Realm.Hysteria2Realm.ListenPorts
+		}
+	}
+	realmOptions, err := buildRealmOptions(ctx, logger, realmConfig)
+	if err != nil {
+		return nil, err
 	}
 	service, err := hysteria2.NewService[int](hysteria2.ServiceOptions{
 		Context:               ctx,
@@ -125,6 +143,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		UDPTimeout:            udpTimeout,
 		Handler:               inbound,
 		MasqueradeHandler:     masqueradeHandler,
+		RealmOptions:          realmOptions,
 	})
 	if err != nil {
 		return nil, err
@@ -203,11 +222,21 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 			return err
 		}
 	}
-	packetConn, err := h.listener.ListenUDP()
+	var packetConn net.PacketConn
+	var err error
+	if len(h.realmPorts) > 0 {
+		packetConn, err = listenRealmPacket(h.ctx, h.listenOptions, h.realmPorts)
+	} else {
+		packetConn, err = h.listener.ListenUDP()
+	}
 	if err != nil {
 		return err
 	}
 	return h.service.Start(packetConn)
+}
+
+func (h *Inbound) InterfaceUpdated() {
+	h.service.Reset()
 }
 
 func (h *Inbound) Close() error {

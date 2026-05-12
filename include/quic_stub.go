@@ -10,6 +10,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
+	boxService "github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
@@ -57,6 +58,12 @@ func registerQUICOutbounds(registry *outbound.Registry) {
 		return nil, C.ErrQUICNotIncluded
 	})
 	outbound.Register[option.Hysteria2OutboundOptions](registry, C.TypeHysteria2, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.Hysteria2OutboundOptions) (adapter.Outbound, error) {
+		return nil, C.ErrQUICNotIncluded
+	})
+}
+
+func registerQUICServices(registry *boxService.Registry) {
+	boxService.Register[option.HysteriaRealmServiceOptions](registry, C.TypeHysteriaRealm, func(ctx context.Context, logger log.ContextLogger, tag string, options option.HysteriaRealmServiceOptions) (adapter.Service, error) {
 		return nil, C.ErrQUICNotIncluded
 	})
 }

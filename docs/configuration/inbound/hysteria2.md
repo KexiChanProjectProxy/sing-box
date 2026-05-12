@@ -144,3 +144,89 @@ Fixed response content.
 #### brutal_debug
 
 Enable debug information logging for Hysteria Brutal CC.
+
+### realm
+
+==Required when using Hysteria2 realm mode==
+
+Hysteria2 realm service configuration, used for multi-user relay and bandwidth control.
+
+```json
+{
+  "server_url": "hy2://example.com:8443",
+  "token": "your_relay_token",
+  "realm_id": "my-realm",
+  "stun_servers": ["stun.example.com:3478"],
+  "listen_ports": ["20000-30000", 40000],
+  "prefer_ip_version": "prefer_ipv4",
+  "fallback_timeout": "30s",
+  "stun_domain_resolver": {}
+}
+```
+
+#### realm.server_url
+
+==Required==
+
+The relay server URL with format `hy2://[host]:[port]`.
+
+Query parameters:
+| Parameter | Description |
+|-----------|-------------|
+| `lport`   | Local port (conflict with `listen_ports`) |
+
+#### realm.token
+
+Realm authentication token, provided by the relay server administrator.
+
+#### realm.realm_id
+
+==Required==
+
+The realm identifier, provided by the relay server administrator.
+
+#### realm.stun_servers
+
+STUN server list for NAT type detection.
+
+#### realm.http_client
+
+HTTP client options for relay connections.
+
+#### realm.listen_ports
+
+!!! warning "Realm-only option"
+
+    This option is only available in `realm` mode and cannot be used with the `lport` query parameter in `server_url`.
+
+Local port range for the relay listener.
+
+Accepted formats:
+- Array of integers: `[8080, 8081, 8082]`
+- String range: `"20000-30000"` or `"20000-30000,40000"`
+- Special values: `"all"` or `"*"` (use ephemeral port)
+
+Port attempts are sequential, not randomized. First available port in the list is used.
+
+Conflict: cannot be used when `server_url` contains `?lport=`.
+
+#### realm.prefer_ip_version
+
+IP version preference for relay connections.
+
+| Value | Description |
+|-------|-------------|
+| `ipv4_only` | Use IPv4 only |
+| `ipv6_only` | Use IPv6 only |
+| `prefer_ipv4` | Prefer IPv4, fallback to IPv6 |
+| `prefer_ipv6` | Prefer IPv6, fallback to IPv4 |
+
+#### realm.fallback_timeout
+
+Duration string for connection fallback timeout when primary path fails.
+
+Accepts duration strings (`"30s"`, `"1m"`) or numeric seconds. Zero or empty disables fallback.
+
+#### realm.stun_domain_resolver
+
+Domain resolver options for STUN server DNS resolution.

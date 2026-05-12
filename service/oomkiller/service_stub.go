@@ -42,7 +42,7 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 	}
 	if s.memoryLimit > 0 {
 		s.hasTimerMode = true
-	} else if memory.AvailableSupported() {
+	} else if memory.AvailableAvailable() {
 		s.useAvailable = true
 		s.hasTimerMode = true
 	}

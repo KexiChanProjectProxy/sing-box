@@ -12,6 +12,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	qtls "github.com/sagernet/sing-quic"
 	"github.com/sagernet/sing-quic/hysteria"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
@@ -77,15 +78,14 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 		ReceiveBPS:    receiveBps,
 		XPlusPassword: options.Obfs,
 		TLSConfig:     tlsConfig,
-		UDPTimeout:    udpTimeout,
-		Handler:       inbound,
-
-		// Legacy options
-
-		ConnReceiveWindow:   options.ReceiveWindowConn,
-		StreamReceiveWindow: options.ReceiveWindowClient,
-		MaxIncomingStreams:  int64(options.MaxConnClient),
-		DisableMTUDiscovery: options.DisableMTUDiscovery,
+		QUICOptions: qtls.QUICOptions{
+			ConnectionReceiveWindow: uint64(options.ReceiveWindowConn),
+			StreamReceiveWindow:     uint64(options.ReceiveWindowClient),
+			MaxConcurrentStreams:    int(options.MaxConnClient),
+			DisablePathMTUDiscovery: options.DisableMTUDiscovery,
+		},
+		UDPTimeout: udpTimeout,
+		Handler:    inbound,
 	})
 	if err != nil {
 		return nil, err

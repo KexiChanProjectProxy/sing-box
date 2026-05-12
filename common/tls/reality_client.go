@@ -108,6 +108,14 @@ func (e *RealityClientConfig) SetNextProtos(nextProto []string) {
 	e.uClient.SetNextProtos(nextProto)
 }
 
+func (e *RealityClientConfig) HandshakeTimeout() time.Duration {
+	return e.uClient.HandshakeTimeout()
+}
+
+func (e *RealityClientConfig) SetHandshakeTimeout(timeout time.Duration) {
+	e.uClient.SetHandshakeTimeout(timeout)
+}
+
 func (e *RealityClientConfig) STDConfig() (*STDConfig, error) {
 	return nil, E.New("unsupported usage for reality")
 }

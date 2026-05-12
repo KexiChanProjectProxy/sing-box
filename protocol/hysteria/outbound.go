@@ -14,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/tuic"
+	qtls "github.com/sagernet/sing-quic"
 	"github.com/sagernet/sing-quic/hysteria"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
@@ -70,21 +71,23 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		receiveBps = uint64(options.DownMbps) * hysteria.MbpsToBps
 	}
 	client, err := hysteria.NewClient(hysteria.ClientOptions{
-		Context:             ctx,
-		Dialer:              outboundDialer,
-		Logger:              logger,
-		ServerAddress:       options.ServerOptions.Build(),
-		ServerPorts:         options.ServerPorts,
-		HopInterval:         time.Duration(options.HopInterval),
-		SendBPS:             sendBps,
-		ReceiveBPS:          receiveBps,
-		XPlusPassword:       options.Obfs,
-		Password:            password,
-		TLSConfig:           tlsConfig,
-		UDPDisabled:         !common.Contains(networkList, N.NetworkUDP),
-		ConnReceiveWindow:   options.ReceiveWindowConn,
-		StreamReceiveWindow: options.ReceiveWindow,
-		DisableMTUDiscovery: options.DisableMTUDiscovery,
+		Context:       ctx,
+		Dialer:        outboundDialer,
+		Logger:        logger,
+		ServerAddress: options.ServerOptions.Build(),
+		ServerPorts:   options.ServerPorts,
+		HopInterval:   time.Duration(options.HopInterval),
+		SendBPS:       sendBps,
+		ReceiveBPS:    receiveBps,
+		XPlusPassword: options.Obfs,
+		Password:      password,
+		TLSConfig:     tlsConfig,
+		QUICOptions: qtls.QUICOptions{
+			ConnectionReceiveWindow: uint64(options.ReceiveWindowConn),
+			StreamReceiveWindow:     uint64(options.ReceiveWindow),
+			DisablePathMTUDiscovery: options.DisableMTUDiscovery,
+		},
+		UDPDisabled: !common.Contains(networkList, N.NetworkUDP),
 	})
 	if err != nil {
 		return nil, err

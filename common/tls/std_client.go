@@ -24,6 +24,7 @@ import (
 type STDClientConfig struct {
 	ctx                   context.Context
 	config                *tls.Config
+	handshakeTimeout      time.Duration
 	fragment              bool
 	fragmentFallbackDelay time.Duration
 	recordFragment        bool
@@ -45,6 +46,14 @@ func (c *STDClientConfig) SetNextProtos(nextProto []string) {
 	c.config.NextProtos = nextProto
 }
 
+func (c *STDClientConfig) HandshakeTimeout() time.Duration {
+	return c.handshakeTimeout
+}
+
+func (c *STDClientConfig) SetHandshakeTimeout(timeout time.Duration) {
+	c.handshakeTimeout = timeout
+}
+
 func (c *STDClientConfig) STDConfig() (*STDConfig, error) {
 	return c.config, nil
 }
@@ -60,6 +69,7 @@ func (c *STDClientConfig) Clone() Config {
 	return &STDClientConfig{
 		ctx:                   c.ctx,
 		config:                c.config.Clone(),
+		handshakeTimeout:      c.handshakeTimeout,
 		fragment:              c.fragment,
 		fragmentFallbackDelay: c.fragmentFallbackDelay,
 		recordFragment:        c.recordFragment,
@@ -198,7 +208,13 @@ func NewSTDClient(ctx context.Context, logger logger.ContextLogger, serverAddres
 	} else if len(clientCertificate) > 0 || len(clientKey) > 0 {
 		return nil, E.New("client certificate and client key must be provided together")
 	}
-	var config Config = &STDClientConfig{ctx, &tlsConfig, options.Fragment, time.Duration(options.FragmentFallbackDelay), options.RecordFragment}
+	var config Config = &STDClientConfig{
+		ctx:                   ctx,
+		config:                &tlsConfig,
+		fragment:              options.Fragment,
+		fragmentFallbackDelay: time.Duration(options.FragmentFallbackDelay),
+		recordFragment:        options.RecordFragment,
+	}
 	if options.ECH != nil && options.ECH.Enabled {
 		var err error
 		config, err = parseECHClientConfig(ctx, config.(ECHCapableConfig), options)

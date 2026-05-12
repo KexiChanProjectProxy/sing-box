@@ -29,6 +29,7 @@ type UTLSClientConfig struct {
 	ctx                   context.Context
 	config                *utls.Config
 	id                    utls.ClientHelloID
+	handshakeTimeout      time.Duration
 	fragment              bool
 	fragmentFallbackDelay time.Duration
 	recordFragment        bool
@@ -70,7 +71,7 @@ func (c *UTLSClientConfig) SetSessionIDGenerator(generator func(clientHello []by
 
 func (c *UTLSClientConfig) Clone() Config {
 	return &UTLSClientConfig{
-		c.ctx, c.config.Clone(), c.id, c.fragment, c.fragmentFallbackDelay, c.recordFragment,
+		c.ctx, c.config.Clone(), c.id, c.handshakeTimeout, c.fragment, c.fragmentFallbackDelay, c.recordFragment,
 	}
 }
 
@@ -80,6 +81,14 @@ func (c *UTLSClientConfig) ECHConfigList() []byte {
 
 func (c *UTLSClientConfig) SetECHConfigList(EncryptedClientHelloConfigList []byte) {
 	c.config.EncryptedClientHelloConfigList = EncryptedClientHelloConfigList
+}
+
+func (c *UTLSClientConfig) HandshakeTimeout() time.Duration {
+	return c.handshakeTimeout
+}
+
+func (c *UTLSClientConfig) SetHandshakeTimeout(timeout time.Duration) {
+	c.handshakeTimeout = timeout
 }
 
 type utlsConnWrapper struct {
@@ -255,7 +264,7 @@ func NewUTLSClient(ctx context.Context, logger logger.ContextLogger, serverAddre
 	if err != nil {
 		return nil, err
 	}
-	var config Config = &UTLSClientConfig{ctx, &tlsConfig, id, options.Fragment, time.Duration(options.FragmentFallbackDelay), options.RecordFragment}
+	var config Config = &UTLSClientConfig{ctx, &tlsConfig, id, 0, options.Fragment, time.Duration(options.FragmentFallbackDelay), options.RecordFragment}
 	if options.ECH != nil && options.ECH.Enabled {
 		if options.Reality != nil && options.Reality.Enabled {
 			return nil, E.New("Reality is conflict with ECH")

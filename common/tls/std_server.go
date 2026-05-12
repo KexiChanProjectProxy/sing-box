@@ -33,6 +33,7 @@ type STDServerConfig struct {
 	keyPath               string
 	clientCertificatePath []string
 	echKeyPath            string
+	handshakeTimeout      time.Duration
 	watcher               *fswatch.Watcher
 }
 
@@ -72,6 +73,18 @@ func (c *STDServerConfig) SetNextProtos(nextProto []string) {
 	c.config = config
 }
 
+func (c *STDServerConfig) HandshakeTimeout() time.Duration {
+	c.access.RLock()
+	defer c.access.RUnlock()
+	return c.handshakeTimeout
+}
+
+func (c *STDServerConfig) SetHandshakeTimeout(timeout time.Duration) {
+	c.access.Lock()
+	defer c.access.Unlock()
+	c.handshakeTimeout = timeout
+}
+
 func (c *STDServerConfig) STDConfig() (*STDConfig, error) {
 	return c.config, nil
 }
@@ -86,7 +99,8 @@ func (c *STDServerConfig) Server(conn net.Conn) (Conn, error) {
 
 func (c *STDServerConfig) Clone() Config {
 	return &STDServerConfig{
-		config: c.config.Clone(),
+		config:           c.config.Clone(),
+		handshakeTimeout: c.handshakeTimeout,
 	}
 }
 

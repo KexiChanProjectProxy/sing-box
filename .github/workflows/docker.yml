@@ -24,18 +24,8 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          # Naive-enabled builds (musl)
           - { arch: amd64, naive: true, docker_platform: "linux/amd64" }
           - { arch: arm64, naive: true, docker_platform: "linux/arm64" }
-          - { arch: "386", naive: true, docker_platform: "linux/386" }
-          - { arch: arm, goarm: "7", naive: true, docker_platform: "linux/arm/v7" }
-          - { arch: mipsle, gomips: softfloat, naive: true, docker_platform: "linux/mipsle" }
-          - { arch: riscv64, naive: true, docker_platform: "linux/riscv64" }
-          - { arch: loong64, naive: true, docker_platform: "linux/loong64" }
-          # Non-naive builds
-          - { arch: arm, goarm: "6", docker_platform: "linux/arm/v6" }
-          - { arch: ppc64le, docker_platform: "linux/ppc64le" }
-          - { arch: s390x, docker_platform: "linux/s390x" }
     steps:
       - name: Get commit to build
         id: ref

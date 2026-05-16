@@ -4,6 +4,7 @@ icon: material/new-box
 
 !!! quote "sing-box 1.14.0 中的更改"
 
+    :material-plus: [prefer_domain](#prefer_domain)
     :material-alert: [domain_resolver](#domain_resolver)
 
 !!! quote "sing-box 1.13.0 中的更改"
@@ -45,6 +46,7 @@ icon: material/new-box
   "tcp_keep_alive": "",
   "tcp_keep_alive_interval": "",
   "udp_fragment": false,
+  "prefer_domain": false,
 
   "domain_resolver": "", // 或 {}
   "network_strategy": "",
@@ -164,6 +166,24 @@ TCP keep alive 间隔。
 #### udp_fragment
 
 启用 UDP 分段。
+
+#### prefer_domain
+
+!!! info ""
+
+    仅在流量已被嗅探时有效。
+
+优先使用嗅探到的域名作为连接目标。
+
+启用后，如果流量已被嗅探（HTTP、TLS 或 QUIC 协议），
+出站将连接到嗅探到的域名而不是原始目标。
+原始端口始终保留。
+
+需要通过路由规则操作已经进行了嗅探。
+此选项不会自动启用嗅探。
+
+仅适用于已嗅探的 HTTP、TLS 和 QUIC 流量。
+其他协议（DNS、STUN、BitTorrent、DTLS、SSH、RDP、NTP）不受影响。
 
 #### domain_resolver
 

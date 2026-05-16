@@ -251,13 +251,20 @@ func (r *abstractLogicalRule) matchStatesWithBase(metadata *adapter.InboundConte
 				}
 				return 0
 			}
+			if metadata.MatchedRuleSetTag == "" && nestedMetadata.MatchedRuleSetTag != "" {
+				metadata.MatchedRuleSetTag = nestedMetadata.MatchedRuleSetTag
+			}
 			stateSet = stateSet.combine(nestedStateSet)
 		}
 	} else {
 		for _, rule := range r.rules {
 			nestedMetadata := *metadata
 			nestedMetadata.ResetRuleCache()
-			stateSet = stateSet.merge(matchHeadlessRuleStatesWithBase(rule, &nestedMetadata, evaluationBase))
+			nestedStateSet := matchHeadlessRuleStatesWithBase(rule, &nestedMetadata, evaluationBase)
+			if !nestedStateSet.isEmpty() && metadata.MatchedRuleSetTag == "" && nestedMetadata.MatchedRuleSetTag != "" {
+				metadata.MatchedRuleSetTag = nestedMetadata.MatchedRuleSetTag
+			}
+			stateSet = stateSet.merge(nestedStateSet)
 		}
 		if stateSet.isEmpty() {
 			if r.invert {

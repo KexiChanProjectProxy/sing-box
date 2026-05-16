@@ -105,6 +105,7 @@ type InboundContext struct {
 	DestinationAddressMatch      bool
 	DestinationPortMatch         bool
 	DidMatch                     bool
+	MatchedRuleSetTag            string
 	IgnoreDestinationIPCIDRMatch bool
 }
 
@@ -120,6 +121,7 @@ func (c *InboundContext) ResetRuleMatchCache() {
 	c.DestinationAddressMatch = false
 	c.DestinationPortMatch = false
 	c.DidMatch = false
+	c.MatchedRuleSetTag = ""
 }
 
 func (c *InboundContext) DNSResponseAddressesForMatch() []netip.Addr {

@@ -66,7 +66,11 @@ func (r *RuleSetItem) matchStatesWithBase(metadata *adapter.InboundContext, base
 		nestedMetadata.ResetRuleMatchCache()
 		nestedMetadata.IPCIDRMatchSource = r.ipCidrMatchSource
 		nestedMetadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
-		stateSet = stateSet.merge(matchHeadlessRuleStatesWithBase(ruleSet, &nestedMetadata, base))
+		nestedStateSet := matchHeadlessRuleStatesWithBase(ruleSet, &nestedMetadata, base)
+		if !nestedStateSet.isEmpty() && metadata.MatchedRuleSetTag == "" {
+			metadata.MatchedRuleSetTag = ruleSet.Name()
+		}
+		stateSet = stateSet.merge(nestedStateSet)
 	}
 	return stateSet
 }

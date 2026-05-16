@@ -6,6 +6,7 @@ type SelectorOutboundOptions struct {
 	Outbounds                 []string `json:"outbounds"`
 	Default                   string   `json:"default,omitempty"`
 	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
+	PreferDomain              bool     `json:"prefer_domain,omitempty"`
 }
 
 type URLTestOutboundOptions struct {
@@ -15,4 +16,5 @@ type URLTestOutboundOptions struct {
 	Tolerance                 uint16             `json:"tolerance,omitempty"`
 	IdleTimeout               badoption.Duration `json:"idle_timeout,omitempty"`
 	InterruptExistConnections bool               `json:"interrupt_exist_connections,omitempty"`
+	PreferDomain              bool               `json:"prefer_domain,omitempty"`
 }

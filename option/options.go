@@ -60,7 +60,9 @@ type LogOptions struct {
 	DisableColor bool   `json:"-"`
 }
 
-type StubOptions struct{}
+type StubOptions struct {
+	PreferDomain bool `json:"prefer_domain,omitempty"`
+}
 
 func checkOptions(options *Options) error {
 	err := checkInbounds(options.Inbounds)

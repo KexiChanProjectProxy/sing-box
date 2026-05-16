@@ -29,7 +29,10 @@ func RegisterURLTest(registry *outbound.Registry) {
 	outbound.Register[option.URLTestOutboundOptions](registry, C.TypeURLTest, NewURLTest)
 }
 
-var _ adapter.OutboundGroup = (*URLTest)(nil)
+var (
+	_ adapter.OutboundGroup           = (*URLTest)(nil)
+	_ adapter.OutboundWithPreferDomain = (*URLTest)(nil)
+)
 
 type URLTest struct {
 	outbound.Adapter
@@ -44,6 +47,7 @@ type URLTest struct {
 	idleTimeout                  time.Duration
 	group                        *URLTestGroup
 	interruptExternalConnections bool
+	preferDomain                 bool
 }
 
 func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.URLTestOutboundOptions) (adapter.Outbound, error) {
@@ -59,11 +63,16 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
 		tolerance:                    options.Tolerance,
 		idleTimeout:                  time.Duration(options.IdleTimeout),
 		interruptExternalConnections: options.InterruptExistConnections,
+		preferDomain:                 options.PreferDomain,
 	}
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
 	}
 	return outbound, nil
+}
+
+func (s *URLTest) PreferDomain() bool {
+	return s.preferDomain
 }
 
 func (s *URLTest) Start() error {

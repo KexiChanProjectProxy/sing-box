@@ -28,6 +28,7 @@ var (
 	_ adapter.OutboundGroup           = (*Selector)(nil)
 	_ adapter.ConnectionHandler       = (*Selector)(nil)
 	_ adapter.PacketConnectionHandler = (*Selector)(nil)
+	_ adapter.OutboundWithPreferDomain = (*Selector)(nil)
 )
 
 type Selector struct {
@@ -42,6 +43,7 @@ type Selector struct {
 	selected                     common.TypedValue[adapter.Outbound]
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
+	preferDomain                 bool
 }
 
 func NewSelector(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SelectorOutboundOptions) (adapter.Outbound, error) {
@@ -56,6 +58,7 @@ func NewSelector(ctx context.Context, router adapter.Router, logger log.ContextL
 		outbounds:                    make(map[string]adapter.Outbound),
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: options.InterruptExistConnections,
+		preferDomain:                 options.PreferDomain,
 	}
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
@@ -69,6 +72,10 @@ func (s *Selector) Network() []string {
 		return []string{N.NetworkTCP, N.NetworkUDP}
 	}
 	return selected.Network()
+}
+
+func (s *Selector) PreferDomain() bool {
+	return s.preferDomain
 }
 
 func (s *Selector) Start() error {

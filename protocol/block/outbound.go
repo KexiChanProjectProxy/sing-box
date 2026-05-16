@@ -19,6 +19,8 @@ func RegisterOutbound(registry *outbound.Registry) {
 	outbound.Register[option.StubOptions](registry, C.TypeBlock, New)
 }
 
+var _ adapter.OutboundWithPreferDomain = (*Outbound)(nil)
+
 type Outbound struct {
 	outbound.Adapter
 	logger logger.ContextLogger
@@ -39,4 +41,8 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	h.logger.InfoContext(ctx, "blocked packet connection to ", destination)
 	return nil, syscall.EPERM
+}
+
+func (h *Outbound) PreferDomain() bool {
+	return false
 }

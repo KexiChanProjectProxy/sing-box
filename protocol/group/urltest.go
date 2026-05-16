@@ -30,7 +30,7 @@ func RegisterURLTest(registry *outbound.Registry) {
 }
 
 var (
-	_ adapter.OutboundGroup           = (*URLTest)(nil)
+	_ adapter.OutboundGroup            = (*URLTest)(nil)
 	_ adapter.OutboundWithPreferDomain = (*URLTest)(nil)
 )
 
@@ -210,6 +210,7 @@ type URLTestGroup struct {
 	selectedOutboundUDP          adapter.Outbound
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
+	updateCallback               func()
 	access                       sync.Mutex
 	ticker                       *time.Ticker
 	close                        chan struct{}
@@ -417,6 +418,9 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 	}
 	b.Wait()
 	g.performUpdateCheck()
+	if g.updateCallback != nil {
+		g.updateCallback()
+	}
 	return result, nil
 }
 

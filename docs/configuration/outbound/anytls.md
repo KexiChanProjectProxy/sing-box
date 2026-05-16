@@ -17,6 +17,12 @@ icon: material/new-box
   "idle_session_check_interval": "30s",
   "idle_session_timeout": "30s",
   "min_idle_session": 5,
+  "ensure_idle_session": 10,
+  "heartbeat": "30s",
+  "min_idle_session_for_age": 2,
+  "max_connection_lifetime": "300s",
+  "connection_lifetime_jitter": "10s",
+  "ensure_idle_session_create_rate": 5,
   "tls": {},
 
   ... // Dial Fields
@@ -54,6 +60,30 @@ In the check, close sessions that have been idle for longer than this. Default: 
 #### min_idle_session
 
 In the check, at least the first `n` idle sessions are kept open. Default value: `n`=0
+
+#### ensure_idle_session
+
+Target number of idle sessions to maintain in the pool.
+
+#### heartbeat
+
+Interval for sending heartbeat packets to keep sessions alive.
+
+#### min_idle_session_for_age
+
+Minimum idle sessions protected from age-based cleanup.
+
+#### max_connection_lifetime
+
+Maximum lifetime of a connection before it is recycled.
+
+#### connection_lifetime_jitter
+
+Random jitter added to max_connection_lifetime to avoid thundering herd.
+
+#### ensure_idle_session_create_rate
+
+Maximum rate at which new idle sessions are created per interval.
 
 #### tls
 

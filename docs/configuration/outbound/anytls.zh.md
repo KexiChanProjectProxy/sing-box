@@ -17,6 +17,12 @@ icon: material/new-box
   "idle_session_check_interval": "30s",
   "idle_session_timeout": "30s",
   "min_idle_session": 5,
+  "ensure_idle_session": 10,
+  "heartbeat": "30s",
+  "min_idle_session_for_age": 2,
+  "max_connection_lifetime": "300s",
+  "connection_lifetime_jitter": "10s",
+  "ensure_idle_session_create_rate": 5,
   "tls": {},
 
   ... // 拨号字段
@@ -54,6 +60,30 @@ AnyTLS 密码。
 #### min_idle_session
 
 在检查中，至少前 `n` 个空闲会话保持打开状态。默认值：`n`=0
+
+#### ensure_idle_session
+
+维护在连接池中的目标空闲会话数量。
+
+#### heartbeat
+
+发送心跳包以保持会话活跃的时间间隔。
+
+#### min_idle_session_for_age
+
+受基于时间的清理保护的最小空闲会话数。
+
+#### max_connection_lifetime
+
+连接被回收前的最大生命周期。
+
+#### connection_lifetime_jitter
+
+添加到 max_connection_lifetime 的随机抖动，用于避免雷鸣般的群体效应。
+
+#### ensure_idle_session_create_rate
+
+每个时间间隔内创建新空闲会话的最大速率。
 
 #### tls
 

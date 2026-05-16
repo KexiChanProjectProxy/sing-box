@@ -4,7 +4,7 @@ icon: material/new-box
 
 !!! quote "Changes in sing-box 1.14.0"
 
-    :material-plus: [prefer_domain](#prefer_domain)
+    :material-plus: [prefer_domain](#prefer_domain)  
     :material-alert: [domain_resolver](#domain_resolver)
 
 !!! quote "Changes in sing-box 1.13.0"

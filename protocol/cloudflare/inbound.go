@@ -4,6 +4,7 @@ package cloudflare
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"time"
 
@@ -27,7 +28,7 @@ func RegisterInbound(registry *inbound.Registry) {
 	inbound.Register[option.CloudflaredInboundOptions](registry, C.TypeCloudflared, NewInbound)
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.CloudflaredInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.CloudflaredInboundOptions) (adapter.Inbound, error) {
 	controlDialer, err := boxDialer.NewWithOptions(boxDialer.Options{
 		Context:        ctx,
 		Options:        options.ControlDialer,
@@ -125,7 +126,7 @@ func (d *routerDialer) ListenPacket(ctx context.Context, destination M.Socksaddr
 
 type icmpRouterHandler struct {
 	router adapter.Router
-	logger log.ContextLogger
+	logger log.StructuredLogger
 	tag    string
 }
 
@@ -151,9 +152,11 @@ func (h *icmpRouterHandler) RouteICMPConnection(ctx context.Context, session tun
 		case rule.IsBypassed(err):
 			err = nil
 		case rule.IsRejected(err):
-			h.logger.Trace("reject ICMP connection from ", session.Source, " to ", session.Destination)
+			h.logger.TraceEvent("protocol.message", F.ToString("reject ICMP connection from ", session.Source, " to ", session.Destination))
+
 		default:
-			h.logger.Warn(E.Cause(err, "link ICMP connection from ", session.Source, " to ", session.Destination))
+			h.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "link ICMP connection from ", session.Source, " to ", session.Destination)))
+
 		}
 	}
 	return routeDestination, err

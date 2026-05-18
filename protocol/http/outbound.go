@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	sHTTP "github.com/sagernet/sing/protocol/http"
@@ -25,11 +25,11 @@ func RegisterOutbound(registry *outbound.Registry) {
 
 type Outbound struct {
 	outbound.Adapter
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 	client *sHTTP.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.HTTPOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.HTTPOutboundOptions) (adapter.Outbound, error) {
 	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
 	if err != nil {
 		return nil, err
@@ -56,7 +56,8 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound connection to ", destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	return h.client.DialContext(ctx, network, destination)
 }
 

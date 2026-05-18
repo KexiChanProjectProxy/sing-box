@@ -2,6 +2,7 @@ package shadowsocks
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"time"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
@@ -29,7 +29,7 @@ func RegisterInbound(registry *inbound.Registry) {
 	inbound.Register[option.ShadowsocksInboundOptions](registry, C.TypeShadowsocks, NewInbound)
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ShadowsocksInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.ShadowsocksInboundOptions) (adapter.Inbound, error) {
 	if len(options.Users) > 0 && len(options.Destinations) > 0 {
 		return nil, E.New("users and destinations options must not be combined")
 	} else if options.Managed && (len(options.Users) > 0 || len(options.Destinations) > 0) {
@@ -50,12 +50,12 @@ type Inbound struct {
 	inbound.Adapter
 	ctx      context.Context
 	router   adapter.ConnectionRouterEx
-	logger   logger.ContextLogger
+	logger   log.StructuredLogger
 	listener *listener.Listener
 	service  shadowsocks.Service
 }
 
-func newInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ShadowsocksInboundOptions) (*Inbound, error) {
+func newInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.ShadowsocksInboundOptions) (*Inbound, error) {
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeShadowsocks, tag),
 		ctx:     ctx,
@@ -112,9 +112,11 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
 		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugContext(ctx, "connection closed: ", err)
+			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
+
 		} else {
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
+			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
+
 		}
 	}
 }
@@ -123,12 +125,14 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 func (h *Inbound) NewPacket(buffer *buf.Buffer, source M.Socksaddr) {
 	err := h.service.NewPacket(h.ctx, &stubPacketConn{h.listener.PacketWriter()}, buffer, M.Metadata{Source: source})
 	if err != nil {
-		h.logger.Error(E.Cause(err, "process packet from ", source))
+		h.logger.ErrorEvent("protocol.message", F.ToString(E.Cause(err, "process packet from ", source)))
+
 	}
 }
 
 func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
-	h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	return h.router.RouteConnection(ctx, conn, metadata)
@@ -136,8 +140,10 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 
 func (h *Inbound) newPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
 	ctx = log.ContextWithNewID(ctx)
-	h.logger.InfoContext(ctx, "inbound packet connection from ", metadata.Source)
-	h.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", metadata.Source))
+
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
+
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	return h.router.RoutePacketConnection(ctx, conn, metadata)
@@ -178,11 +184,13 @@ func (h *Inbound) NewError(ctx context.Context, err error) {
 }
 
 // Deprecated: remove
-func NewError(logger logger.ContextLogger, ctx context.Context, err error) {
+func NewError(logger log.StructuredLogger, ctx context.Context, err error) {
 	common.Close(err)
 	if E.IsClosedOrCanceled(err) {
-		logger.DebugContext(ctx, "connection closed: ", err)
+		logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
+
 		return
 	}
-	logger.ErrorContext(ctx, err)
+	logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+
 }

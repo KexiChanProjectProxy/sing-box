@@ -11,9 +11,9 @@ import (
 )
 
 type Candidate struct {
-	Tag     string
-	Outbound adapter.Outbound
-	Latency uint16
+	Tag       string
+	Outbound  adapter.Outbound
+	Latency   uint16
 	IsPrimary bool
 }
 

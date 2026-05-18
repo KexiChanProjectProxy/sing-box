@@ -18,7 +18,7 @@ import (
 var _ adapter.CertificateProviderManager = (*Manager)(nil)
 
 type Manager struct {
-	logger        log.ContextLogger
+	logger        log.StructuredLogger
 	registry      adapter.CertificateProviderRegistry
 	access        sync.Mutex
 	started       bool
@@ -27,7 +27,7 @@ type Manager struct {
 	providerByTag map[string]adapter.CertificateProviderService
 }
 
-func NewManager(logger log.ContextLogger, registry adapter.CertificateProviderRegistry) *Manager {
+func NewManager(logger log.StructuredLogger, registry adapter.CertificateProviderRegistry) *Manager {
 	return &Manager{
 		logger:        logger,
 		registry:      registry,
@@ -46,13 +46,15 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	m.access.Unlock()
 	for _, provider := range providers {
 		name := "certificate-provider/" + provider.Type() + "[" + provider.Tag() + "]"
-		m.logger.Trace(stage, " ", name)
+		m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name))
+
 		startTime := time.Now()
 		err := adapter.LegacyStart(provider, stage)
 		if err != nil {
 			return E.Cause(err, stage, " ", name)
 		}
-		m.logger.Trace(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)"))
+
 	}
 	return nil
 }
@@ -70,14 +72,16 @@ func (m *Manager) Close() error {
 	var err error
 	for _, provider := range providers {
 		name := "certificate-provider/" + provider.Type() + "[" + provider.Tag() + "]"
-		m.logger.Trace("close ", name)
+		m.logger.TraceEvent("adapter.message", F.ToString("close ", name))
+
 		startTime := time.Now()
 		monitor.Start("close ", name)
 		err = E.Append(err, provider.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
 		})
 		monitor.Finish()
-		m.logger.Trace("close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		m.logger.TraceEvent("adapter.message", F.ToString("close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)"))
+
 	}
 	return err
 }
@@ -118,7 +122,7 @@ func (m *Manager) Remove(tag string) error {
 	return nil
 }
 
-func (m *Manager) Create(ctx context.Context, logger log.ContextLogger, tag string, providerType string, options any) error {
+func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag string, providerType string, options any) error {
 	provider, err := m.registry.Create(ctx, logger, tag, providerType, options)
 	if err != nil {
 		return err
@@ -128,13 +132,15 @@ func (m *Manager) Create(ctx context.Context, logger log.ContextLogger, tag stri
 	if m.started {
 		name := "certificate-provider/" + provider.Type() + "[" + provider.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			m.logger.Trace(stage, " ", name)
+			m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name))
+
 			startTime := time.Now()
 			err = adapter.LegacyStart(provider, stage)
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			m.logger.Trace(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+			m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)"))
+
 		}
 	}
 	if existsProvider, loaded := m.providerByTag[tag]; loaded {

@@ -13,13 +13,12 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 )
 
 var _ adapter.DNSTransportManager = (*TransportManager)(nil)
 
 type TransportManager struct {
-	logger                   log.ContextLogger
+	logger                   log.StructuredLogger
 	registry                 adapter.DNSTransportRegistry
 	outbound                 adapter.OutboundManager
 	defaultTag               string
@@ -34,7 +33,7 @@ type TransportManager struct {
 	fakeIPTransport          adapter.FakeIPTransport
 }
 
-func NewTransportManager(logger logger.ContextLogger, registry adapter.DNSTransportRegistry, outbound adapter.OutboundManager, defaultTag string) *TransportManager {
+func NewTransportManager(logger log.StructuredLogger, registry adapter.DNSTransportRegistry, outbound adapter.OutboundManager, defaultTag string) *TransportManager {
 	return &TransportManager{
 		logger:         logger,
 		registry:       registry,
@@ -217,7 +216,7 @@ func (m *TransportManager) Remove(tag string) error {
 				return E.New("default server cannot be fakeip")
 			}
 			m.defaultTransport = nextTransport
-			m.logger.Info("updated default server to ", m.defaultTransport.Tag())
+			m.logger.InfoEvent("dns.default_server.updated", "updated default server", log.String("server", m.defaultTransport.Tag()))
 		} else {
 			m.defaultTransport = nil
 		}
@@ -242,7 +241,7 @@ func (m *TransportManager) Remove(tag string) error {
 	return nil
 }
 
-func (m *TransportManager) Create(ctx context.Context, logger log.ContextLogger, tag string, transportType string, options any) error {
+func (m *TransportManager) Create(ctx context.Context, logger log.StructuredLogger, tag string, transportType string, options any) error {
 	if tag == "" {
 		return os.ErrInvalid
 	}
@@ -287,7 +286,7 @@ func (m *TransportManager) Create(ctx context.Context, logger log.ContextLogger,
 		}
 		m.defaultTransport = transport
 		if m.started {
-			m.logger.Info("updated default server to ", transport.Tag())
+			m.logger.InfoEvent("dns.default_server.updated", "updated default server", log.String("server", transport.Tag()))
 		}
 	}
 	if transport.Type() == C.DNSTypeFakeIP {

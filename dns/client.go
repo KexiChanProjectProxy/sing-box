@@ -10,9 +10,9 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/compatible"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/task"
 	"github.com/sagernet/sing/contrab/freelru"
 	"github.com/sagernet/sing/contrab/maphash"
@@ -41,7 +41,7 @@ type Client struct {
 	initRDRCFunc      func() adapter.RDRCStore
 	dnsCache          adapter.DNSCacheStore
 	initDNSCacheFunc  func() adapter.DNSCacheStore
-	logger            logger.ContextLogger
+	logger            log.StructuredLogger
 	cache             freelru.Cache[dnsCacheKey, *dns.Msg]
 	cacheLock         compatible.Map[dnsCacheKey, chan struct{}]
 	backgroundRefresh compatible.Map[dnsCacheKey, struct{}]
@@ -57,7 +57,7 @@ type ClientOptions struct {
 	ClientSubnet      netip.Prefix
 	RDRC              func() adapter.RDRCStore
 	DNSCache          func() adapter.DNSCacheStore
-	Logger            logger.ContextLogger
+	Logger            log.StructuredLogger
 }
 
 func NewClient(options ClientOptions) *Client {
@@ -155,14 +155,14 @@ func normalizeTTL(response *dns.Msg, timeToLive uint32) {
 func (c *Client) Exchange(ctx context.Context, transport adapter.DNSTransport, message *dns.Msg, options adapter.DNSQueryOptions, responseChecker func(response *dns.Msg) bool) (*dns.Msg, error) {
 	if len(message.Question) == 0 {
 		if c.logger != nil {
-			c.logger.WarnContext(ctx, "bad question size: ", len(message.Question))
+			c.logger.WarnEventContext(ctx, "dns.query.invalid", "bad question size", log.Int("question_size", len(message.Question)))
 		}
 		return FixedResponseStatus(message, dns.RcodeFormatError), nil
 	}
 	question := message.Question[0]
 	if question.Qtype == dns.TypeA && options.Strategy == C.DomainStrategyIPv6Only || question.Qtype == dns.TypeAAAA && options.Strategy == C.DomainStrategyIPv4Only {
 		if c.logger != nil {
-			c.logger.DebugContext(ctx, "strategy rejected")
+			c.logger.DebugEventContext(ctx, "dns.strategy.rejected", "strategy rejected")
 		}
 		return FixedResponseStatus(message, dns.RcodeSuccess), nil
 	}
@@ -310,7 +310,7 @@ func (c *Client) ClearCache() {
 	if c.dnsCache != nil {
 		err := c.dnsCache.ClearDNSCache()
 		if err != nil && c.logger != nil {
-			c.logger.Warn("clear DNS cache: ", err)
+			c.logger.WarnEvent("dns.cache.clear.error", "clear DNS cache", log.Err(err))
 		}
 	}
 }
@@ -492,7 +492,7 @@ func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, question d
 		response, err := c.exchangeToTransport(ctx, transport, message, options.Timeout)
 		if err != nil {
 			if c.logger != nil {
-				c.logger.DebugContext(ctx, "optimistic refresh failed for ", FqdnToDomain(question.Name), ": ", err)
+				c.logger.DebugEventContext(ctx, "dns.cache.refresh.error", "optimistic refresh failed", log.String("domain", FqdnToDomain(question.Name)), log.Err(err))
 			}
 			return
 		}
@@ -505,7 +505,7 @@ func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, question d
 			}
 			if rejected {
 				if c.logger != nil {
-					c.logger.DebugContext(ctx, "optimistic refresh rejected for ", FqdnToDomain(question.Name))
+					c.logger.DebugEventContext(ctx, "dns.cache.refresh.rejected", "optimistic refresh rejected", log.String("domain", FqdnToDomain(question.Name)))
 				}
 				if c.rdrc != nil {
 					c.rdrc.SaveRDRCAsync(transport.Tag(), question.Name, question.Qtype, c.logger)

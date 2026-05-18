@@ -2,6 +2,8 @@ package wireguard
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"sync"
@@ -10,7 +12,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -22,7 +23,7 @@ var _ conn.Bind = (*ClientBind)(nil)
 
 type ClientBind struct {
 	ctx                 context.Context
-	logger              logger.Logger
+	logger              log.StructuredLogger
 	pauseManager        pause.Manager
 	bindCtx             context.Context
 	bindDone            context.CancelFunc
@@ -36,7 +37,7 @@ type ClientBind struct {
 	reserved            [3]uint8
 }
 
-func NewClientBind(ctx context.Context, logger logger.Logger, dialer N.Dialer, isConnect bool, connectAddr netip.AddrPort, reserved [3]uint8) *ClientBind {
+func NewClientBind(ctx context.Context, logger log.StructuredLogger, dialer N.Dialer, isConnect bool, connectAddr netip.AddrPort, reserved [3]uint8) *ClientBind {
 	return &ClientBind{
 		ctx:                 ctx,
 		logger:              logger,
@@ -116,7 +117,8 @@ func (c *ClientBind) receive(packets [][]byte, sizes []int, eps []conn.Endpoint)
 			return
 		default:
 		}
-		c.logger.Error(E.Cause(err, "connect to server"))
+		c.logger.ErrorEvent("transport.message", F.ToString(E.Cause(err, "connect to server")))
+
 		err = nil
 		c.pauseManager.WaitActive()
 		time.Sleep(time.Second)
@@ -128,7 +130,8 @@ func (c *ClientBind) receive(packets [][]byte, sizes []int, eps []conn.Endpoint)
 		select {
 		case <-c.done:
 		default:
-			c.logger.Error(E.Cause(err, "read packet"))
+			c.logger.ErrorEvent("transport.message", F.ToString(E.Cause(err, "read packet")))
+
 			err = nil
 		}
 		return

@@ -53,7 +53,7 @@ type DirectRouteOutbound interface {
 
 type OutboundRegistry interface {
 	option.OutboundOptionsRegistry
-	CreateOutbound(ctx context.Context, router Router, logger log.ContextLogger, tag string, outboundType string, options any) (Outbound, error)
+	CreateOutbound(ctx context.Context, router Router, logger log.StructuredLogger, tag string, outboundType string, options any) (Outbound, error)
 }
 
 type OutboundManager interface {
@@ -62,5 +62,5 @@ type OutboundManager interface {
 	Outbound(tag string) (Outbound, bool)
 	Default() Outbound
 	Remove(tag string) error
-	Create(ctx context.Context, router Router, logger log.ContextLogger, tag string, outboundType string, options any) error
+	Create(ctx context.Context, router Router, logger log.StructuredLogger, tag string, outboundType string, options any) error
 }

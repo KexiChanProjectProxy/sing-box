@@ -2,11 +2,11 @@ package cachefile
 
 import (
 	"encoding/binary"
+	"github.com/sagernet/sing-box/log"
 	"time"
 
 	"github.com/sagernet/bbolt"
 	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/logger"
 )
 
 var bucketDNSCache = []byte("dns_cache")
@@ -73,7 +73,7 @@ func (c *CacheFile) SaveDNSCache(transportName string, qName string, qType uint1
 	})
 }
 
-func (c *CacheFile) SaveDNSCacheAsync(transportName string, qName string, qType uint16, rawMessage []byte, expireAt time.Time, logger logger.Logger) {
+func (c *CacheFile) SaveDNSCacheAsync(transportName string, qName string, qType uint16, rawMessage []byte, expireAt time.Time, logger log.StructuredLogger) {
 	saveKey := saveCacheKey{transportName, qName, qType}
 	if !c.queueDNSCacheSave(saveKey, rawMessage, expireAt) {
 		return
@@ -94,13 +94,13 @@ func (c *CacheFile) queueDNSCacheSave(saveKey saveCacheKey, rawMessage []byte, e
 	return startFlush
 }
 
-func (c *CacheFile) flushPendingDNSCache(saveKey saveCacheKey, logger logger.Logger) {
+func (c *CacheFile) flushPendingDNSCache(saveKey saveCacheKey, logger log.StructuredLogger) {
 	c.flushPendingDNSCacheWith(saveKey, logger, func(entry saveDNSCacheEntry) error {
 		return c.SaveDNSCache(saveKey.TransportName, saveKey.QuestionName, saveKey.QType, entry.rawMessage, entry.expireAt)
 	})
 }
 
-func (c *CacheFile) flushPendingDNSCacheWith(saveKey saveCacheKey, logger logger.Logger, save func(saveDNSCacheEntry) error) {
+func (c *CacheFile) flushPendingDNSCacheWith(saveKey saveCacheKey, logger log.StructuredLogger, save func(saveDNSCacheEntry) error) {
 	for {
 		c.saveDNSCacheAccess.RLock()
 		entry, loaded := c.saveDNSCache[saveKey]
@@ -110,7 +110,7 @@ func (c *CacheFile) flushPendingDNSCacheWith(saveKey saveCacheKey, logger logger
 		}
 		err := save(entry)
 		if err != nil {
-			logger.Warn("save DNS cache: ", err)
+			logger.WarnEvent("cachefile.dns.save.error", "save DNS cache", log.Err(err))
 		}
 		c.saveDNSCacheAccess.Lock()
 		currentEntry, loaded := c.saveDNSCache[saveKey]
@@ -216,7 +216,7 @@ func (c *CacheFile) cleanupDNSCache() {
 		return nil
 	})
 	if err != nil {
-		c.logger.Warn("cleanup DNS cache: ", err)
+		c.logger.WarnEvent("cachefile.dns.cleanup.error", "cleanup DNS cache", log.Err(err))
 	}
 }
 
@@ -238,7 +238,7 @@ func (c *CacheFile) clearRDRC() {
 		return bucket.DeleteBucket(bucketRDRC)
 	})
 	if err != nil {
-		c.logger.Warn("clear RDRC: ", err)
+		c.logger.WarnEvent("cachefile.rdrc.clear.error", "clear RDRC", log.Err(err))
 	}
 }
 
@@ -294,6 +294,6 @@ func (c *CacheFile) cleanupRDRC() {
 		return nil
 	})
 	if err != nil {
-		c.logger.Warn("cleanup RDRC: ", err)
+		c.logger.WarnEvent("cachefile.rdrc.cleanup.error", "cleanup RDRC", log.Err(err))
 	}
 }

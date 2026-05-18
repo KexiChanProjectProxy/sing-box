@@ -16,12 +16,12 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
 	dnsTransport "github.com/sagernet/sing-box/dns/transport"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/service/resolved"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/x/list"
@@ -52,7 +52,7 @@ func isSystemdResolvedManaged() bool {
 
 type DBusResolvedResolver struct {
 	ctx               context.Context
-	logger            logger.ContextLogger
+	logger            log.StructuredLogger
 	interfaceMonitor  tun.DefaultInterfaceMonitor
 	interfaceCallback *list.Element[tun.DefaultInterfaceUpdateCallback]
 	systemBus         *dbus.Conn
@@ -75,7 +75,7 @@ type resolvedServerSpecification struct {
 	serverName string
 }
 
-func NewResolvedResolver(ctx context.Context, logger logger.ContextLogger) (ResolvedResolver, error) {
+func NewResolvedResolver(ctx context.Context, logger log.StructuredLogger) (ResolvedResolver, error) {
 	interfaceMonitor := service.FromContext[adapter.NetworkManager](ctx).InterfaceMonitor()
 	if interfaceMonitor == nil {
 		return nil, os.ErrInvalid
@@ -191,14 +191,14 @@ func (t *DBusResolvedResolver) updateStatus() {
 	if err != nil {
 		var dbusErr dbus.Error
 		if !errors.As(err, &dbusErr) || dbusErr.Name != "org.freedesktop.DBus.Error.NameHasNoOwner" {
-			t.logger.Debug(E.Cause(err, "systemd-resolved service unavailable"))
+			t.logger.DebugEvent("dns.resolved.unavailable", "systemd-resolved service unavailable", log.Err(err))
 		}
 		if oldServerSet != nil {
-			t.logger.Debug("systemd-resolved service is gone")
+			t.logger.DebugEvent("dns.resolved.gone", "systemd-resolved service is gone")
 		}
 		return
 	} else if oldServerSet == nil {
-		t.logger.Debug("using systemd-resolved service as resolver")
+		t.logger.DebugEvent("dns.resolved.active", "using systemd-resolved service as resolver")
 	}
 }
 

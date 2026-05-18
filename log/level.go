@@ -4,8 +4,10 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
+// Level represents the severity level of a log entry.
 type Level = uint8
 
+// Log level constants.
 const (
 	LevelPanic Level = iota
 	LevelFatal
@@ -16,6 +18,7 @@ const (
 	LevelTrace
 )
 
+// FormatLevel returns the string representation of a log level.
 func FormatLevel(level Level) string {
 	switch level {
 	case LevelTrace:
@@ -37,6 +40,7 @@ func FormatLevel(level Level) string {
 	}
 }
 
+// ParseLevel parses a string into a log level.
 func ParseLevel(level string) (Level, error) {
 	switch level {
 	case "trace":

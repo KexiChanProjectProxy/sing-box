@@ -57,7 +57,7 @@ type AggregatedUsage struct {
 	Combinations []CostCombination `json:"combinations"`
 	mutex        sync.Mutex
 	filePath     string
-	logger       log.ContextLogger
+	logger       log.StructuredLogger
 	lastSaveTime time.Time
 	pendingSave  bool
 	saveTimer    *time.Timer
@@ -1182,7 +1182,7 @@ func (u *AggregatedUsage) saveAsync() {
 	err := u.Save()
 	if err != nil {
 		if u.logger != nil {
-			u.logger.Error("save usage statistics: ", err)
+			u.logger.ErrorEvent("ocm.usage.save.error", "save usage statistics", log.Err(err))
 		}
 	}
 }

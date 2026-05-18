@@ -5,16 +5,16 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/sagernet/sing/common/logger"
+	"github.com/sagernet/sing-box/log"
 )
 
 type stderrManager struct {
 	access   sync.Mutex
-	logger   logger.Logger
+	logger   log.StructuredLogger
 	reported map[string]bool
 }
 
-func NewStderrManager(logger logger.Logger) Manager {
+func NewStderrManager(logger log.StructuredLogger) Manager {
 	return &stderrManager{
 		logger:   logger,
 		reported: make(map[string]bool),
@@ -29,18 +29,18 @@ func (f *stderrManager) ReportDeprecated(feature Note) {
 	}
 	f.reported[feature.Name] = true
 	if !feature.Impending() {
-		f.logger.Warn(feature.MessageWithLink())
+		f.logger.WarnEvent("deprecated.feature", feature.MessageWithLink())
 		return
 	}
 	if feature.EnvName != "" {
 		enable, enableErr := strconv.ParseBool(os.Getenv("ENABLE_DEPRECATED_" + feature.EnvName))
 		if enableErr == nil && enable {
-			f.logger.Warn(feature.MessageWithLink())
+			f.logger.WarnEvent("deprecated.feature", feature.MessageWithLink())
 			return
 		}
-		f.logger.Error(feature.MessageWithLink())
-		f.logger.Fatal("to continuing using this feature, set environment variable ENABLE_DEPRECATED_" + feature.EnvName + "=true")
+		f.logger.ErrorEvent("deprecated.feature", feature.MessageWithLink())
+		f.logger.FatalEvent("deprecated.blocked", "to continuing using this feature, set environment variable ENABLE_DEPRECATED_"+feature.EnvName+"=true", log.String("env_var", "ENABLE_DEPRECATED_"+feature.EnvName))
 	} else {
-		f.logger.Error(feature.MessageWithLink())
+		f.logger.ErrorEvent("deprecated.feature", feature.MessageWithLink())
 	}
 }

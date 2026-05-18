@@ -14,7 +14,7 @@ import (
 )
 
 func registerDHCPTransport(registry *dns.TransportRegistry) {
-	dns.RegisterTransport[option.DHCPDNSServerOptions](registry, C.DNSTypeDHCP, func(ctx context.Context, logger log.ContextLogger, tag string, options option.DHCPDNSServerOptions) (adapter.DNSTransport, error) {
+	dns.RegisterTransport[option.DHCPDNSServerOptions](registry, C.DNSTypeDHCP, func(ctx context.Context, logger log.StructuredLogger, tag string, options option.DHCPDNSServerOptions) (adapter.DNSTransport, error) {
 		return nil, E.New(`DHCP is not included in this build, rebuild with -tags with_dhcp`)
 	})
 }

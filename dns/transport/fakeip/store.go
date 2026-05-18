@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service"
 )
 
@@ -15,7 +15,7 @@ var _ adapter.FakeIPStore = (*Store)(nil)
 
 type Store struct {
 	ctx        context.Context
-	logger     logger.Logger
+	logger     log.StructuredLogger
 	inet4Range netip.Prefix
 	inet6Range netip.Prefix
 	inet4Last  netip.Addr
@@ -27,7 +27,7 @@ type Store struct {
 	inet6Current  netip.Addr
 }
 
-func NewStore(ctx context.Context, logger logger.Logger, inet4Range netip.Prefix, inet6Range netip.Prefix) *Store {
+func NewStore(ctx context.Context, logger log.StructuredLogger, inet4Range netip.Prefix, inet6Range netip.Prefix) *Store {
 	store := &Store{
 		ctx:        ctx,
 		logger:     logger,
@@ -141,7 +141,7 @@ func (s *Store) Create(domain string, isIPv6 bool) (netip.Addr, error) {
 	}
 	err := s.storage.FakeIPStore(address, domain)
 	if err != nil {
-		s.logger.Warn("save FakeIP cache: ", err)
+		s.logger.WarnEvent("dns.fakeip.cache.save.error", "save FakeIP cache", log.Err(err))
 	}
 	s.storage.FakeIPSaveMetadataAsync(&adapter.FakeIPMetadata{
 		Inet4Range:   s.inet4Range,

@@ -10,6 +10,7 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
+// Options contains the configuration options for creating a log factory.
 type Options struct {
 	Context        context.Context
 	Options        option.LogOptions
@@ -19,11 +20,21 @@ type Options struct {
 	PlatformWriter PlatformWriter
 }
 
+// New creates a new log factory with the given options.
 func New(options Options) (Factory, error) {
 	logOptions := options.Options
 
 	if logOptions.Disabled {
 		return NewNOPFactory(), nil
+	}
+	format := logOptions.Format
+	switch format {
+	case "", "text":
+		format = "text"
+	case "json":
+		logOptions.DisableColor = true
+	default:
+		return nil, E.New("unknown log format: ", format)
 	}
 
 	var logWriter io.Writer
@@ -49,6 +60,7 @@ func New(options Options) (Factory, error) {
 		DisableTimestamp: !logOptions.Timestamp && logFilePath != "",
 		FullTimestamp:    logOptions.Timestamp,
 		TimestampFormat:  "-0700 2006-01-02 15:04:05",
+		FormatMode:       format,
 	}
 	factory := NewDefaultFactory(
 		options.Context,
@@ -57,6 +69,7 @@ func New(options Options) (Factory, error) {
 		logFilePath,
 		options.PlatformWriter,
 		options.Observable,
+		format,
 	)
 	if logOptions.Level != "" {
 		logLevel, err := ParseLevel(logOptions.Level)

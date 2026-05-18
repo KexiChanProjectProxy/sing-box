@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
 	"time"
 
 	"github.com/sagernet/sing-box/common/dialer"
@@ -10,11 +11,10 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	N "github.com/sagernet/sing/common/network"
 )
 
-func NewTransport(ctx context.Context, logger logger.ContextLogger, tag string, options option.HTTPClientOptions) (*ManagedTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.HTTPClientOptions) (*ManagedTransport, error) {
 	rawDialer, err := dialer.NewWithOptions(dialer.Options{
 		Context:                 ctx,
 		Options:                 options.DialerOptions,

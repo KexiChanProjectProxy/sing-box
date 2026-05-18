@@ -13,12 +13,12 @@ import (
 	"github.com/sagernet/sing-box/common/sniff"
 	"github.com/sagernet/sing-box/common/tlsspoof"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -46,7 +46,7 @@ func newRuleActionRouteOptions(options option.RawRouteOptionsActionOptions) (Rul
 	}, nil
 }
 
-func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action option.RuleAction) (adapter.RuleAction, error) {
+func NewRuleAction(ctx context.Context, logger log.StructuredLogger, action option.RuleAction) (adapter.RuleAction, error) {
 	switch action.Action {
 	case "":
 		return nil, nil
@@ -123,7 +123,7 @@ func NewRuleAction(ctx context.Context, logger logger.ContextLogger, action opti
 	}
 }
 
-func NewDNSRuleAction(logger logger.ContextLogger, action option.DNSRuleAction) adapter.RuleAction {
+func NewDNSRuleAction(logger log.StructuredLogger, action option.DNSRuleAction) adapter.RuleAction {
 	switch action.Action {
 	case "":
 		return nil
@@ -425,7 +425,7 @@ func IsBypassed(err error) bool {
 type RuleActionReject struct {
 	Method      string
 	NoDrop      bool
-	logger      logger.ContextLogger
+	logger      log.StructuredLogger
 	dropAccess  sync.Mutex
 	dropCounter []time.Time
 }
@@ -465,7 +465,7 @@ func (r *RuleActionReject) Error(ctx context.Context) error {
 	r.dropCounter = append(r.dropCounter, timeNow)
 	if len(r.dropCounter) > 50 {
 		if ctx != nil {
-			r.logger.DebugContext(ctx, "dropped due to flooding")
+			r.logger.DebugEventContext(ctx, "route.rule.reject.flood_drop", "dropped due to flooding")
 		}
 		return &RejectedError{tun.ErrDrop}
 	}

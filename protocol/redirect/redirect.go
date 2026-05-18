@@ -2,6 +2,7 @@ package redirect
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -22,11 +23,11 @@ func RegisterRedirect(registry *inbound.Registry) {
 type Redirect struct {
 	inbound.Adapter
 	router   adapter.Router
-	logger   log.ContextLogger
+	logger   log.StructuredLogger
 	listener *listener.Listener
 }
 
-func NewRedirect(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.RedirectInboundOptions) (adapter.Inbound, error) {
+func NewRedirect(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.RedirectInboundOptions) (adapter.Inbound, error) {
 	redirect := &Redirect{
 		Adapter: inbound.NewAdapter(C.TypeRedirect, tag),
 		router:  router,
@@ -57,12 +58,14 @@ func (h *Redirect) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 	destination, err := redir.GetOriginalDestination(conn)
 	if err != nil {
 		conn.Close()
-		h.logger.ErrorContext(ctx, "process connection from ", conn.RemoteAddr(), ": get redirect destination: ", err)
+		h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString("process connection from ", conn.RemoteAddr(), ": get redirect destination: ", err))
+
 		return
 	}
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	metadata.Destination = M.SocksaddrFromNetIP(destination)
-	h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

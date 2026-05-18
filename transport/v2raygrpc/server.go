@@ -12,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -27,12 +26,12 @@ var _ adapter.V2RayServerTransport = (*Server)(nil)
 
 type Server struct {
 	ctx     context.Context
-	logger  logger.ContextLogger
+	logger  log.StructuredLogger
 	handler adapter.V2RayServerTransportHandler
 	server  *grpc.Server
 }
 
-func NewServer(ctx context.Context, logger logger.ContextLogger, options option.V2RayGRPCOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (*Server, error) {
+func NewServer(ctx context.Context, logger log.StructuredLogger, options option.V2RayGRPCOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (*Server, error) {
 	var serverOptions []grpc.ServerOption
 	if tlsConfig != nil {
 		if !common.Contains(tlsConfig.NextProtos(), http2.NextProtoTLS) {

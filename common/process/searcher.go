@@ -20,7 +20,7 @@ type Searcher interface {
 var ErrNotFound = E.New("process not found")
 
 type Config struct {
-	Logger         log.ContextLogger
+	Logger         log.StructuredLogger
 	PackageManager tun.PackageManager
 }
 

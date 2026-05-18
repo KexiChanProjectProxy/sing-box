@@ -16,7 +16,7 @@ type Endpoint interface {
 
 type EndpointRegistry interface {
 	option.EndpointOptionsRegistry
-	Create(ctx context.Context, router Router, logger log.ContextLogger, tag string, endpointType string, options any) (Endpoint, error)
+	Create(ctx context.Context, router Router, logger log.StructuredLogger, tag string, endpointType string, options any) (Endpoint, error)
 }
 
 type EndpointManager interface {
@@ -24,5 +24,5 @@ type EndpointManager interface {
 	Endpoints() []Endpoint
 	Get(tag string) (Endpoint, bool)
 	Remove(tag string) error
-	Create(ctx context.Context, router Router, logger log.ContextLogger, tag string, endpointType string, options any) error
+	Create(ctx context.Context, router Router, logger log.StructuredLogger, tag string, endpointType string, options any) error
 }

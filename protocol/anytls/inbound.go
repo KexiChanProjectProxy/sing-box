@@ -2,6 +2,7 @@ package anytls
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"strings"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -32,12 +32,12 @@ type Inbound struct {
 	inbound.Adapter
 	tlsConfig tls.ServerConfig
 	router    adapter.ConnectionRouterEx
-	logger    logger.ContextLogger
+	logger    log.StructuredLogger
 	listener  *listener.Listener
 	service   *anytls.Service
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.AnyTLSInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeAnyTLS, tag),
 		router:  uot.NewRouter(router, logger),
@@ -101,7 +101,8 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		tlsConn, err := tls.ServerHandshake(ctx, conn, h.tlsConfig)
 		if err != nil {
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake"))
+			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake")))
+
 			return
 		}
 		conn = tlsConn
@@ -109,7 +110,8 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.service.NewConnection(adapter.WithContext(ctx, &metadata), conn, metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
+		h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
+
 	}
 }
 
@@ -126,9 +128,11 @@ func (h *inboundHandler) NewConnectionEx(ctx context.Context, conn net.Conn, sou
 	metadata.Destination = destination.Unwrap()
 	if userName, _ := auth.UserFromContext[string](ctx); userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", metadata.Destination))
+
 	} else {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	}
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

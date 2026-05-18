@@ -14,7 +14,7 @@ import (
 )
 
 func registerCloudflaredInbound(registry *inbound.Registry) {
-	inbound.Register[option.CloudflaredInboundOptions](registry, C.TypeCloudflared, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.CloudflaredInboundOptions) (adapter.Inbound, error) {
+	inbound.Register[option.CloudflaredInboundOptions](registry, C.TypeCloudflared, func(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.CloudflaredInboundOptions) (adapter.Inbound, error) {
 		return nil, E.New(`Cloudflared is not included in this build, rebuild with -tags with_cloudflared`)
 	})
 }

@@ -99,7 +99,7 @@ func buildTimerConfig(options option.OOMKillerServiceOptions, memoryLimit uint64
 
 type adaptiveTimer struct {
 	timerConfig
-	logger          log.ContextLogger
+	logger          log.StructuredLogger
 	network         adapter.NetworkManager
 	onTriggered     func(uint64)
 	limitThresholds pressureThresholds
@@ -115,7 +115,7 @@ type adaptiveTimer struct {
 	pressureBaselineTime    time.Time
 }
 
-func newAdaptiveTimer(logger log.ContextLogger, network adapter.NetworkManager, config timerConfig, onTriggered func(uint64)) *adaptiveTimer {
+func newAdaptiveTimer(logger log.StructuredLogger, network adapter.NetworkManager, config timerConfig, onTriggered func(uint64)) *adaptiveTimer {
 	t := &adaptiveTimer{
 		timerConfig: config,
 		logger:      logger,
@@ -206,16 +206,16 @@ func (t *adaptiveTimer) poll() {
 	t.onTriggered(sample.usage)
 	if rateTriggered {
 		if t.killerDisabled {
-			t.logger.Warn("memory growth rate critical (report only), usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample))
+			t.logger.WarnEvent("oom.growth.report", "memory growth rate critical", log.String("usage", byteformats.FormatMemoryBytes(sample.usage)), log.String("details", t.logDetails(sample)))
 		} else {
-			t.logger.Error("memory growth rate critical, usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample), ", resetting network")
+			t.logger.ErrorEvent("oom.growth.reset", "memory growth rate critical, resetting network", log.String("usage", byteformats.FormatMemoryBytes(sample.usage)), log.String("details", t.logDetails(sample)))
 			t.network.ResetNetwork()
 		}
 	} else {
 		if t.killerDisabled {
-			t.logger.Warn("memory threshold reached (report only), usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample))
+			t.logger.WarnEvent("oom.threshold.report", "memory threshold reached", log.String("usage", byteformats.FormatMemoryBytes(sample.usage)), log.String("details", t.logDetails(sample)))
 		} else {
-			t.logger.Error("memory threshold reached, usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample), ", resetting network")
+			t.logger.ErrorEvent("oom.threshold.reset", "memory threshold reached, resetting network", log.String("usage", byteformats.FormatMemoryBytes(sample.usage)), log.String("details", t.logDetails(sample)))
 			t.network.ResetNetwork()
 		}
 	}

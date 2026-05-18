@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
 	"net"
 	"net/netip"
 	"runtime"
@@ -13,7 +14,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -22,7 +22,7 @@ import (
 
 type Listener struct {
 	ctx                      context.Context
-	logger                   logger.ContextLogger
+	logger                   log.StructuredLogger
 	network                  []string
 	listenOptions            option.ListenOptions
 	connHandler              adapter.ConnectionHandler
@@ -45,7 +45,7 @@ type Listener struct {
 
 type Options struct {
 	Context                  context.Context
-	Logger                   logger.ContextLogger
+	Logger                   log.StructuredLogger
 	Network                  []string
 	Listen                   option.ListenOptions
 	ConnectionHandler        adapter.ConnectionHandler

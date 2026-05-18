@@ -38,7 +38,7 @@ func RegisterService(registry *boxService.Registry) {
 type Service struct {
 	boxService.Adapter
 	ctx                   context.Context
-	logger                log.ContextLogger
+	logger                log.StructuredLogger
 	network               adapter.NetworkManager
 	dnsRouter             adapter.DNSRouter
 	listener              *listener.Listener
@@ -61,11 +61,11 @@ type TransportLink struct {
 	// dnsOverTLSFallback bool
 }
 
-func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.ResolvedServiceOptions) (adapter.Service, error) {
+func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.ResolvedServiceOptions) (adapter.Service, error) {
 	inbound := &Service{
 		Adapter:   boxService.NewAdapter(C.TypeResolved, tag),
 		ctx:       ctx,
-		logger:    logger,
+		logger:    logger.(log.StructuredLogger),
 		network:   service.FromContext[adapter.NetworkManager](ctx),
 		dnsRouter: service.FromContext[adapter.DNSRouter](ctx),
 		links:     make(map[int32]*TransportLink),

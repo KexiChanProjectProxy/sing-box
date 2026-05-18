@@ -30,7 +30,7 @@ type Transport struct {
 	predefined map[string][]netip.Addr
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.HostsDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.HostsDNSServerOptions) (adapter.DNSTransport, error) {
 	var (
 		files      []*File
 		predefined = make(map[string][]netip.Addr)

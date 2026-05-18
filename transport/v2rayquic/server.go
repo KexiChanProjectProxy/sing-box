@@ -4,6 +4,8 @@ package v2rayquic
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 
@@ -25,7 +27,7 @@ var _ adapter.V2RayServerTransport = (*Server)(nil)
 
 type Server struct {
 	ctx          context.Context
-	logger       logger.ContextLogger
+	logger       log.StructuredLogger
 	tlsConfig    tls.ServerConfig
 	quicConfig   *quic.Config
 	handler      adapter.V2RayServerTransportHandler
@@ -33,7 +35,7 @@ type Server struct {
 	quicListener qtls.Listener
 }
 
-func NewServer(ctx context.Context, logger logger.ContextLogger, options option.V2RayQUICOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (adapter.V2RayServerTransport, error) {
+func NewServer(ctx context.Context, logger log.StructuredLogger, options option.V2RayQUICOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (adapter.V2RayServerTransport, error) {
 	quicConfig := &quic.Config{
 		DisablePathMTUDiscovery: !C.IsLinux && !C.IsWindows,
 	}
@@ -78,7 +80,8 @@ func (s *Server) acceptLoop() {
 		go func() {
 			hErr := s.streamAcceptLoop(conn)
 			if hErr != nil && !E.IsClosedOrCanceled(hErr) {
-				s.logger.ErrorContext(conn.Context(), hErr)
+				s.logger.ErrorEventContext(conn.Context(), "transport.message", F.ToString(hErr))
+
 			}
 		}()
 	}

@@ -15,7 +15,7 @@ type Service interface {
 
 type ServiceRegistry interface {
 	option.ServiceOptionsRegistry
-	Create(ctx context.Context, logger log.ContextLogger, tag string, serviceType string, options any) (Service, error)
+	Create(ctx context.Context, logger log.StructuredLogger, tag string, serviceType string, options any) (Service, error)
 }
 
 type ServiceManager interface {
@@ -23,5 +23,5 @@ type ServiceManager interface {
 	Services() []Service
 	Get(tag string) (Service, bool)
 	Remove(tag string) error
-	Create(ctx context.Context, logger log.ContextLogger, tag string, serviceType string, options any) error
+	Create(ctx context.Context, logger log.StructuredLogger, tag string, serviceType string, options any) error
 }

@@ -4,6 +4,7 @@ package wireguard
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"os"
@@ -36,7 +37,7 @@ var _ NatDevice = (*stackDevice)(nil)
 
 type stackDevice struct {
 	ctx            context.Context
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 	stack          *stack.Stack
 	mtu            uint32
 	events         chan wgTun.Event
@@ -281,7 +282,8 @@ func (w *stackDevice) CreateDestination(metadata adapter.InboundContext, routeCo
 	if err != nil {
 		return nil, err
 	}
-	w.logger.InfoContext(ctx, "linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString())
+	w.logger.InfoEventContext(ctx, "transport.message", F.ToString("linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString()))
+
 	return destination, nil
 }
 

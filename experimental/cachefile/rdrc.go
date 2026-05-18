@@ -2,11 +2,11 @@ package cachefile
 
 import (
 	"encoding/binary"
+	"github.com/sagernet/sing-box/log"
 	"time"
 
 	"github.com/sagernet/bbolt"
 	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/logger"
 )
 
 var bucketRDRC = []byte("rdrc2")
@@ -92,7 +92,7 @@ func (c *CacheFile) SaveRDRC(transportName string, qName string, qType uint16) e
 	})
 }
 
-func (c *CacheFile) SaveRDRCAsync(transportName string, qName string, qType uint16, logger logger.Logger) {
+func (c *CacheFile) SaveRDRCAsync(transportName string, qName string, qType uint16, logger log.StructuredLogger) {
 	saveKey := saveCacheKey{transportName, qName, qType}
 	c.saveRDRCAccess.Lock()
 	c.saveRDRC[saveKey] = true
@@ -100,7 +100,7 @@ func (c *CacheFile) SaveRDRCAsync(transportName string, qName string, qType uint
 	go func() {
 		err := c.SaveRDRC(transportName, qName, qType)
 		if err != nil {
-			logger.Warn("save RDRC: ", err)
+			logger.WarnEvent("cachefile.rdrc.save.error", "save RDRC", log.Err(err))
 		}
 		c.saveRDRCAccess.Lock()
 		delete(c.saveRDRC, saveKey)

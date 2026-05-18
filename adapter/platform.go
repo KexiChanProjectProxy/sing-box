@@ -1,11 +1,11 @@
 package adapter
 
 import (
+	"github.com/sagernet/sing-box/log"
 	"net/netip"
 
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing/common/logger"
 )
 
 type PlatformInterface interface {
@@ -18,7 +18,7 @@ type PlatformInterface interface {
 	OpenInterface(options *tun.Options, platformOptions option.TunPlatformOptions) (tun.Tun, error)
 
 	UsePlatformDefaultInterfaceMonitor() bool
-	CreateDefaultInterfaceMonitor(logger logger.Logger) tun.DefaultInterfaceMonitor
+	CreateDefaultInterfaceMonitor(logger log.StructuredLogger) tun.DefaultInterfaceMonitor
 
 	UsePlatformNetworkInterfaces() bool
 	NetworkInterfaces() ([]NetworkInterface, error)

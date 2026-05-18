@@ -80,7 +80,7 @@ type Endpoint struct {
 	endpoint.Adapter
 	ctx               context.Context
 	router            adapter.Router
-	logger            logger.ContextLogger
+	logger            log.StructuredLogger
 	dnsRouter         adapter.DNSRouter
 	network           adapter.NetworkManager
 	platformInterface adapter.PlatformInterface
@@ -155,7 +155,7 @@ func (t *Endpoint) registerNetstackHandlers() {
 	}
 }
 
-func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TailscaleEndpointOptions) (adapter.Endpoint, error) {
+func NewEndpoint(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.TailscaleEndpointOptions) (adapter.Endpoint, error) {
 	stateDirectory := options.StateDirectory
 	if stateDirectory == "" {
 		stateDirectory = "tailscale"
@@ -230,10 +230,12 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 		Dir:      stateDirectory,
 		Hostname: hostname,
 		Logf: func(format string, args ...any) {
-			logger.Trace(fmt.Sprintf(format, args...))
+			logger.TraceEvent("protocol.message", F.ToString(fmt.Sprintf(format, args...)))
+
 		},
 		UserLogf: func(format string, args ...any) {
-			logger.Debug(fmt.Sprintf(format, args...))
+			logger.DebugEvent("protocol.message", F.ToString(fmt.Sprintf(format, args...)))
+
 		},
 		Ephemeral:     options.Ephemeral,
 		AuthKey:       options.AuthKey,
@@ -442,7 +444,8 @@ func (t *Endpoint) watchState() {
 		}
 		authURL := localBackend.StatusWithoutPeers().AuthURL
 		if authURL != "" {
-			t.logger.Info("Waiting for authentication: ", authURL)
+			t.logger.InfoEvent("protocol.message", F.ToString("Waiting for authentication: ", authURL))
+
 			if t.platformInterface != nil {
 				err := t.platformInterface.SendNotification(&adapter.Notification{
 					Identifier: "tailscale-authentication",
@@ -453,7 +456,8 @@ func (t *Endpoint) watchState() {
 					OpenURL:    authURL,
 				})
 				if err != nil {
-					t.logger.Error("send authentication notification: ", err)
+					t.logger.ErrorEvent("protocol.message", F.ToString("send authentication notification: ", err))
+
 				}
 			}
 			return false
@@ -467,7 +471,8 @@ func (t *Endpoint) watchState() {
 			}
 			status, err := common.Must1(t.server.LocalClient()).Status(t.ctx)
 			if err != nil {
-				t.logger.Error("set exit node: ", err)
+				t.logger.ErrorEvent("protocol.message", F.ToString("set exit node: ", err))
+
 				return
 			}
 			perfs := &ipn.MaskedPrefs{
@@ -479,12 +484,14 @@ func (t *Endpoint) watchState() {
 			}
 			err = perfs.SetExitNodeIP(t.exitNode, status)
 			if err != nil {
-				t.logger.Error("set exit node: ", err)
+				t.logger.ErrorEvent("protocol.message", F.ToString("set exit node: ", err))
+
 				return true
 			}
 			_, err = localBackend.EditPrefs(perfs)
 			if err != nil {
-				t.logger.Error("set exit node: ", err)
+				t.logger.ErrorEvent("protocol.message", F.ToString("set exit node: ", err))
+
 				return true
 			}
 			return false
@@ -515,9 +522,11 @@ func (t *Endpoint) Close() error {
 func (t *Endpoint) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch network {
 	case N.NetworkTCP:
-		t.logger.InfoContext(ctx, "outbound connection to ", destination)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	case N.NetworkUDP:
-		t.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	}
 	if !t.started.Load() {
 		return nil, E.New("Tailscale is not ready yet")
@@ -610,7 +619,8 @@ func (t *Endpoint) listenPacketWithAddress(ctx context.Context, destination M.So
 }
 
 func (t *Endpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {
-	t.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	if destination.IsDomain() {
 		destinationAddresses, err := t.dnsRouter.Lookup(ctx, destination.Fqdn, adapter.DNSQueryOptions{})
 		if err != nil {
@@ -693,10 +703,12 @@ func (t *Endpoint) PrepareConnection(network string, source M.Socksaddr, destina
 		case rule.IsBypassed(err):
 			err = nil
 		case rule.IsRejected(err):
-			t.logger.Trace("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())
+			t.logger.TraceEvent("protocol.message", F.ToString("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+
 		default:
 			if network == N.NetworkICMP {
-				t.logger.Warn(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+				t.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())))
+
 			}
 		}
 	}
@@ -716,8 +728,10 @@ func (t *Endpoint) NewConnectionEx(ctx context.Context, conn net.Conn, source M.
 		destination.Addr = netip.IPv6Loopback()
 	}
 	metadata.Destination = destination
-	t.logger.InfoContext(ctx, "inbound connection from ", source)
-	t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", source))
+
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -738,8 +752,10 @@ func (t *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 		conn = bufio.NewNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, destination)
 	}
 	metadata.Destination = destination
-	t.logger.InfoContext(ctx, "inbound packet connection from ", source)
-	t.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", source))
+
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
+
 	t.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -773,7 +789,8 @@ func (t *Endpoint) NewDirectRouteConnection(metadata adapter.InboundContext, rou
 	if err != nil {
 		return nil, err
 	}
-	t.logger.InfoContext(ctx, "linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString())
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString()))
+
 	return destination, nil
 }
 
@@ -848,21 +865,24 @@ func addressFromAddr(destination netip.Addr) tcpip.Address {
 
 type endpointDialer struct {
 	N.Dialer
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 }
 
 func (d *endpointDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		d.logger.InfoContext(ctx, "output connection to ", destination)
+		d.logger.InfoEventContext(ctx, "protocol.message", F.ToString("output connection to ", destination))
+
 	case N.NetworkUDP:
-		d.logger.InfoContext(ctx, "output packet connection to ", destination)
+		d.logger.InfoEventContext(ctx, "protocol.message", F.ToString("output packet connection to ", destination))
+
 	}
 	return d.Dialer.DialContext(ctx, network, destination)
 }
 
 func (d *endpointDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	d.logger.InfoContext(ctx, "output packet connection")
+	d.logger.InfoEventContext(ctx, "protocol.message", F.ToString("output packet connection"))
+
 	return d.Dialer.ListenPacket(ctx, destination)
 }
 

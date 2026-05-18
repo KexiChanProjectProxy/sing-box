@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing/common/logger"
+	"github.com/sagernet/sing-box/log"
 	sHTTP "github.com/sagernet/sing/protocol/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,12 +12,12 @@ import (
 )
 
 type APIServer struct {
-	logger  logger.Logger
+	logger  log.StructuredLogger
 	traffic *TrafficManager
 	user    *UserManager
 }
 
-func NewAPIServer(logger logger.Logger, traffic *TrafficManager, user *UserManager) *APIServer {
+func NewAPIServer(logger log.StructuredLogger, traffic *TrafficManager, user *UserManager) *APIServer {
 	return &APIServer{
 		logger:  logger,
 		traffic: traffic,
@@ -29,7 +29,7 @@ func (s *APIServer) Route(r chi.Router) {
 	r.Route("/server/v1", func(r chi.Router) {
 		r.Use(func(handler http.Handler) http.Handler {
 			return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				s.logger.Debug(request.Method, " ", request.RequestURI, " ", sHTTP.SourceAddress(request))
+				s.logger.DebugEvent("service.api.request", "request", log.String("method", request.Method), log.String("uri", request.RequestURI), log.String("source", sHTTP.SourceAddress(request).String()))
 				handler.ServeHTTP(writer, request)
 			})
 		})

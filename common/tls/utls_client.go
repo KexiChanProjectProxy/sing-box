@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"github.com/sagernet/sing-box/log"
 	"math/rand"
 	"net"
 	"os"
@@ -19,7 +20,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/ntp"
 
 	utls "github.com/metacubex/utls"
@@ -184,11 +184,11 @@ func (c *utlsALPNWrapper) HandshakeContext(ctx context.Context) error {
 	return c.UConn.HandshakeContext(ctx)
 }
 
-func NewUTLSClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
+func NewUTLSClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
 	return newUTLSClient(ctx, logger, serverAddress, options, false)
 }
 
-func newUTLSClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
+func newUTLSClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
 	var serverName string
 	if options.ServerName != "" {
 		serverName = options.ServerName

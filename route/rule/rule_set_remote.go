@@ -15,12 +15,12 @@ import (
 	"github.com/sagernet/sing-box/common/srs"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/experimental/deprecated"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/json"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/x/list"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/pause"
@@ -33,7 +33,7 @@ var _ adapter.RuleSet = (*RemoteRuleSet)(nil)
 type RemoteRuleSet struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
-	logger         logger.ContextLogger
+	logger         log.StructuredLogger
 	outbound       adapter.OutboundManager
 	options        option.RuleSet
 	updateInterval time.Duration
@@ -50,7 +50,7 @@ type RemoteRuleSet struct {
 	refs           atomic.Int32
 }
 
-func NewRemoteRuleSet(ctx context.Context, logger logger.ContextLogger, options option.RuleSet) (*RemoteRuleSet, error) {
+func NewRemoteRuleSet(ctx context.Context, logger log.StructuredLogger, options option.RuleSet) (*RemoteRuleSet, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	var updateInterval time.Duration
 	if options.RemoteOptions.UpdateInterval > 0 {
@@ -214,14 +214,14 @@ func (s *RemoteRuleSet) loopUpdate() {
 func (s *RemoteRuleSet) updateOnce() {
 	err := s.fetch(s.ctx, false)
 	if err != nil {
-		s.logger.Error("fetch rule-set ", s.options.Tag, ": ", err)
+		s.logger.ErrorEvent("route.rule_set.error", "fetch rule-set", log.String("rule_set", s.options.Tag), log.Err(err))
 	} else if s.refs.Load() == 0 {
 		s.rules = nil
 	}
 }
 
 func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
-	s.logger.Debug("updating rule-set ", s.options.Tag, " from URL: ", s.options.RemoteOptions.URL)
+	s.logger.DebugEvent("route.rule_set.updating", "updating rule-set", log.String("rule_set", s.options.Tag), log.String("url", s.options.RemoteOptions.URL))
 	request, err := http.NewRequest("GET", s.options.RemoteOptions.URL, nil)
 	if err != nil {
 		return err
@@ -247,12 +247,12 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
 				savedRuleSet.LastUpdated = s.lastUpdated
 				err = s.cacheFile.SaveRuleSet(s.options.Tag, savedRuleSet)
 				if err != nil {
-					s.logger.Error("save rule-set updated time: ", err)
+					s.logger.ErrorEvent("route.rule_set.error", "save rule-set updated time", log.String("rule_set", s.options.Tag), log.Err(err))
 					return nil
 				}
 			}
 		}
-		s.logger.Info("update rule-set ", s.options.Tag, ": not modified")
+		s.logger.InfoEvent("route.rule_set.not_modified", "update rule-set not modified", log.String("rule_set", s.options.Tag))
 		return nil
 	default:
 		return E.New("unexpected status: ", response.Status)
@@ -277,10 +277,10 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
 			LastEtag:    s.lastEtag,
 		})
 		if err != nil {
-			s.logger.Error("save rule-set cache: ", err)
+			s.logger.ErrorEvent("route.rule_set.error", "save rule-set cache", log.String("rule_set", s.options.Tag), log.Err(err))
 		}
 	}
-	s.logger.Info("updated rule-set ", s.options.Tag)
+	s.logger.InfoEvent("route.rule_set.updated", "updated rule-set", log.String("rule_set", s.options.Tag))
 	return nil
 }
 

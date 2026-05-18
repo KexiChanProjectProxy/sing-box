@@ -2,6 +2,7 @@ package direct
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 	"time"
@@ -27,14 +28,14 @@ type Inbound struct {
 	inbound.Adapter
 	ctx                 context.Context
 	router              adapter.ConnectionRouterEx
-	logger              log.ContextLogger
+	logger              log.StructuredLogger
 	listener            *listener.Listener
 	udpNat              *udpnat.Service
 	overrideOption      int
 	overrideDestination M.Socksaddr
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.DirectInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.DirectInboundOptions) (adapter.Inbound, error) {
 	options.UDPFragmentDefault = true
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeDirect, tag),
@@ -103,13 +104,15 @@ func (i *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	}
 	metadata.Destination = destination
 	if i.overrideOption != 0 {
-		i.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		i.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	}
 	i.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	i.logger.InfoContext(ctx, "inbound packet connection from ", source)
+	i.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", source))
+
 	var metadata adapter.InboundContext
 	metadata.Inbound = i.Tag()
 	metadata.InboundType = i.Type()
@@ -127,7 +130,8 @@ func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 		destination.Port = i.overrideDestination.Port
 	default:
 	}
-	i.logger.InfoContext(ctx, "inbound packet connection to ", destination)
+	i.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", destination))
+
 	metadata.Destination = destination
 	if i.overrideOption != 0 {
 		conn = bufio.NewDestinationNATPacketConn(bufio.NewNetPacketConn(conn), i.listener.UDPAddr(), destination)

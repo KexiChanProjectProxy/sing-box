@@ -56,6 +56,7 @@ type LogOptions struct {
 	Disabled     bool   `json:"disabled,omitempty"`
 	Level        string `json:"level,omitempty"`
 	Output       string `json:"output,omitempty"`
+	Format       string `json:"format,omitempty"`
 	Timestamp    bool   `json:"timestamp,omitempty"`
 	DisableColor bool   `json:"-"`
 }

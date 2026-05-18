@@ -18,7 +18,6 @@ import (
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json/badoption"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/task"
 	"github.com/sagernet/sing/service"
 
@@ -65,12 +64,12 @@ var (
 type Transport struct {
 	dns.TransportAdapter
 	ctx            context.Context
-	logger         logger.ContextLogger
+	logger         log.StructuredLogger
 	networkManager adapter.NetworkManager
 	interfaceNames badoption.Listable[string]
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.MDNSDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.MDNSDNSServerOptions) (adapter.DNSTransport, error) {
 	return &Transport{
 		TransportAdapter: dns.NewTransportAdapterWithLocalOptions(C.DNSTypeMDNS, tag, options.LocalDNSServerOptions),
 		ctx:              ctx,
@@ -80,7 +79,7 @@ func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, opt
 	}, nil
 }
 
-func NewRawTransport(transportAdapter dns.TransportAdapter, ctx context.Context, logger log.ContextLogger) *Transport {
+func NewRawTransport(transportAdapter dns.TransportAdapter, ctx context.Context, logger log.StructuredLogger) *Transport {
 	return &Transport{
 		TransportAdapter: transportAdapter,
 		ctx:              ctx,
@@ -142,7 +141,7 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 	for result := range results {
 		if result.err != nil {
 			lastErr = result.err
-			t.logger.TraceContext(ctx, result.err)
+			t.logger.TraceEventContext(ctx, "dns.mdns.query.error", "mdns query error", log.Err(result.err))
 			continue
 		}
 		mergeResponse(response, result.response, seenRecords)
@@ -205,7 +204,7 @@ func (t *Transport) exchangeTarget(ctx context.Context, target queryTarget, rawM
 		var candidate mDNS.Msg
 		err = candidate.Unpack(buffer[:n])
 		if err != nil {
-			t.logger.TraceContext(ctx, "mdns: unpack response: ", err)
+			t.logger.TraceEventContext(ctx, "dns.mdns.response.unpack_error", "mdns: unpack response", log.Err(err))
 			continue
 		}
 		if !validResponse(&candidate, question) {
@@ -286,11 +285,11 @@ func (t *Transport) fetchInterfaces() ([]control.Interface, error) {
 		for _, interfaceName := range t.interfaceNames {
 			iface, err := finder.ByName(interfaceName)
 			if err != nil {
-				t.logger.Warn("mdns: interface ", interfaceName, " not found")
+				t.logger.WarnEvent("dns.mdns.interface.not_found", "mdns: interface not found", log.String("interface", interfaceName))
 				continue
 			}
 			if !isUsableInterface(*iface) {
-				t.logger.Warn("mdns: interface ", interfaceName, " is not usable")
+				t.logger.WarnEvent("dns.mdns.interface.unusable", "mdns: interface is not usable", log.String("interface", interfaceName))
 				continue
 			}
 			interfaces = append(interfaces, *iface)

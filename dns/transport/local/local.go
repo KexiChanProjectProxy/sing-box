@@ -11,8 +11,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
-	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -32,7 +30,7 @@ var (
 type Transport struct {
 	dns.TransportAdapter
 	ctx              context.Context
-	logger           logger.ContextLogger
+	logger           log.StructuredLogger
 	hosts            *hosts.File
 	dialer           N.Dialer
 	preferGo         bool
@@ -50,7 +48,7 @@ type dhcpTransport interface {
 	Exchange0(ctx context.Context, message *mDNS.Msg, servers []M.Socksaddr) (*mDNS.Msg, error)
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.LocalDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.LocalDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewLocalDialer(ctx, options)
 	if err != nil {
 		return nil, err
@@ -74,7 +72,7 @@ func (t *Transport) Start(stage adapter.StartStage) error {
 	case adapter.StartStateInitialize:
 		defaultHosts, err := hosts.NewDefault()
 		if err != nil {
-			t.logger.Warn(err)
+			t.logger.WarnEvent("dns.hosts.load.error", "load hosts file", log.Err(err))
 		} else {
 			t.hosts = defaultHosts
 		}
@@ -85,7 +83,7 @@ func (t *Transport) Start(stage adapter.StartStage) error {
 				if err == nil {
 					t.resolved = resolvedResolver
 				} else {
-					t.logger.Warn(E.Cause(err, "initialize resolved resolver"))
+					t.logger.WarnEvent("dns.resolved.initialize.error", "initialize resolved resolver", log.Err(err))
 				}
 			}
 		}

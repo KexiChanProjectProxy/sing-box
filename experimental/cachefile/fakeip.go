@@ -1,6 +1,7 @@
 package cachefile
 
 import (
+	"github.com/sagernet/sing-box/log"
 	"net/netip"
 	"os"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/sagernet/bbolt"
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 )
 
@@ -96,7 +96,7 @@ func (c *CacheFile) FakeIPStore(address netip.Addr, domain string) error {
 	})
 }
 
-func (c *CacheFile) FakeIPStoreAsync(address netip.Addr, domain string, logger logger.Logger) {
+func (c *CacheFile) FakeIPStoreAsync(address netip.Addr, domain string, logger log.StructuredLogger) {
 	c.saveFakeIPAccess.Lock()
 	if oldDomain, loaded := c.saveDomain[address]; loaded {
 		if address.Is4() {
@@ -115,7 +115,7 @@ func (c *CacheFile) FakeIPStoreAsync(address netip.Addr, domain string, logger l
 	go func() {
 		err := c.FakeIPStore(address, domain)
 		if err != nil {
-			logger.Warn("save FakeIP cache: ", err)
+			logger.WarnEvent("cachefile.fakeip.save.error", "save FakeIP cache", log.Err(err))
 		}
 		c.saveFakeIPAccess.Lock()
 		delete(c.saveDomain, address)

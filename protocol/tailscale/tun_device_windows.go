@@ -4,12 +4,12 @@ package tailscale
 
 import (
 	"errors"
+	"github.com/sagernet/sing-box/log"
 	"os"
 	"sync"
 	"sync/atomic"
 
 	singTun "github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing/common/logger"
 	wgTun "github.com/sagernet/wireguard-go/tun"
 )
 
@@ -21,7 +21,7 @@ type tunDeviceAdapter struct {
 	closeOnce sync.Once
 }
 
-func newTunDeviceAdapter(tun singTun.Tun, mtu int, _ logger.ContextLogger) (wgTun.Device, error) {
+func newTunDeviceAdapter(tun singTun.Tun, mtu int, _ log.StructuredLogger) (wgTun.Device, error) {
 	winTun, ok := tun.(singTun.WinTun)
 	if !ok {
 		return nil, errors.New("not a windows tun device")

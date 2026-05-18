@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing/common/logger"
+	"github.com/sagernet/sing-box/log"
 )
 
-func newNeighborResolver(_ logger.ContextLogger, _ []string) (adapter.NeighborResolver, error) {
+func newNeighborResolver(_ log.StructuredLogger, _ []string) (adapter.NeighborResolver, error) {
 	return nil, os.ErrInvalid
 }

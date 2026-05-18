@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/ntp"
@@ -79,7 +80,7 @@ func isForwardableWebSocketRequestHeader(key string) bool {
 func (s *Service) handleWebSocket(w http.ResponseWriter, r *http.Request, proxyPath string, username string) {
 	accessToken, err := s.getAccessToken()
 	if err != nil {
-		s.logger.Error("get access token for websocket: ", err)
+		s.logger.ErrorEvent("ocm.token.error", "get access token for websocket", log.Err(err))
 		writeJSONError(w, r, http.StatusUnauthorized, "authentication_error", "authentication failed")
 		return
 	}
@@ -122,7 +123,7 @@ func (s *Service) handleWebSocket(w http.ResponseWriter, r *http.Request, proxyP
 
 	upstreamConn, upstreamBufferedReader, _, err := upstreamDialer.Dial(r.Context(), upstreamURL)
 	if err != nil {
-		s.logger.Error("dial upstream websocket: ", err)
+		s.logger.ErrorEvent("ocm.websocket.dial.error", "dial upstream websocket", log.Err(err))
 		writeJSONError(w, r, http.StatusBadGateway, "api_error", "upstream websocket connection failed")
 		return
 	}
@@ -146,7 +147,7 @@ func (s *Service) handleWebSocket(w http.ResponseWriter, r *http.Request, proxyP
 	}
 	clientConn, _, _, err := clientUpgrader.Upgrade(r, w)
 	if err != nil {
-		s.logger.Error("upgrade client websocket: ", err)
+		s.logger.ErrorEvent("ocm.websocket.upgrade.error", "upgrade client websocket", log.Err(err))
 		upstreamConn.Close()
 		return
 	}
@@ -192,7 +193,7 @@ func (s *Service) proxyWebSocketClientToUpstream(clientConn net.Conn, upstreamCo
 		data, opCode, err := wsutil.ReadClientData(clientConn)
 		if err != nil {
 			if !E.IsClosedOrCanceled(err) {
-				s.logger.Debug("read client websocket: ", err)
+				s.logger.DebugEvent("ocm.websocket.client.read.error", "read client websocket", log.Err(err))
 			}
 			return
 		}
@@ -213,7 +214,7 @@ func (s *Service) proxyWebSocketClientToUpstream(clientConn net.Conn, upstreamCo
 		err = wsutil.WriteClientMessage(upstreamConn, opCode, data)
 		if err != nil {
 			if !E.IsClosedOrCanceled(err) {
-				s.logger.Debug("write upstream websocket: ", err)
+				s.logger.DebugEvent("ocm.websocket.upstream.write.error", "write upstream websocket", log.Err(err))
 			}
 			return
 		}
@@ -226,7 +227,7 @@ func (s *Service) proxyWebSocketUpstreamToClient(upstreamReadWriter io.ReadWrite
 		data, opCode, err := wsutil.ReadServerData(upstreamReadWriter)
 		if err != nil {
 			if !E.IsClosedOrCanceled(err) {
-				s.logger.Debug("read upstream websocket: ", err)
+				s.logger.DebugEvent("ocm.websocket.upstream.read.error", "read upstream websocket", log.Err(err))
 			}
 			return
 		}
@@ -277,7 +278,7 @@ func (s *Service) proxyWebSocketUpstreamToClient(upstreamReadWriter io.ReadWrite
 		err = wsutil.WriteServerMessage(clientConn, opCode, data)
 		if err != nil {
 			if !E.IsClosedOrCanceled(err) {
-				s.logger.Debug("write client websocket: ", err)
+				s.logger.DebugEvent("ocm.websocket.client.write.error", "write client websocket", log.Err(err))
 			}
 			return
 		}

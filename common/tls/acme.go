@@ -5,6 +5,7 @@ package tls
 import (
 	"context"
 	"crypto/tls"
+	"github.com/sagernet/sing-box/log"
 	"slices"
 	"strings"
 
@@ -12,7 +13,6 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 
 	"github.com/caddyserver/certmagic"
 	"github.com/libdns/acmedns"
@@ -20,7 +20,6 @@ import (
 	"github.com/libdns/cloudflare"
 	"github.com/mholt/acmez/v3/acme"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type acmeWrapper struct {
@@ -39,7 +38,7 @@ func (w *acmeWrapper) Close() error {
 	return nil
 }
 
-func startACME(ctx context.Context, logger logger.Logger, options option.InboundACMEOptions) (*tls.Config, adapter.SimpleLifecycle, error) {
+func startACME(ctx context.Context, logger log.StructuredLogger, options option.InboundACMEOptions) (*tls.Config, adapter.SimpleLifecycle, error) {
 	var acmeServer string
 	switch options.Provider {
 	case "", "letsencrypt":
@@ -60,11 +59,7 @@ func startACME(ctx context.Context, logger logger.Logger, options option.Inbound
 	} else {
 		storage = certmagic.Default.Storage
 	}
-	zapLogger := zap.New(zapcore.NewCore(
-		zapcore.NewConsoleEncoder(ACMEEncoderConfig()),
-		&ACMELogWriter{Logger: logger},
-		zap.DebugLevel,
-	))
+	zapLogger := zap.New(&ACMELogWriter{Logger: logger})
 	config := &certmagic.Config{
 		DefaultServerName: options.DefaultServerName,
 		Storage:           storage,

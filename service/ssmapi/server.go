@@ -32,7 +32,7 @@ type Service struct {
 	boxService.Adapter
 	ctx            context.Context
 	cancel         context.CancelFunc
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 	listener       *listener.Listener
 	tlsConfig      tls.ServerConfig
 	httpServer     *http.Server
@@ -44,14 +44,15 @@ type Service struct {
 	cacheMutex     sync.Mutex
 }
 
-func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.SSMAPIServiceOptions) (adapter.Service, error) {
+func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.SSMAPIServiceOptions) (adapter.Service, error) {
+	structuredLogger := logger.(log.StructuredLogger)
 	ctx, cancel := context.WithCancel(ctx)
 	chiRouter := chi.NewRouter()
 	s := &Service{
 		Adapter: boxService.NewAdapter(C.TypeSSMAPI, tag),
 		ctx:     ctx,
 		cancel:  cancel,
-		logger:  logger,
+		logger:  structuredLogger,
 		listener: listener.New(listener.Options{
 			Context: ctx,
 			Logger:  logger,
@@ -81,7 +82,7 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 		traffic := NewTrafficManager()
 		managedServer.SetTracker(traffic)
 		user := NewUserManager(managedServer, traffic)
-		chiRouter.Route(entry.Key, NewAPIServer(logger, traffic, user).Route)
+		chiRouter.Route(entry.Key, NewAPIServer(structuredLogger, traffic, user).Route)
 		s.traffics[entry.Key] = traffic
 		s.users[entry.Key] = user
 	}
@@ -101,7 +102,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	}
 	err := s.loadCache()
 	if err != nil {
-		s.logger.Error(E.Cause(err, "load cache"))
+		s.logger.ErrorEvent("service.cache.load.error", "load cache", log.Err(err))
 	}
 	s.saveTicker = time.NewTicker(1 * time.Minute)
 	go s.loopSaveCache()
@@ -124,7 +125,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	go func() {
 		err = s.httpServer.Serve(tcpListener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error("serve error: ", err)
+			s.logger.ErrorEvent("service.serve.error", "serve error", log.Err(err))
 		}
 	}()
 	return nil
@@ -138,7 +139,7 @@ func (s *Service) loopSaveCache() {
 		case <-s.saveTicker.C:
 			err := s.saveCache()
 			if err != nil {
-				s.logger.Error(E.Cause(err, "save cache"))
+				s.logger.ErrorEvent("service.cache.save.error", "save cache", log.Err(err))
 			}
 		}
 	}
@@ -153,7 +154,7 @@ func (s *Service) Close() error {
 	}
 	err := s.saveCache()
 	if err != nil {
-		s.logger.Error(E.Cause(err, "save cache"))
+		s.logger.ErrorEvent("service.cache.save.error", "save cache", log.Err(err))
 	}
 	return common.Close(
 		common.PtrOrNil(s.httpServer),

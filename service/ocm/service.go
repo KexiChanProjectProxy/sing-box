@@ -126,7 +126,7 @@ func extractWeeklyCycleHint(headers http.Header) *WeeklyCycleHint {
 type Service struct {
 	boxService.Adapter
 	ctx            context.Context
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 	credentialPath string
 	credentials    *oauthCredentials
 	users          []option.OCMUser
@@ -145,7 +145,8 @@ type Service struct {
 	shuttingDown   bool
 }
 
-func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.OCMServiceOptions) (adapter.Service, error) {
+func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.OCMServiceOptions) (adapter.Service, error) {
+	structuredLogger := logger.(log.StructuredLogger)
 	serviceDialer, err := dialer.NewWithOptions(dialer.Options{
 		Context: ctx,
 		Options: option.DialerOptions{
@@ -180,14 +181,14 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 			LastUpdated:  time.Now(),
 			Combinations: make([]CostCombination, 0),
 			filePath:     options.UsagesPath,
-			logger:       logger,
+			logger:       structuredLogger,
 		}
 	}
 
 	service := &Service{
 		Adapter:        boxService.NewAdapter(C.TypeOCM, tag),
 		ctx:            ctx,
-		logger:         logger,
+		logger:         structuredLogger,
 		credentialPath: options.CredentialPath,
 		users:          options.Users,
 		dialer:         serviceDialer,
@@ -231,7 +232,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	if s.usageTracker != nil {
 		err = s.usageTracker.Load()
 		if err != nil {
-			s.logger.Warn("load usage statistics: ", err)
+			s.logger.WarnEvent("ocm.usage.load.error", "load usage statistics", log.Err(err))
 		}
 	}
 
@@ -262,7 +263,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	go func() {
 		serveErr := s.httpServer.Serve(tcpListener)
 		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-			s.logger.Error("serve error: ", serveErr)
+			s.logger.ErrorEvent("ocm.serve.error", "serve error", log.Err(serveErr))
 		}
 	}()
 
@@ -294,7 +295,7 @@ func (s *Service) getAccessToken() (string, error) {
 
 	err = platformWriteCredentials(newCredentials, s.credentialPath)
 	if err != nil {
-		s.logger.Warn("persist refreshed token: ", err)
+		s.logger.WarnEvent("ocm.token.persist.error", "persist refreshed token", log.Err(err))
 	}
 
 	return newCredentials.getAccessToken(), nil
@@ -342,20 +343,20 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(s.users) > 0 {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			s.logger.Warn("authentication failed for request from ", r.RemoteAddr, ": missing Authorization header")
+			s.logger.WarnEvent("ocm.auth.failed", "authentication failed: missing Authorization header", log.String("remote_addr", r.RemoteAddr))
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication_error", "missing api key")
 			return
 		}
 		clientToken := strings.TrimPrefix(authHeader, "Bearer ")
 		if clientToken == authHeader {
-			s.logger.Warn("authentication failed for request from ", r.RemoteAddr, ": invalid Authorization format")
+			s.logger.WarnEvent("ocm.auth.failed", "authentication failed: invalid Authorization format", log.String("remote_addr", r.RemoteAddr))
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication_error", "invalid api key format")
 			return
 		}
 		var ok bool
 		username, ok = s.userManager.Authenticate(clientToken)
 		if !ok {
-			s.logger.Warn("authentication failed for request from ", r.RemoteAddr, ": unknown key: ", clientToken)
+			s.logger.WarnEvent("ocm.auth.failed", "authentication failed: unknown key", log.String("remote_addr", r.RemoteAddr), log.String("client_token", clientToken))
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication_error", "invalid api key")
 			return
 		}
@@ -384,7 +385,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := s.getAccessToken()
 	if err != nil {
-		s.logger.Error("get access token: ", err)
+		s.logger.ErrorEvent("ocm.token.error", "get access token", log.Err(err))
 		writeJSONError(w, r, http.StatusUnauthorized, "authentication_error", "Authentication failed")
 		return
 	}
@@ -395,7 +396,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	proxyRequest, err := http.NewRequestWithContext(r.Context(), r.Method, proxyURL, r.Body)
 	if err != nil {
-		s.logger.Error("create proxy request: ", err)
+		s.logger.ErrorEvent("ocm.proxy.request.error", "create proxy request", log.Err(err))
 		writeJSONError(w, r, http.StatusInternalServerError, "api_error", "Internal server error")
 		return
 	}
@@ -443,7 +444,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		flusher, ok := w.(http.Flusher)
 		if !ok {
-			s.logger.Error("streaming not supported")
+			s.logger.ErrorEvent("ocm.streaming.unsupported", "streaming not supported")
 			return
 		}
 		buffer := make([]byte, buf.BufferSize)
@@ -452,7 +453,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if n > 0 {
 				_, writeError := w.Write(buffer[:n])
 				if writeError != nil {
-					s.logger.Error("write streaming response: ", writeError)
+					s.logger.ErrorEvent("ocm.streaming.write.error", "write streaming response", log.Err(writeError))
 					return
 				}
 				flusher.Flush()
@@ -475,7 +476,7 @@ func (s *Service) handleResponseWithTracking(writer http.ResponseWriter, respons
 	if !isStreaming {
 		bodyBytes, err := io.ReadAll(response.Body)
 		if err != nil {
-			s.logger.Error("read response body: ", err)
+			s.logger.ErrorEvent("ocm.response.read.error", "read response body", log.Err(err))
 			return
 		}
 
@@ -528,7 +529,7 @@ func (s *Service) handleResponseWithTracking(writer http.ResponseWriter, respons
 
 	flusher, ok := writer.(http.Flusher)
 	if !ok {
-		s.logger.Error("streaming not supported")
+		s.logger.ErrorEvent("ocm.streaming.unsupported", "streaming not supported")
 		return
 	}
 
@@ -605,7 +606,7 @@ func (s *Service) handleResponseWithTracking(writer http.ResponseWriter, respons
 
 			_, writeError := writer.Write(buffer[:n])
 			if writeError != nil {
-				s.logger.Error("write streaming response: ", writeError)
+				s.logger.ErrorEvent("ocm.streaming.write.error", "write streaming response", log.Err(writeError))
 				return
 			}
 			flusher.Flush()
@@ -654,7 +655,7 @@ func (s *Service) Close() error {
 		s.usageTracker.cancelPendingSave()
 		saveErr := s.usageTracker.Save()
 		if saveErr != nil {
-			s.logger.Error("save usage statistics: ", saveErr)
+			s.logger.ErrorEvent("ocm.usage.save.error", "save usage statistics", log.Err(saveErr))
 		}
 	}
 

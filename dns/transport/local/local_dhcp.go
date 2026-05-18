@@ -11,6 +11,6 @@ import (
 	N "github.com/sagernet/sing/common/network"
 )
 
-func newDHCPTransport(transportAdapter dns.TransportAdapter, ctx context.Context, dialer N.Dialer, logger log.ContextLogger) dhcpTransport {
+func newDHCPTransport(transportAdapter dns.TransportAdapter, ctx context.Context, dialer N.Dialer, logger log.StructuredLogger) dhcpTransport {
 	return dhcp.NewRawTransport(transportAdapter, ctx, dialer, logger)
 }

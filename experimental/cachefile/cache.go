@@ -3,6 +3,7 @@ package cachefile
 import (
 	"context"
 	"errors"
+	"github.com/sagernet/sing-box/log"
 	"net/netip"
 	"os"
 	"strings"
@@ -16,7 +17,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service/filemanager"
 )
 
@@ -42,7 +42,7 @@ var _ adapter.CacheFile = (*CacheFile)(nil)
 
 type CacheFile struct {
 	ctx                context.Context
-	logger             logger.Logger
+	logger             log.StructuredLogger
 	path               string
 	cacheID            []byte
 	storeFakeIP        bool
@@ -77,7 +77,7 @@ type saveDNSCacheEntry struct {
 	saving     bool
 }
 
-func New(ctx context.Context, logger logger.Logger, options option.CacheFileOptions) *CacheFile {
+func New(ctx context.Context, logger log.StructuredLogger, options option.CacheFileOptions) *CacheFile {
 	var path string
 	if options.Path != "" {
 		path = options.Path

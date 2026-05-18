@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"io"
 	"net/http"
 	"time"
@@ -20,12 +21,11 @@ import (
 	congestion_meta1 "github.com/sagernet/sing-quic/congestion_meta1"
 	congestion_meta2 "github.com/sagernet/sing-quic/congestion_meta2"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/ntp"
 )
 
 func init() {
-	naive.ConfigureHTTP3ListenerFunc = func(ctx context.Context, logger logger.Logger, listener *listener.Listener, handler http.Handler, tlsConfig tls.ServerConfig, options option.NaiveInboundOptions) (io.Closer, error) {
+	naive.ConfigureHTTP3ListenerFunc = func(ctx context.Context, logger log.StructuredLogger, listener *listener.Listener, handler http.Handler, tlsConfig tls.ServerConfig, options option.NaiveInboundOptions) (io.Closer, error) {
 		err := qtls.ConfigureHTTP3(tlsConfig)
 		if err != nil {
 			return nil, err
@@ -118,7 +118,8 @@ func init() {
 			sErr := h3Server.ServeListener(quicListener)
 			udpConn.Close()
 			if sErr != nil && !E.IsClosedOrCanceled(sErr) {
-				logger.Error("http3 server closed: ", sErr)
+				logger.ErrorEvent("protocol.message", F.ToString("http3 server closed: ", sErr))
+
 			}
 		}()
 

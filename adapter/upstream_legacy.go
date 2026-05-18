@@ -4,8 +4,9 @@ import (
 	"context"
 	"net"
 
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -145,7 +146,7 @@ func (w *legacyUpstreamContextHandlerWrapper) NewError(ctx context.Context, err 
 func NewLegacyRouteHandler(
 	metadata InboundContext,
 	router ConnectionRouter,
-	logger logger.ContextLogger,
+	logger log.StructuredLogger,
 ) LegacyUpstreamHandlerAdapter {
 	return &legacyRouteHandlerWrapper{
 		metadata: metadata,
@@ -157,7 +158,7 @@ func NewLegacyRouteHandler(
 // Deprecated: Use ConnectionRouterEx instead.
 func NewLegacyRouteContextHandler(
 	router ConnectionRouter,
-	logger logger.ContextLogger,
+	logger log.StructuredLogger,
 ) LegacyUpstreamHandlerAdapter {
 	return &legacyRouteContextHandlerWrapper{
 		router: router,
@@ -173,7 +174,7 @@ var _ LegacyUpstreamHandlerAdapter = (*legacyRouteHandlerWrapper)(nil)
 type legacyRouteHandlerWrapper struct {
 	metadata InboundContext
 	router   ConnectionRouter
-	logger   logger.ContextLogger
+	logger   log.StructuredLogger
 }
 
 // Deprecated: Use ConnectionRouterEx instead.
@@ -202,7 +203,8 @@ func (w *legacyRouteHandlerWrapper) NewPacketConnection(ctx context.Context, con
 
 // Deprecated: Use ConnectionRouterEx instead.
 func (w *legacyRouteHandlerWrapper) NewError(ctx context.Context, err error) {
-	w.logger.ErrorContext(ctx, err)
+	w.logger.ErrorEventContext(ctx, "adapter.message", F.ToString(err))
+
 }
 
 var _ LegacyUpstreamHandlerAdapter = (*legacyRouteContextHandlerWrapper)(nil)
@@ -210,7 +212,7 @@ var _ LegacyUpstreamHandlerAdapter = (*legacyRouteContextHandlerWrapper)(nil)
 // Deprecated: Use ConnectionRouterEx instead.
 type legacyRouteContextHandlerWrapper struct {
 	router ConnectionRouter
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 }
 
 // Deprecated: Use ConnectionRouterEx instead.
@@ -239,5 +241,6 @@ func (w *legacyRouteContextHandlerWrapper) NewPacketConnection(ctx context.Conte
 
 // Deprecated: Use ConnectionRouterEx instead.
 func (w *legacyRouteContextHandlerWrapper) NewError(ctx context.Context, err error) {
-	w.logger.ErrorContext(ctx, err)
+	w.logger.ErrorEventContext(ctx, "adapter.message", F.ToString(err))
+
 }

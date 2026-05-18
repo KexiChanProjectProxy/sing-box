@@ -8,6 +8,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/process"
+	"github.com/sagernet/sing-box/log"
 )
 
 type processCacheKey struct {
@@ -47,29 +48,29 @@ func (r *Router) searchProcessInfo(ctx context.Context, metadata *adapter.Inboun
 	}
 	processInfo, err := r.findProcessInfoCached(ctx, metadata.Network, metadata.Source.AddrPort(), originDestination)
 	if err != nil {
-		r.logger.InfoContext(ctx, "failed to search process: ", err)
+		r.logger.InfoEventContext(ctx, "route.process.search_failed", "failed to search process", log.Err(err))
 		return
 	}
 	metadata.ProcessInfo = processInfo
 	if processInfo.ProcessPath != "" {
 		if processInfo.UserName != "" {
-			r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath, ", user: ", processInfo.UserName)
+			r.logger.InfoEventContext(ctx, "route.process.found", "found process path", log.String("process_path", processInfo.ProcessPath), log.String("user", processInfo.UserName))
 		} else if processInfo.UserId != -1 {
-			r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath, ", user id: ", processInfo.UserId)
+			r.logger.InfoEventContext(ctx, "route.process.found", "found process path", log.String("process_path", processInfo.ProcessPath), log.Int("user_id", int(processInfo.UserId)))
 		} else {
-			r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath)
+			r.logger.InfoEventContext(ctx, "route.process.found", "found process path", log.String("process_path", processInfo.ProcessPath))
 		}
 		return
 	}
 	if len(processInfo.AndroidPackageNames) > 0 {
-		r.logger.InfoContext(ctx, "found package name: ", strings.Join(processInfo.AndroidPackageNames, ", "))
+		r.logger.InfoEventContext(ctx, "route.process.found", "found package name", log.String("package_name", strings.Join(processInfo.AndroidPackageNames, ", ")))
 		return
 	}
 	if processInfo.UserId != -1 {
 		if processInfo.UserName != "" {
-			r.logger.InfoContext(ctx, "found user: ", processInfo.UserName)
+			r.logger.InfoEventContext(ctx, "route.process.found", "found user", log.String("user", processInfo.UserName))
 		} else {
-			r.logger.InfoContext(ctx, "found user id: ", processInfo.UserId)
+			r.logger.InfoEventContext(ctx, "route.process.found", "found user id", log.Int("user_id", int(processInfo.UserId)))
 		}
 	}
 }

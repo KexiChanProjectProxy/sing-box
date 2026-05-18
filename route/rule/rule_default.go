@@ -12,7 +12,7 @@ import (
 	"github.com/sagernet/sing/service"
 )
 
-func NewRule(ctx context.Context, logger log.ContextLogger, options option.Rule, checkOutbound bool) (adapter.Rule, error) {
+func NewRule(ctx context.Context, logger log.StructuredLogger, options option.Rule, checkOutbound bool) (adapter.Rule, error) {
 	switch options.Type {
 	case "", C.RuleTypeDefault:
 		if !options.DefaultOptions.IsValid() {
@@ -56,7 +56,7 @@ type RuleItem interface {
 	String() string
 }
 
-func NewDefaultRule(ctx context.Context, logger log.ContextLogger, options option.DefaultRule) (*DefaultRule, error) {
+func NewDefaultRule(ctx context.Context, logger log.StructuredLogger, options option.DefaultRule) (*DefaultRule, error) {
 	action, err := NewRuleAction(ctx, logger, options.RuleAction)
 	if err != nil {
 		return nil, E.Cause(err, "action")
@@ -313,7 +313,7 @@ func (r *LogicalRule) matchStates(metadata *adapter.InboundContext) ruleMatchSta
 	return r.abstractLogicalRule.matchStates(metadata)
 }
 
-func NewLogicalRule(ctx context.Context, logger log.ContextLogger, options option.LogicalRule) (*LogicalRule, error) {
+func NewLogicalRule(ctx context.Context, logger log.StructuredLogger, options option.LogicalRule) (*LogicalRule, error) {
 	action, err := NewRuleAction(ctx, logger, options.RuleAction)
 	if err != nil {
 		return nil, E.Cause(err, "action")

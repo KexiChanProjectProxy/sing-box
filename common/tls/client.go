@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/sagernet/sing-box/log"
 	"net"
 	"os"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	aTLS "github.com/sagernet/sing/common/tls"
@@ -45,7 +45,7 @@ func applyTLSSpoof(conn net.Conn, spoof string, method tlsspoof.Method) (net.Con
 	return tlsspoof.NewConn(conn, method, spoof)
 }
 
-func NewDialerFromOptions(ctx context.Context, logger logger.ContextLogger, dialer N.Dialer, serverAddress string, options option.OutboundTLSOptions) (N.Dialer, error) {
+func NewDialerFromOptions(ctx context.Context, logger log.StructuredLogger, dialer N.Dialer, serverAddress string, options option.OutboundTLSOptions) (N.Dialer, error) {
 	if !options.Enabled {
 		return dialer, nil
 	}
@@ -61,7 +61,7 @@ func NewDialerFromOptions(ctx context.Context, logger logger.ContextLogger, dial
 	return NewDialer(dialer, config), nil
 }
 
-func NewClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
+func NewClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
 	return NewClientWithOptions(ClientOptions{
 		Context:       ctx,
 		Logger:        logger,
@@ -72,7 +72,7 @@ func NewClient(ctx context.Context, logger logger.ContextLogger, serverAddress s
 
 type ClientOptions struct {
 	Context              context.Context
-	Logger               logger.ContextLogger
+	Logger               log.StructuredLogger
 	ServerAddress        string
 	Options              option.OutboundTLSOptions
 	AllowEmptyServerName bool

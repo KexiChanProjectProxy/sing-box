@@ -6,11 +6,11 @@ import (
 	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing/common/logger"
+	"github.com/sagernet/sing-box/log"
 )
 
 type platformNeighborResolver struct {
-	logger        logger.ContextLogger
+	logger        log.StructuredLogger
 	platform      adapter.PlatformInterface
 	access        sync.RWMutex
 	ipToMAC       map[netip.Addr]net.HardwareAddr
@@ -18,7 +18,7 @@ type platformNeighborResolver struct {
 	macToHostname map[string]string
 }
 
-func newPlatformNeighborResolver(resolverLogger logger.ContextLogger, platform adapter.PlatformInterface) adapter.NeighborResolver {
+func newPlatformNeighborResolver(resolverLogger log.StructuredLogger, platform adapter.PlatformInterface) adapter.NeighborResolver {
 	return &platformNeighborResolver{
 		logger:        resolverLogger,
 		platform:      platform,
@@ -86,5 +86,5 @@ func (r *platformNeighborResolver) UpdateNeighborTable(entries []adapter.Neighbo
 	r.ipToHostname = ipToHostname
 	r.macToHostname = macToHostname
 	r.access.Unlock()
-	r.logger.Info("updated neighbor table: ", len(entries), " entries")
+	r.logger.InfoEvent("route.neighbor.updated", "updated neighbor table", log.Int("entries", len(entries)))
 }

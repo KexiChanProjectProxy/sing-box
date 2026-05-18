@@ -11,9 +11,9 @@ import (
 
 	"github.com/sagernet/fswatch"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 
 	"golang.org/x/net/route"
 	"golang.org/x/sys/unix"
@@ -25,7 +25,7 @@ var defaultLeaseFiles = []string{
 }
 
 type neighborResolver struct {
-	logger          logger.ContextLogger
+	logger          log.StructuredLogger
 	leaseFiles      []string
 	access          sync.RWMutex
 	neighborIPToMAC map[netip.Addr]net.HardwareAddr
@@ -36,7 +36,7 @@ type neighborResolver struct {
 	done            chan struct{}
 }
 
-func newNeighborResolver(resolverLogger logger.ContextLogger, leaseFiles []string) (adapter.NeighborResolver, error) {
+func newNeighborResolver(resolverLogger log.StructuredLogger, leaseFiles []string) (adapter.NeighborResolver, error) {
 	if len(leaseFiles) == 0 {
 		for _, path := range defaultLeaseFiles {
 			info, err := os.Stat(path)
@@ -59,7 +59,7 @@ func newNeighborResolver(resolverLogger logger.ContextLogger, leaseFiles []strin
 func (r *neighborResolver) Start() error {
 	err := r.loadNeighborTable()
 	if err != nil {
-		r.logger.Warn(E.Cause(err, "load neighbor table"))
+		r.logger.WarnEvent("route.neighbor.error", "load neighbor table", log.Err(err))
 	}
 	r.doReloadLeaseFiles()
 	go r.subscribeNeighborUpdates()
@@ -72,12 +72,12 @@ func (r *neighborResolver) Start() error {
 			},
 		})
 		if err != nil {
-			r.logger.Warn(E.Cause(err, "create lease file watcher"))
+			r.logger.WarnEvent("route.neighbor.error", "create lease file watcher", log.Err(err))
 		} else {
 			r.watcher = watcher
 			err = watcher.Start()
 			if err != nil {
-				r.logger.Warn(E.Cause(err, "start lease file watcher"))
+				r.logger.WarnEvent("route.neighbor.error", "start lease file watcher", log.Err(err))
 			}
 		}
 	}
@@ -155,13 +155,13 @@ func (r *neighborResolver) loadNeighborTable() error {
 func (r *neighborResolver) subscribeNeighborUpdates() {
 	routeSocket, err := unix.Socket(unix.AF_ROUTE, unix.SOCK_RAW, 0)
 	if err != nil {
-		r.logger.Warn(E.Cause(err, "subscribe neighbor updates"))
+		r.logger.WarnEvent("route.neighbor.error", "subscribe neighbor updates", log.Err(err))
 		return
 	}
 	err = unix.SetNonblock(routeSocket, true)
 	if err != nil {
 		unix.Close(routeSocket)
-		r.logger.Warn(E.Cause(err, "set route socket nonblock"))
+		r.logger.WarnEvent("route.neighbor.error", "set route socket nonblock", log.Err(err))
 		return
 	}
 	routeSocketFile := os.NewFile(uintptr(routeSocket), "route")
@@ -176,7 +176,7 @@ func (r *neighborResolver) subscribeNeighborUpdates() {
 		}
 		err = setReadDeadline(routeSocketFile, 3*time.Second)
 		if err != nil {
-			r.logger.Warn(E.Cause(err, "set route socket read deadline"))
+			r.logger.WarnEvent("route.neighbor.error", "set route socket read deadline", log.Err(err))
 			return
 		}
 		n, err := routeSocketFile.Read(buffer.FreeBytes())
@@ -189,7 +189,7 @@ func (r *neighborResolver) subscribeNeighborUpdates() {
 				return
 			default:
 			}
-			r.logger.Warn(E.Cause(err, "receive neighbor update"))
+			r.logger.WarnEvent("route.neighbor.error", "receive neighbor update", log.Err(err))
 			continue
 		}
 		messages, err := route.ParseRIB(route.RIBTypeRoute, buffer.FreeBytes()[:n])

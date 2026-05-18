@@ -3,7 +3,7 @@ package clashapi
 import (
 	"net/http"
 
-	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -22,15 +22,15 @@ func updateExternalUI(server *Server) func(w http.ResponseWriter, r *http.Reques
 			render.JSON(w, r, newError("external UI not enabled"))
 			return
 		}
-		server.logger.Info("upgrading external UI")
+		server.logger.InfoEvent("clashapi.ui.upgrade", "upgrading external UI")
 		err := server.downloadExternalUI()
 		if err != nil {
-			server.logger.Error(E.Cause(err, "upgrade external ui"))
+			server.logger.ErrorEvent("clashapi.ui.upgrade.error", "upgrade external ui", log.Err(err))
 			render.Status(r, http.StatusInternalServerError)
 			render.JSON(w, r, newError(err.Error()))
 			return
 		}
-		server.logger.Info("updated external UI")
+		server.logger.InfoEvent("clashapi.ui.updated", "updated external UI")
 		render.JSON(w, r, render.M{"status": "ok"})
 	}
 }

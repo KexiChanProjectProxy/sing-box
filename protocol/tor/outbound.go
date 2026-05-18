@@ -17,7 +17,6 @@ import (
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/rw"
@@ -34,7 +33,7 @@ func RegisterOutbound(registry *outbound.Registry) {
 type Outbound struct {
 	outbound.Adapter
 	ctx         context.Context
-	logger      logger.ContextLogger
+	logger      log.StructuredLogger
 	proxy       *proxybridge.Bridge
 	startConf   *tor.StartConf
 	options     map[string]string
@@ -43,7 +42,7 @@ type Outbound struct {
 	socksClient *socks.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TorOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.TorOutboundOptions) (adapter.Outbound, error) {
 	var startConf tor.StartConf
 	startConf.DataDir = os.ExpandEnv(options.DataDirectory)
 	startConf.TempDataDirBase = os.TempDir()
@@ -125,9 +124,12 @@ func (t *Outbound) start() error {
 	proxyPort := "127.0.0.1:" + F.ToString(t.proxy.Port())
 	proxyUsername := t.proxy.Username()
 	proxyPassword := t.proxy.Password()
-	t.logger.Trace("created upstream proxy at ", proxyPort)
-	t.logger.Trace("upstream proxy username ", proxyUsername)
-	t.logger.Trace("upstream proxy password ", proxyPassword)
+	t.logger.TraceEvent("protocol.message", F.ToString("created upstream proxy at ", proxyPort))
+
+	t.logger.TraceEvent("protocol.message", F.ToString("upstream proxy username ", proxyUsername))
+
+	t.logger.TraceEvent("protocol.message", F.ToString("upstream proxy password ", proxyPassword))
+
 	confOptions := []*control.KeyVal{
 		control.NewKeyVal("Socks5Proxy", proxyPort),
 		control.NewKeyVal("Socks5ProxyUsername", proxyUsername),
@@ -162,7 +164,8 @@ func (t *Outbound) start() error {
 	if len(info) != 1 || info[0].Key != "net/listeners/socks" {
 		return E.New("get socks proxy address")
 	}
-	t.logger.Trace("obtained tor socks5 address ", info[0].Val)
+	t.logger.TraceEvent("protocol.message", F.ToString("obtained tor socks5 address ", info[0].Val))
+
 	// TODO: set password for tor socks5 server if supported
 	t.socksClient = socks.NewClient(N.SystemDialer, M.ParseSocksaddr(info[0].Val), socks.Version5, "", "")
 	return nil
@@ -175,17 +178,22 @@ func (t *Outbound) recvLoop() {
 			event.Raw = strings.ToLower(event.Raw)
 			switch event.Severity {
 			case control.EventCodeLogDebug, control.EventCodeLogInfo:
-				t.logger.Trace(event.Raw)
+				t.logger.TraceEvent("protocol.message", F.ToString(event.Raw))
+
 			case control.EventCodeLogNotice:
 				if strings.Contains(event.Raw, "disablenetwork") || strings.Contains(event.Raw, "socks listener") {
-					t.logger.Trace(event.Raw)
+					t.logger.TraceEvent("protocol.message", F.ToString(event.Raw))
+
 					continue
 				}
-				t.logger.Info(event.Raw)
+				t.logger.InfoEvent("protocol.message", F.ToString(event.Raw))
+
 			case control.EventCodeLogWarn:
-				t.logger.Warn(event.Raw)
+				t.logger.WarnEvent("protocol.message", F.ToString(event.Raw))
+
 			case control.EventCodeLogErr:
-				t.logger.Error(event.Raw)
+				t.logger.ErrorEvent("protocol.message", F.ToString(event.Raw))
+
 			}
 		}
 	}
@@ -204,7 +212,8 @@ func (t *Outbound) Close() error {
 }
 
 func (t *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	t.logger.InfoContext(ctx, "outbound connection to ", destination)
+	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	return t.socksClient.DialContext(ctx, network, destination)
 }
 

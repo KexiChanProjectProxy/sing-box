@@ -27,7 +27,7 @@ type Outbound struct {
 	client *shadowtls.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ShadowTLSOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.ShadowTLSOutboundOptions) (adapter.Outbound, error) {
 	outbound := &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeShadowTLS, tag, []string{N.NetworkTCP}, options.DialerOptions),
 	}

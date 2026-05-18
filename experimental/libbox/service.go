@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"github.com/sagernet/sing-box/log"
 	"net"
 	"net/netip"
 	"runtime"
@@ -19,7 +20,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 )
 
 var _ adapter.PlatformInterface = (*platformInterfaceWrapper)(nil)
@@ -103,7 +103,7 @@ func (w *platformInterfaceWrapper) UsePlatformDefaultInterfaceMonitor() bool {
 	return true
 }
 
-func (w *platformInterfaceWrapper) CreateDefaultInterfaceMonitor(logger logger.Logger) tun.DefaultInterfaceMonitor {
+func (w *platformInterfaceWrapper) CreateDefaultInterfaceMonitor(logger log.StructuredLogger) tun.DefaultInterfaceMonitor {
 	return &platformDefaultInterfaceMonitor{
 		platformInterfaceWrapper: w,
 		logger:                   logger,

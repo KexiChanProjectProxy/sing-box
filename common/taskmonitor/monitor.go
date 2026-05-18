@@ -3,17 +3,17 @@ package taskmonitor
 import (
 	"time"
 
+	"github.com/sagernet/sing-box/log"
 	F "github.com/sagernet/sing/common/format"
-	"github.com/sagernet/sing/common/logger"
 )
 
 type Monitor struct {
-	logger  logger.Logger
+	logger  log.StructuredLogger
 	timeout time.Duration
 	timer   *time.Timer
 }
 
-func New(logger logger.Logger, timeout time.Duration) *Monitor {
+func New(logger log.StructuredLogger, timeout time.Duration) *Monitor {
 	return &Monitor{
 		logger:  logger,
 		timeout: timeout,
@@ -22,7 +22,8 @@ func New(logger logger.Logger, timeout time.Duration) *Monitor {
 
 func (m *Monitor) Start(taskName ...any) {
 	m.timer = time.AfterFunc(m.timeout, func() {
-		m.logger.Warn(F.ToString(taskName...), " take too much time to finish!")
+		m.logger.WarnEvent("common.taskmonitor.message", F.ToString(F.ToString(taskName...), " take too much time to finish!"))
+
 	})
 }
 

@@ -18,7 +18,6 @@ import (
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/x/list"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/filemanager"
@@ -30,7 +29,7 @@ func baseContext(platformInterface PlatformInterface) context.Context {
 	dnsRegistry := include.DNSTransportRegistry()
 	if platformInterface != nil {
 		if localTransport := platformInterface.LocalDNSTransport(); localTransport != nil {
-			dns.RegisterTransport[option.LocalDNSServerOptions](dnsRegistry, C.DNSTypeLocal, func(ctx context.Context, logger log.ContextLogger, tag string, options option.LocalDNSServerOptions) (adapter.DNSTransport, error) {
+			dns.RegisterTransport[option.LocalDNSServerOptions](dnsRegistry, C.DNSTypeLocal, func(ctx context.Context, logger log.StructuredLogger, tag string, options option.LocalDNSServerOptions) (adapter.DNSTransport, error) {
 				return newPlatformTransport(localTransport, tag, options), nil
 			})
 		}
@@ -96,7 +95,7 @@ func (s *platformInterfaceStub) UsePlatformDefaultInterfaceMonitor() bool {
 	return true
 }
 
-func (s *platformInterfaceStub) CreateDefaultInterfaceMonitor(logger logger.Logger) tun.DefaultInterfaceMonitor {
+func (s *platformInterfaceStub) CreateDefaultInterfaceMonitor(logger log.StructuredLogger) tun.DefaultInterfaceMonitor {
 	return (*interfaceMonitorStub)(nil)
 }
 

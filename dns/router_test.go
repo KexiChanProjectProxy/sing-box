@@ -65,7 +65,7 @@ func (m *fakeDNSTransportManager) FakeIP() adapter.FakeIPTransport {
 	return nil
 }
 func (m *fakeDNSTransportManager) Remove(string) error { return nil }
-func (m *fakeDNSTransportManager) Create(context.Context, log.ContextLogger, string, string, any) error {
+func (m *fakeDNSTransportManager) Create(context.Context, log.StructuredLogger, string, string, any) error {
 	return E.New("unsupported")
 }
 
@@ -287,7 +287,7 @@ func newTestRouterWithContext(t *testing.T, ctx context.Context, rules []option.
 	return newTestRouterWithContextAndLogger(t, ctx, rules, transportManager, client, log.NewNOPFactory().NewLogger("dns"))
 }
 
-func newTestRouterWithContextAndLogger(t *testing.T, ctx context.Context, rules []option.DNSRule, transportManager *fakeDNSTransportManager, client *fakeDNSClient, dnsLogger log.ContextLogger) *Router {
+func newTestRouterWithContextAndLogger(t *testing.T, ctx context.Context, rules []option.DNSRule, transportManager *fakeDNSTransportManager, client *fakeDNSClient, dnsLogger log.StructuredLogger) *Router {
 	t.Helper()
 	router := &Router{
 		ctx:                   ctx,

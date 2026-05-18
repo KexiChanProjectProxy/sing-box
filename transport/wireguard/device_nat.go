@@ -2,6 +2,7 @@ package wireguard
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"sync/atomic"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing-tun/ping"
 	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/logger"
 )
 
 var _ Device = (*natDeviceWrapper)(nil)
@@ -18,13 +18,13 @@ var _ Device = (*natDeviceWrapper)(nil)
 type natDeviceWrapper struct {
 	Device
 	ctx            context.Context
-	logger         logger.ContextLogger
+	logger         log.StructuredLogger
 	packetOutbound chan *buf.Buffer
 	rewriter       *ping.SourceRewriter
 	buffer         [][]byte
 }
 
-func NewNATDevice(ctx context.Context, logger logger.ContextLogger, upstream Device) NatDevice {
+func NewNATDevice(ctx context.Context, logger log.StructuredLogger, upstream Device) NatDevice {
 	wrapper := &natDeviceWrapper{
 		Device:         upstream,
 		ctx:            ctx,
@@ -74,7 +74,8 @@ func (d *natDeviceWrapper) CreateDestination(metadata adapter.InboundContext, ro
 		Destination: metadata.Destination.Addr,
 	}
 	d.rewriter.CreateSession(session, routeContext)
-	d.logger.InfoContext(ctx, "linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString())
+	d.logger.InfoEventContext(ctx, "transport.message", F.ToString("linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString()))
+
 	return &natDestination{device: d, session: session}, nil
 }
 

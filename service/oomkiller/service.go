@@ -26,7 +26,7 @@ func RegisterService(registry *boxService.Registry) {
 type Service struct {
 	boxService.Adapter
 	ctx            context.Context
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 	network        adapter.NetworkManager
 	timerConfig    timerConfig
 	adaptiveTimer  *adaptiveTimer
@@ -35,7 +35,7 @@ type Service struct {
 	draftCancelled atomic.Bool
 }
 
-func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.OOMKillerServiceOptions) (adapter.Service, error) {
+func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.OOMKillerServiceOptions) (adapter.Service, error) {
 	memoryLimit, mode := resolvePolicyMode(ctx, options)
 	config, err := buildTimerConfig(options, memoryLimit, mode, options.KillerDisabled)
 	if err != nil {
@@ -80,8 +80,8 @@ func (s *Service) writeOOMReport(memoryUsage uint64) {
 	}
 	err := reporter.WriteReport(memoryUsage)
 	if err != nil {
-		s.logger.Warn("failed to write OOM report: ", err)
+		s.logger.WarnEvent("oom.report.write.error", "failed to write OOM report", log.Err(err))
 	} else {
-		s.logger.Info("OOM report saved")
+		s.logger.InfoEvent("oom.report.saved", "OOM report saved")
 	}
 }

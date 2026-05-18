@@ -14,6 +14,7 @@ import (
 	sBufio "github.com/sagernet/sing/common/bufio"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -57,7 +58,8 @@ func (l *Listener) ListenUDP() (net.PacketConn, error) {
 	}
 	l.udpConn = udpConn.(*net.UDPConn)
 	l.udpAddr = bindAddr
-	l.logger.Info("udp server started at ", udpConn.LocalAddr())
+	l.logger.InfoEvent("common.listener.message", F.ToString("udp server started at ", udpConn.LocalAddr()))
+
 	return udpConn, err
 }
 
@@ -134,7 +136,8 @@ func (l *Listener) loopUDPIn() {
 					return
 				}
 				l.udpConn.Close()
-				l.logger.Error("udp listener closed: ", err)
+				l.logger.ErrorEvent("common.listener.message", F.ToString("udp listener closed: ", err))
+
 				return
 			}
 			buffer.Truncate(n)
@@ -156,7 +159,8 @@ func (l *Listener) loopUDPIn() {
 					return
 				}
 				l.udpConn.Close()
-				l.logger.Error("udp listener closed: ", err)
+				l.logger.ErrorEvent("common.listener.message", F.ToString("udp listener closed: ", err))
+
 				return
 			}
 			buffer.Truncate(n)
@@ -178,7 +182,8 @@ func (l *Listener) loopUDPInBatch(handler adapter.PacketBatchHandler, readWaiter
 				return
 			}
 			l.udpConn.Close()
-			l.logger.Error("udp listener closed: ", err)
+			l.logger.ErrorEvent("common.listener.message", F.ToString("udp listener closed: ", err))
+
 			return
 		}
 		handler.NewPacketBatch(buffers, sources)
@@ -223,7 +228,8 @@ func (l *Listener) loopUDPOut() {
 			if l.shutdown.Load() && E.IsClosed(err) {
 				return
 			}
-			l.logger.Error("udp listener write back: ", err)
+			l.logger.ErrorEvent("common.listener.message", F.ToString("udp listener write back: ", err))
+
 		}
 	}
 }
@@ -255,7 +261,8 @@ func (w *packetWriter) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) 
 		if w.shutdown.Load() {
 			return os.ErrClosed
 		}
-		w.logger.Trace("dropped packet to ", destination)
+		w.logger.TraceEvent("common.listener.message", F.ToString("dropped packet to ", destination))
+
 		return nil
 	}
 }
@@ -278,7 +285,8 @@ func (w *packetWriter) WritePacketBatch(buffers []*buf.Buffer, destinations []M.
 			if w.shutdown.Load() {
 				return os.ErrClosed
 			}
-			w.logger.Trace("dropped packet batch to ", destinations[index])
+			w.logger.TraceEvent("common.listener.message", F.ToString("dropped packet batch to ", destinations[index]))
+
 			return nil
 		}
 	}

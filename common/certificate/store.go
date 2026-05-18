@@ -13,9 +13,10 @@ import (
 	"github.com/sagernet/fswatch"
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/service"
 )
 
@@ -34,7 +35,7 @@ type Store struct {
 	platform storePlatform
 }
 
-func NewStore(ctx context.Context, logger logger.Logger, options option.CertificateOptions) (*Store, error) {
+func NewStore(ctx context.Context, logger log.StructuredLogger, options option.CertificateOptions) (*Store, error) {
 	storeType := options.Store
 	if storeType == "" {
 		storeType = C.CertificateStoreSystem
@@ -85,7 +86,8 @@ func NewStore(ctx context.Context, logger logger.Logger, options option.Certific
 			Callback: func(_ string) {
 				err := store.update()
 				if err != nil {
-					logger.Error(E.Cause(err, "reload certificates"))
+					logger.ErrorEvent("common.certificate.message", F.ToString(E.Cause(err, "reload certificates")))
+
 				}
 			},
 		})

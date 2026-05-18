@@ -21,7 +21,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/service"
 
@@ -40,7 +39,7 @@ var (
 type Transport struct {
 	dns.TransportAdapter
 	ctx                    context.Context
-	logger                 logger.ContextLogger
+	logger                 log.StructuredLogger
 	serviceTag             string
 	acceptDefaultResolvers bool
 	ndots                  int
@@ -65,7 +64,7 @@ func (c *LinkServers) ServerOffset(rotate bool) uint32 {
 	return 0
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.ResolvedDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.ResolvedDNSServerOptions) (adapter.DNSTransport, error) {
 	return &Transport{
 		TransportAdapter:       dns.NewTransportAdapter(C.DNSTypeDHCP, tag, nil),
 		ctx:                    ctx,

@@ -9,7 +9,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service"
 
 	"github.com/miekg/dns"
@@ -65,13 +64,13 @@ func DNSQueryOptionsFrom(ctx context.Context, options *option.DomainResolveOptio
 type RDRCStore interface {
 	LoadRDRC(transportName string, qName string, qType uint16) (rejected bool)
 	SaveRDRC(transportName string, qName string, qType uint16) error
-	SaveRDRCAsync(transportName string, qName string, qType uint16, logger logger.Logger)
+	SaveRDRCAsync(transportName string, qName string, qType uint16, logger log.StructuredLogger)
 }
 
 type DNSCacheStore interface {
 	LoadDNSCache(transportName string, qName string, qType uint16) (rawMessage []byte, expireAt time.Time, loaded bool)
 	SaveDNSCache(transportName string, qName string, qType uint16, rawMessage []byte, expireAt time.Time) error
-	SaveDNSCacheAsync(transportName string, qName string, qType uint16, rawMessage []byte, expireAt time.Time, logger logger.Logger)
+	SaveDNSCacheAsync(transportName string, qName string, qType uint16, rawMessage []byte, expireAt time.Time, logger log.StructuredLogger)
 	ClearDNSCache() error
 }
 
@@ -93,7 +92,7 @@ type DNSTransportWithPreferredDomain interface {
 
 type DNSTransportRegistry interface {
 	option.DNSTransportOptionsRegistry
-	CreateDNSTransport(ctx context.Context, logger log.ContextLogger, tag string, transportType string, options any) (DNSTransport, error)
+	CreateDNSTransport(ctx context.Context, logger log.StructuredLogger, tag string, transportType string, options any) (DNSTransport, error)
 }
 
 type DNSTransportManager interface {
@@ -103,5 +102,5 @@ type DNSTransportManager interface {
 	Default() DNSTransport
 	FakeIP() FakeIPTransport
 	Remove(tag string) error
-	Create(ctx context.Context, logger log.ContextLogger, tag string, outboundType string, options any) error
+	Create(ctx context.Context, logger log.StructuredLogger, tag string, outboundType string, options any) error
 }

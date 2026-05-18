@@ -12,8 +12,8 @@ import (
 
 	"github.com/sagernet/fswatch"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 
 	"github.com/jsimonetti/rtnetlink"
 	"github.com/mdlayher/netlink"
@@ -29,7 +29,7 @@ var defaultLeaseFiles = []string{
 }
 
 type neighborResolver struct {
-	logger          logger.ContextLogger
+	logger          log.StructuredLogger
 	leaseFiles      []string
 	access          sync.RWMutex
 	neighborIPToMAC map[netip.Addr]net.HardwareAddr
@@ -40,7 +40,7 @@ type neighborResolver struct {
 	done            chan struct{}
 }
 
-func newNeighborResolver(resolverLogger logger.ContextLogger, leaseFiles []string) (adapter.NeighborResolver, error) {
+func newNeighborResolver(resolverLogger log.StructuredLogger, leaseFiles []string) (adapter.NeighborResolver, error) {
 	if len(leaseFiles) == 0 {
 		for _, path := range defaultLeaseFiles {
 			info, err := os.Stat(path)
@@ -63,7 +63,7 @@ func newNeighborResolver(resolverLogger logger.ContextLogger, leaseFiles []strin
 func (r *neighborResolver) Start() error {
 	err := r.loadNeighborTable()
 	if err != nil {
-		r.logger.Warn(E.Cause(err, "load neighbor table"))
+		r.logger.WarnEvent("route.neighbor.error", "load neighbor table", log.Err(err))
 	}
 	r.doReloadLeaseFiles()
 	go r.subscribeNeighborUpdates()
@@ -76,12 +76,12 @@ func (r *neighborResolver) Start() error {
 			},
 		})
 		if err != nil {
-			r.logger.Warn(E.Cause(err, "create lease file watcher"))
+			r.logger.WarnEvent("route.neighbor.error", "create lease file watcher", log.Err(err))
 		} else {
 			r.watcher = watcher
 			err = watcher.Start()
 			if err != nil {
-				r.logger.Warn(E.Cause(err, "start lease file watcher"))
+				r.logger.WarnEvent("route.neighbor.error", "start lease file watcher", log.Err(err))
 			}
 		}
 	}
@@ -176,7 +176,7 @@ func (r *neighborResolver) subscribeNeighborUpdates() {
 		Groups: 1 << (unix.RTNLGRP_NEIGH - 1),
 	})
 	if err != nil {
-		r.logger.Warn(E.Cause(err, "subscribe neighbor updates"))
+		r.logger.WarnEvent("route.neighbor.error", "subscribe neighbor updates", log.Err(err))
 		return
 	}
 	defer connection.Close()
@@ -188,7 +188,7 @@ func (r *neighborResolver) subscribeNeighborUpdates() {
 		}
 		err = connection.SetReadDeadline(time.Now().Add(3 * time.Second))
 		if err != nil {
-			r.logger.Warn(E.Cause(err, "set netlink read deadline"))
+			r.logger.WarnEvent("route.neighbor.error", "set netlink read deadline", log.Err(err))
 			return
 		}
 		messages, err := connection.Receive()
@@ -201,7 +201,7 @@ func (r *neighborResolver) subscribeNeighborUpdates() {
 				return
 			default:
 			}
-			r.logger.Warn(E.Cause(err, "receive neighbor update"))
+			r.logger.WarnEvent("route.neighbor.error", "receive neighbor update", log.Err(err))
 			continue
 		}
 		for _, message := range messages {

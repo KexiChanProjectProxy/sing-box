@@ -13,7 +13,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio/deadline"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -30,7 +29,7 @@ func RegisterTLS(registry *dns.TransportRegistry) {
 
 type TLSTransport struct {
 	dns.TransportAdapter
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 
 	dialer      tls.Dialer
 	serverAddr  M.Socksaddr
@@ -44,7 +43,7 @@ type tlsDNSConn struct {
 	needDeadlineClose bool
 }
 
-func NewTLS(ctx context.Context, logger log.ContextLogger, tag string, options option.RemoteTLSDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTLS(ctx context.Context, logger log.StructuredLogger, tag string, options option.RemoteTLSDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewRemoteDialer(ctx, options.RemoteDNSServerOptions)
 	if err != nil {
 		return nil, err
@@ -65,7 +64,7 @@ func NewTLS(ctx context.Context, logger log.ContextLogger, tag string, options o
 	return NewTLSRaw(logger, dns.NewTransportAdapterWithRemoteOptions(C.DNSTypeTLS, tag, options.RemoteDNSServerOptions), transportDialer, serverAddr, tlsConfig), nil
 }
 
-func NewTLSRaw(logger logger.ContextLogger, adapter dns.TransportAdapter, dialer N.Dialer, serverAddr M.Socksaddr, tlsConfig tls.Config) *TLSTransport {
+func NewTLSRaw(logger log.StructuredLogger, adapter dns.TransportAdapter, dialer N.Dialer, serverAddr M.Socksaddr, tlsConfig tls.Config) *TLSTransport {
 	return &TLSTransport{
 		TransportAdapter: adapter,
 		logger:           logger,
@@ -122,7 +121,7 @@ func (t *TLSTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.M
 			return response, nil
 		}
 		lastErr = err
-		t.logger.DebugContext(ctx, "discarded pooled connection: ", err)
+		t.logger.DebugEventContext(ctx, "dns.transport.connection.discarded", "discarded pooled connection", log.Err(err))
 		t.connections.Release(conn, false)
 		if created {
 			return nil, err

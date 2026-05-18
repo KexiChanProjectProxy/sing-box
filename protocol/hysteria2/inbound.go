@@ -2,6 +2,7 @@ package hysteria2
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -35,14 +36,14 @@ func RegisterInbound(registry *inbound.Registry) {
 type Inbound struct {
 	inbound.Adapter
 	router       adapter.Router
-	logger       log.ContextLogger
+	logger       log.StructuredLogger
 	listener     *listener.Listener
 	tlsConfig    tls.ServerConfig
 	service      *hysteria2.Service[int]
 	userNameList []string
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.Hysteria2InboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.Hysteria2InboundOptions) (adapter.Inbound, error) {
 	options.UDPFragmentDefault = true
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, C.ErrTLSRequired
@@ -199,13 +200,16 @@ func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, source M.S
 	metadata.OriginDestination = h.listener.UDPAddr()
 	metadata.Source = source
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", metadata.Source))
+
 	userID, _ := auth.UserFromContext[int](ctx)
 	if userName := h.userNameList[userID]; userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", metadata.Destination))
+
 	} else {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	}
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -221,13 +225,16 @@ func (h *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	metadata.OriginDestination = h.listener.UDPAddr()
 	metadata.Source = source
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "inbound packet connection from ", metadata.Source)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", metadata.Source))
+
 	userID, _ := auth.UserFromContext[int](ctx)
 	if userName := h.userNameList[userID]; userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound packet connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound packet connection to ", metadata.Destination))
+
 	} else {
-		h.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
+
 	}
 	h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }

@@ -11,7 +11,6 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -24,10 +23,10 @@ func RegisterOutbound(registry *outbound.Registry) {
 type Outbound struct {
 	outbound.Adapter
 	router adapter.DNSRouter
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.StubOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.StubOptions) (adapter.Outbound, error) {
 	return &Outbound{
 		Adapter: outbound.NewAdapter(C.TypeDNS, tag, []string{N.NetworkTCP, N.NetworkUDP}, nil),
 		router:  service.FromContext[adapter.DNSRouter](ctx),

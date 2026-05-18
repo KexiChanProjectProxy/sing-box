@@ -3,6 +3,7 @@ package naive
 import (
 	"context"
 	"errors"
+	F "github.com/sagernet/sing/common/format"
 	"io"
 	"net"
 	"net/http"
@@ -19,7 +20,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	aTLS "github.com/sagernet/sing/common/tls"
@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	ConfigureHTTP3ListenerFunc func(ctx context.Context, logger logger.Logger, listener *listener.Listener, handler http.Handler, tlsConfig tls.ServerConfig, options option.NaiveInboundOptions) (io.Closer, error)
+	ConfigureHTTP3ListenerFunc func(ctx context.Context, logger log.StructuredLogger, listener *listener.Listener, handler http.Handler, tlsConfig tls.ServerConfig, options option.NaiveInboundOptions) (io.Closer, error)
 	WrapError                  func(error) error
 )
 
@@ -42,7 +42,7 @@ type Inbound struct {
 	inbound.Adapter
 	ctx              context.Context
 	router           adapter.ConnectionRouterEx
-	logger           logger.ContextLogger
+	logger           log.StructuredLogger
 	options          option.NaiveInboundOptions
 	listener         *listener.Listener
 	network          []string
@@ -53,7 +53,7 @@ type Inbound struct {
 	h3Server         io.Closer
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.NaiveInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.NaiveInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeNaive, tag),
 		ctx:     ctx,
@@ -119,7 +119,8 @@ func (n *Inbound) Start(stage adapter.StartStage) error {
 			}
 			sErr := n.httpServer.Serve(listener)
 			if sErr != nil && !errors.Is(sErr, http.ErrServerClosed) {
-				n.logger.Error("http server serve error: ", sErr)
+				n.logger.ErrorEvent("protocol.message", F.ToString("http server serve error: ", sErr))
+
 			}
 		}()
 	}
@@ -129,7 +130,8 @@ func (n *Inbound) Start(stage adapter.StartStage) error {
 		if err == nil {
 			n.h3Server = http3Server
 		} else if len(n.network) > 1 {
-			n.logger.Warn(E.Cause(err, "naive http3 disabled"))
+			n.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "naive http3 disabled")))
+
 		} else {
 			return err
 		}
@@ -200,11 +202,15 @@ func (n *Inbound) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net.Conn, userName string, source M.Socksaddr, destination M.Socksaddr) {
 	if userName != "" {
-		n.logger.InfoContext(ctx, "[", userName, "] inbound connection from ", source)
-		n.logger.InfoContext(ctx, "[", userName, "] inbound connection to ", destination)
+		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection from ", source))
+
+		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", destination))
+
 	} else {
-		n.logger.InfoContext(ctx, "inbound connection from ", source)
-		n.logger.InfoContext(ctx, "inbound connection to ", destination)
+		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", source))
+
+		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", destination))
+
 	}
 	var metadata adapter.InboundContext
 	metadata.Inbound = n.Tag()
@@ -230,7 +236,8 @@ func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net
 }
 
 func (n *Inbound) badRequest(ctx context.Context, request *http.Request, err error) {
-	n.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", request.RemoteAddr))
+	n.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", request.RemoteAddr)))
+
 }
 
 func rejectHTTP(writer http.ResponseWriter, statusCode int) {

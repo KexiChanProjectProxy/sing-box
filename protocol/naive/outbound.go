@@ -5,6 +5,7 @@ package naive
 import (
 	"context"
 	"encoding/pem"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 	"strings"
@@ -36,12 +37,12 @@ func RegisterOutbound(registry *outbound.Registry) {
 type Outbound struct {
 	outbound.Adapter
 	ctx       context.Context
-	logger    logger.ContextLogger
+	logger    log.StructuredLogger
 	client    *cronet.NaiveClient
 	uotClient *uot.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.NaiveOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.NaiveOutboundOptions) (adapter.Outbound, error) {
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, C.ErrTLSRequired
 	}
@@ -129,7 +130,8 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		dnsResolver = func(dnsContext context.Context, request *mDNS.Msg) *mDNS.Msg {
 			response, err := dnsRouter.Exchange(dnsContext, request, outboundDialer.(dialer.ResolveDialer).QueryOptions())
 			if err != nil {
-				logger.Error("DNS exchange failed: ", err)
+				logger.ErrorEvent("protocol.message", F.ToString("DNS exchange failed: ", err))
+
 				return dns.FixedResponseStatus(request, mDNS.RcodeServerFailure)
 			}
 			return response
@@ -227,20 +229,23 @@ func (h *Outbound) Start(stage adapter.StartStage) error {
 	if err != nil {
 		return err
 	}
-	h.logger.Info("NaiveProxy started, version: ", h.client.Engine().Version())
+	h.logger.InfoEvent("protocol.message", F.ToString("NaiveProxy started, version: ", h.client.Engine().Version()))
+
 	return nil
 }
 
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 		return h.client.DialEarly(ctx, destination)
 	case N.NetworkUDP:
 		if h.uotClient == nil {
 			return nil, E.New("UDP is not supported unless UDP over TCP is enabled")
 		}
-		h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+
 		return h.uotClient.DialContext(ctx, network, destination)
 	default:
 		return nil, E.Extend(N.ErrUnknownNetwork, network)

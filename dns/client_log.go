@@ -4,70 +4,70 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sagernet/sing/common/logger"
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/miekg/dns"
 )
 
-func logCachedResponse(logger logger.ContextLogger, ctx context.Context, response *dns.Msg, ttl int) {
+func logCachedResponse(logger log.StructuredLogger, ctx context.Context, response *dns.Msg, ttl int) {
 	if logger == nil || len(response.Question) == 0 {
 		return
 	}
 	domain := FqdnToDomain(response.Question[0].Name)
-	logger.DebugContext(ctx, "cached ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
+	logger.DebugEventContext(ctx, "dns.cache.hit", "cached response", log.String("domain", domain), log.String("rcode", dns.RcodeToString[response.Rcode]), log.Int("ttl", ttl))
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "cached ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			logger.InfoEventContext(ctx, "dns.cache.record", "cached record", log.String("record_type", dns.Type(record.Header().Rrtype).String()), log.String("record", FormatQuestion(record.String())))
 		}
 	}
 }
 
-func logOptimisticResponse(logger logger.ContextLogger, ctx context.Context, response *dns.Msg) {
+func logOptimisticResponse(logger log.StructuredLogger, ctx context.Context, response *dns.Msg) {
 	if logger == nil || len(response.Question) == 0 {
 		return
 	}
 	domain := FqdnToDomain(response.Question[0].Name)
-	logger.DebugContext(ctx, "optimistic ", domain, " ", dns.RcodeToString[response.Rcode])
+	logger.DebugEventContext(ctx, "dns.cache.optimistic", "optimistic response", log.String("domain", domain), log.String("rcode", dns.RcodeToString[response.Rcode]))
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "optimistic ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			logger.InfoEventContext(ctx, "dns.cache.optimistic.record", "optimistic record", log.String("record_type", dns.Type(record.Header().Rrtype).String()), log.String("record", FormatQuestion(record.String())))
 		}
 	}
 }
 
-func logExchangedResponse(logger logger.ContextLogger, ctx context.Context, response *dns.Msg, ttl uint32) {
+func logExchangedResponse(logger log.StructuredLogger, ctx context.Context, response *dns.Msg, ttl uint32) {
 	if logger == nil || len(response.Question) == 0 {
 		return
 	}
 	domain := FqdnToDomain(response.Question[0].Name)
-	logger.DebugContext(ctx, "exchanged ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
+	logger.DebugEventContext(ctx, "dns.response", "exchanged response", log.String("domain", domain), log.String("rcode", dns.RcodeToString[response.Rcode]), log.Uint("ttl", uint(ttl)))
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "exchanged ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			logger.InfoEventContext(ctx, "dns.response.record", "exchanged record", log.String("record_type", dns.Type(record.Header().Rrtype).String()), log.String("record", FormatQuestion(record.String())))
 		}
 	}
 }
 
-func logRefreshedResponse(logger logger.ContextLogger, ctx context.Context, response *dns.Msg, ttl uint32) {
+func logRefreshedResponse(logger log.StructuredLogger, ctx context.Context, response *dns.Msg, ttl uint32) {
 	if logger == nil || len(response.Question) == 0 {
 		return
 	}
 	domain := FqdnToDomain(response.Question[0].Name)
-	logger.DebugContext(ctx, "refreshed ", domain, " ", dns.RcodeToString[response.Rcode], " ", ttl)
+	logger.DebugEventContext(ctx, "dns.cache.refresh", "refreshed response", log.String("domain", domain), log.String("rcode", dns.RcodeToString[response.Rcode]), log.Uint("ttl", uint(ttl)))
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "refreshed ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			logger.InfoEventContext(ctx, "dns.cache.refresh.record", "refreshed record", log.String("record_type", dns.Type(record.Header().Rrtype).String()), log.String("record", FormatQuestion(record.String())))
 		}
 	}
 }
 
-func logRejectedResponse(logger logger.ContextLogger, ctx context.Context, response *dns.Msg) {
+func logRejectedResponse(logger log.StructuredLogger, ctx context.Context, response *dns.Msg) {
 	if logger == nil || len(response.Question) == 0 {
 		return
 	}
 	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
 		for _, record := range recordList {
-			logger.InfoContext(ctx, "rejected ", dns.Type(record.Header().Rrtype).String(), " ", FormatQuestion(record.String()))
+			logger.InfoEventContext(ctx, "dns.response.rejected.record", "rejected record", log.String("record_type", dns.Type(record.Header().Rrtype).String()), log.String("record", FormatQuestion(record.String())))
 		}
 	}
 }

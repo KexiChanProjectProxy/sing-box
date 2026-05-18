@@ -12,12 +12,12 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/srs"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/json"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/x/list"
 	"github.com/sagernet/sing/service/filemanager"
 
@@ -28,7 +28,7 @@ var _ adapter.RuleSet = (*LocalRuleSet)(nil)
 
 type LocalRuleSet struct {
 	ctx        context.Context
-	logger     logger.Logger
+	logger     log.StructuredLogger
 	tag        string
 	access     sync.RWMutex
 	rules      []adapter.HeadlessRule
@@ -39,7 +39,7 @@ type LocalRuleSet struct {
 	refs       atomic.Int32
 }
 
-func NewLocalRuleSet(ctx context.Context, logger logger.Logger, options option.RuleSet) (*LocalRuleSet, error) {
+func NewLocalRuleSet(ctx context.Context, logger log.StructuredLogger, options option.RuleSet) (*LocalRuleSet, error) {
 	ruleSet := &LocalRuleSet{
 		ctx:        ctx,
 		logger:     logger,
@@ -66,7 +66,7 @@ func NewLocalRuleSet(ctx context.Context, logger logger.Logger, options option.R
 			Callback: func(path string) {
 				uErr := ruleSet.reloadFile(path)
 				if uErr != nil {
-					logger.Error(E.Cause(uErr, "reload rule-set ", options.Tag))
+					logger.ErrorEvent("route.rule_set.error", "reload rule-set", log.String("rule_set", options.Tag), log.Err(uErr))
 				}
 			},
 		})
@@ -90,7 +90,7 @@ func (s *LocalRuleSet) StartContext(ctx context.Context, startContext *adapter.H
 	if s.watcher != nil {
 		err := s.watcher.Start()
 		if err != nil {
-			s.logger.Error(E.Cause(err, "watch rule-set file"))
+			s.logger.ErrorEvent("route.rule_set.error", "watch rule-set file", log.String("rule_set", s.tag), log.Err(err))
 		}
 	}
 	return nil

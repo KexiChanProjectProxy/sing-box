@@ -6,8 +6,9 @@ import (
 	"net/netip"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/uot"
@@ -17,10 +18,10 @@ var _ adapter.ConnectionRouterEx = (*Router)(nil)
 
 type Router struct {
 	router adapter.ConnectionRouterEx
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 }
 
-func NewRouter(router adapter.ConnectionRouterEx, logger logger.ContextLogger) *Router {
+func NewRouter(router adapter.ConnectionRouterEx, logger log.StructuredLogger) *Router {
 	return &Router{router, logger}
 }
 
@@ -32,15 +33,18 @@ func (r *Router) RouteConnection(ctx context.Context, conn net.Conn, metadata ad
 			return E.Cause(err, "read UoT request")
 		}
 		if request.IsConnect {
-			r.logger.InfoContext(ctx, "inbound UoT connect connection to ", request.Destination)
+			r.logger.InfoEventContext(ctx, "common.uot.message", F.ToString("inbound UoT connect connection to ", request.Destination))
+
 		} else {
-			r.logger.InfoContext(ctx, "inbound UoT connection to ", request.Destination)
+			r.logger.InfoEventContext(ctx, "common.uot.message", F.ToString("inbound UoT connection to ", request.Destination))
+
 		}
 		metadata.Domain = metadata.Destination.Fqdn
 		metadata.Destination = request.Destination
 		return r.router.RoutePacketConnection(ctx, uot.NewConn(conn, *request), metadata)
 	case uot.LegacyMagicAddress:
-		r.logger.InfoContext(ctx, "inbound legacy UoT connection")
+		r.logger.InfoEventContext(ctx, "common.uot.message", F.ToString("inbound legacy UoT connection"))
+
 		metadata.Domain = metadata.Destination.Fqdn
 		metadata.Destination = M.Socksaddr{Addr: netip.IPv4Unspecified()}
 		return r.RoutePacketConnection(ctx, uot.NewConn(conn, uot.Request{}), metadata)
@@ -58,21 +62,25 @@ func (r *Router) RouteConnectionEx(ctx context.Context, conn net.Conn, metadata 
 		request, err := uot.ReadRequest(conn)
 		if err != nil {
 			err = E.Cause(err, "UoT read request")
-			r.logger.ErrorContext(ctx, "process connection from ", metadata.Source, ": ", err)
+			r.logger.ErrorEventContext(ctx, "common.uot.message", F.ToString("process connection from ", metadata.Source, ": ", err))
+
 			N.CloseOnHandshakeFailure(conn, onClose, err)
 			return
 		}
 		if request.IsConnect {
-			r.logger.InfoContext(ctx, "inbound UoT connect connection to ", request.Destination)
+			r.logger.InfoEventContext(ctx, "common.uot.message", F.ToString("inbound UoT connect connection to ", request.Destination))
+
 		} else {
-			r.logger.InfoContext(ctx, "inbound UoT connection to ", request.Destination)
+			r.logger.InfoEventContext(ctx, "common.uot.message", F.ToString("inbound UoT connection to ", request.Destination))
+
 		}
 		metadata.Domain = metadata.Destination.Fqdn
 		metadata.Destination = request.Destination
 		r.router.RoutePacketConnectionEx(ctx, uot.NewConn(conn, *request), metadata, onClose)
 		return
 	case uot.LegacyMagicAddress:
-		r.logger.InfoContext(ctx, "inbound legacy UoT connection")
+		r.logger.InfoEventContext(ctx, "common.uot.message", F.ToString("inbound legacy UoT connection"))
+
 		metadata.Domain = metadata.Destination.Fqdn
 		metadata.Destination = M.Socksaddr{Addr: netip.IPv4Unspecified()}
 		r.RoutePacketConnectionEx(ctx, uot.NewConn(conn, uot.Request{}), metadata, onClose)

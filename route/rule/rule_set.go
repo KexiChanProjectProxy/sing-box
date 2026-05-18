@@ -6,16 +6,16 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service"
 
 	"go4.org/netipx"
 )
 
-func NewRuleSet(ctx context.Context, logger logger.ContextLogger, options option.RuleSet) (adapter.RuleSet, error) {
+func NewRuleSet(ctx context.Context, logger log.StructuredLogger, options option.RuleSet) (adapter.RuleSet, error) {
 	switch options.Type {
 	case C.RuleSetTypeInline, C.RuleSetTypeLocal, "":
 		return NewLocalRuleSet(ctx, logger, options)

@@ -2,6 +2,7 @@ package direct
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"reflect"
@@ -17,7 +18,6 @@ import (
 	"github.com/sagernet/sing-tun/ping"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -36,14 +36,14 @@ var (
 type Outbound struct {
 	outbound.Adapter
 	ctx            context.Context
-	logger         logger.ContextLogger
+	logger         log.StructuredLogger
 	dialer         dialer.ParallelInterfaceDialer
 	domainStrategy C.DomainStrategy
 	fallbackDelay  time.Duration
 	isEmpty        bool
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.DirectOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.DirectOutboundOptions) (adapter.Outbound, error) {
 	options.UDPFragmentDefault = true
 	if options.Detour != "" {
 		return nil, E.New("`detour` is not supported in direct context")
@@ -81,9 +81,11 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	}
 	return h.dialer.DialContext(ctx, network, destination)
 }
@@ -92,7 +94,8 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound packet connection")
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection"))
+
 	conn, err := h.dialer.ListenPacket(ctx, destination)
 	if err != nil {
 		return nil, err
@@ -106,7 +109,8 @@ func (h *Outbound) NewDirectRouteConnection(metadata adapter.InboundContext, rou
 	if err != nil {
 		return nil, err
 	}
-	h.logger.InfoContext(ctx, "linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString())
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString()))
+
 	return destination, nil
 }
 
@@ -117,9 +121,11 @@ func (h *Outbound) DialParallel(ctx context.Context, network string, destination
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	}
 	return dialer.DialParallelNetwork(ctx, h.dialer, network, destination, destinationAddresses, len(destinationAddresses) > 0 && destinationAddresses[0].Is6(), nil, nil, nil, h.fallbackDelay)
 }
@@ -131,9 +137,11 @@ func (h *Outbound) DialParallelNetwork(ctx context.Context, network string, dest
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	}
 	return dialer.DialParallelNetwork(ctx, h.dialer, network, destination, destinationAddresses, len(destinationAddresses) > 0 && destinationAddresses[0].Is6(), networkStrategy, networkType, fallbackNetworkType, fallbackDelay)
 }
@@ -142,7 +150,8 @@ func (h *Outbound) ListenSerialNetworkPacket(ctx context.Context, destination M.
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound packet connection")
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection"))
+
 	conn, newDestination, err := dialer.ListenSerialNetworkPacket(ctx, h.dialer, destination, destinationAddresses, networkStrategy, networkType, fallbackNetworkType, fallbackDelay)
 	if err != nil {
 		return nil, netip.Addr{}, err

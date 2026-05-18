@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 	"strings"
@@ -93,7 +94,7 @@ type STDServerConfig struct {
 	access                sync.RWMutex
 	config                *tls.Config
 	handshakeTimeout      time.Duration
-	logger                log.Logger
+	logger                log.StructuredLogger
 	certificateProvider   managedCertificateProvider
 	acmeService           adapter.SimpleLifecycle
 	certificate           []byte
@@ -214,7 +215,8 @@ func (c *STDServerConfig) Start() error {
 	}
 	err := c.startWatcher()
 	if err != nil {
-		c.logger.Warn("create fsnotify watcher: ", err)
+		c.logger.WarnEvent("common.tls.message", F.ToString("create fsnotify watcher: ", err))
+
 	}
 	return nil
 }
@@ -241,7 +243,8 @@ func (c *STDServerConfig) startWatcher() error {
 		Callback: func(path string) {
 			err := c.certificateUpdated(path)
 			if err != nil {
-				c.logger.Error(E.Cause(err, "reload certificate"))
+				c.logger.ErrorEvent("common.tls.message", F.ToString(E.Cause(err, "reload certificate")))
+
 			}
 		},
 	})
@@ -281,18 +284,21 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.Certificates = []tls.Certificate{keyPair}
 		c.config = config
 		c.access.Unlock()
-		c.logger.Info("reloaded TLS certificate")
+		c.logger.InfoEvent("common.tls.message", F.ToString("reloaded TLS certificate"))
+
 	} else if common.Contains(c.clientCertificatePath, path) {
 		clientCertificateCA := x509.NewCertPool()
 		var reloaded bool
 		for _, certPath := range c.clientCertificatePath {
 			content, err := os.ReadFile(certPath)
 			if err != nil {
-				c.logger.Error(E.Cause(err, "reload certificate from ", c.clientCertificatePath))
+				c.logger.ErrorEvent("common.tls.message", F.ToString(E.Cause(err, "reload certificate from ", c.clientCertificatePath)))
+
 				continue
 			}
 			if !clientCertificateCA.AppendCertsFromPEM(content) {
-				c.logger.Error(E.New("invalid client certificate file: ", certPath))
+				c.logger.ErrorEvent("common.tls.message", F.ToString(E.New("invalid client certificate file: ", certPath)))
+
 				continue
 			}
 			reloaded = true
@@ -305,7 +311,8 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.ClientCAs = clientCertificateCA
 		c.config = config
 		c.access.Unlock()
-		c.logger.Info("reloaded client certificates")
+		c.logger.InfoEvent("common.tls.message", F.ToString("reloaded client certificates"))
+
 	} else if path == c.echKeyPath {
 		echKey, err := os.ReadFile(c.echKeyPath)
 		if err != nil {
@@ -315,7 +322,8 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		if err != nil {
 			return err
 		}
-		c.logger.Info("reloaded ECH keys")
+		c.logger.InfoEvent("common.tls.message", F.ToString("reloaded ECH keys"))
+
 	}
 	return nil
 }
@@ -324,7 +332,7 @@ func (c *STDServerConfig) Close() error {
 	return common.Close(c.certificateProvider, c.acmeService, common.PtrOrNil(c.watcher))
 }
 
-func NewSTDServer(ctx context.Context, logger log.ContextLogger, options option.InboundTLSOptions) (ServerConfig, error) {
+func NewSTDServer(ctx context.Context, logger log.StructuredLogger, options option.InboundTLSOptions) (ServerConfig, error) {
 	if !options.Enabled {
 		return nil, nil
 	}
@@ -526,7 +534,7 @@ func NewSTDServer(ctx context.Context, logger log.ContextLogger, options option.
 	return config, nil
 }
 
-func newCertificateProvider(ctx context.Context, logger log.ContextLogger, options *option.CertificateProviderOptions) (managedCertificateProvider, error) {
+func newCertificateProvider(ctx context.Context, logger log.StructuredLogger, options *option.CertificateProviderOptions) (managedCertificateProvider, error) {
 	if options.IsShared() {
 		manager := service.FromContext[adapter.CertificateProviderManager](ctx)
 		if manager == nil {

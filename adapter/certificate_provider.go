@@ -26,7 +26,7 @@ type CertificateProviderService interface {
 
 type CertificateProviderRegistry interface {
 	option.CertificateProviderOptionsRegistry
-	Create(ctx context.Context, logger log.ContextLogger, tag string, providerType string, options any) (CertificateProviderService, error)
+	Create(ctx context.Context, logger log.StructuredLogger, tag string, providerType string, options any) (CertificateProviderService, error)
 }
 
 type CertificateProviderManager interface {
@@ -34,5 +34,5 @@ type CertificateProviderManager interface {
 	CertificateProviders() []CertificateProviderService
 	Get(tag string) (CertificateProviderService, bool)
 	Remove(tag string) error
-	Create(ctx context.Context, logger log.ContextLogger, tag string, providerType string, options any) error
+	Create(ctx context.Context, logger log.StructuredLogger, tag string, providerType string, options any) error
 }

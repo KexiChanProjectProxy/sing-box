@@ -35,7 +35,7 @@ type TCPTransport struct {
 	serverAddr M.Socksaddr
 }
 
-func NewTCP(ctx context.Context, logger log.ContextLogger, tag string, options option.RemoteDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTCP(ctx context.Context, logger log.StructuredLogger, tag string, options option.RemoteDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewRemoteDialer(ctx, options)
 	if err != nil {
 		return nil, err

@@ -11,6 +11,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/sniff"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	R "github.com/sagernet/sing-box/route/rule"
 	"github.com/sagernet/sing-mux"
 	"github.com/sagernet/sing-tun"
@@ -50,9 +51,9 @@ func (r *Router) RouteConnectionEx(ctx context.Context, conn net.Conn, metadata 
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
 		if E.IsClosedOrCanceled(err) || R.IsRejected(err) {
-			r.logger.DebugContext(ctx, "connection closed: ", err)
+			r.logger.DebugEventContext(ctx, "route.connection.closed", "connection closed", log.Err(err))
 		} else {
-			r.logger.ErrorContext(ctx, err)
+			r.logger.ErrorEventContext(ctx, "route.error", "route error", log.Err(err))
 		}
 	}
 }
@@ -174,9 +175,9 @@ func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if err != nil {
 		conn.Close()
 		if E.IsClosedOrCanceled(err) || R.IsRejected(err) {
-			r.logger.DebugContext(ctx, "connection closed: ", err)
+			r.logger.DebugEventContext(ctx, "route.connection.closed", "connection closed", log.Err(err))
 		} else {
-			r.logger.ErrorContext(ctx, err)
+			r.logger.ErrorEventContext(ctx, "route.error", "route error", log.Err(err))
 		}
 	}
 	select {
@@ -191,9 +192,9 @@ func (r *Router) RoutePacketConnectionEx(ctx context.Context, conn N.PacketConn,
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
 		if E.IsClosedOrCanceled(err) || R.IsRejected(err) {
-			r.logger.DebugContext(ctx, "connection closed: ", err)
+			r.logger.DebugEventContext(ctx, "route.connection.closed", "connection closed", log.Err(err))
 		} else {
-			r.logger.ErrorContext(ctx, err)
+			r.logger.ErrorEventContext(ctx, "route.error", "route error", log.Err(err))
 		}
 	}
 }
@@ -428,12 +429,12 @@ func (r *Router) matchRule(
 		if hostnameFound {
 			metadata.SourceHostname = hostname
 			if macFound {
-				r.logger.InfoContext(ctx, "found neighbor: ", mac, ", hostname: ", hostname)
+				r.logger.InfoEventContext(ctx, "route.neighbor.found", "found neighbor", log.String("mac", mac.String()), log.String("hostname", hostname))
 			} else {
-				r.logger.InfoContext(ctx, "found neighbor hostname: ", hostname)
+				r.logger.InfoEventContext(ctx, "route.neighbor.found", "found neighbor hostname", log.String("hostname", hostname))
 			}
 		} else if macFound {
-			r.logger.InfoContext(ctx, "found neighbor: ", mac)
+			r.logger.InfoEventContext(ctx, "route.neighbor.found", "found neighbor", log.String("mac", mac.String()))
 		}
 	}
 	if metadata.Destination.Addr.IsValid() && r.dnsTransport.FakeIP() != nil && r.dnsTransport.FakeIP().Store().Contains(metadata.Destination.Addr) {
@@ -449,13 +450,13 @@ func (r *Router) matchRule(
 				Port: metadata.Destination.Port,
 			}
 			metadata.FakeIP = true
-			r.logger.DebugContext(ctx, "found fakeip domain: ", domain)
+			r.logger.DebugEventContext(ctx, "route.dns.fakeip", "found fakeip domain", log.String("domain", domain))
 		}
 	} else if metadata.Domain == "" {
 		domain, loaded := r.dns.LookupReverseMapping(metadata.Destination.Addr)
 		if loaded {
 			metadata.Domain = domain
-			r.logger.DebugContext(ctx, "found reserve mapped domain: ", metadata.Domain)
+			r.logger.DebugEventContext(ctx, "route.dns.reverse_mapping", "found reserve mapped domain", log.String("domain", metadata.Domain))
 		}
 	}
 	if metadata.Destination.IsIPv4() {
@@ -473,18 +474,18 @@ match:
 		if !preMatch {
 			ruleDescription := currentRule.String()
 			if ruleDescription != "" {
-				r.logger.DebugContext(ctx, "match[", currentRuleIndex, "] ", currentRule, " => ", currentRule.Action())
+				r.logger.DebugEventContext(ctx, "route.rule.matched", "matched rule", log.Int("rule_index", currentRuleIndex), log.String("rule", ruleDescription), log.String("action", currentRule.Action().String()))
 			} else {
-				r.logger.DebugContext(ctx, "match[", currentRuleIndex, "] => ", currentRule.Action())
+				r.logger.DebugEventContext(ctx, "route.rule.matched", "matched rule", log.Int("rule_index", currentRuleIndex), log.String("action", currentRule.Action().String()))
 			}
 		} else {
 			switch currentRule.Action().Type() {
 			case C.RuleActionTypeReject:
 				ruleDescription := currentRule.String()
 				if ruleDescription != "" {
-					r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] ", currentRule, " => ", currentRule.Action())
+					r.logger.DebugEventContext(ctx, "route.rule.pre_matched", "pre-matched rule", log.Int("rule_index", currentRuleIndex), log.String("rule", ruleDescription), log.String("action", currentRule.Action().String()))
 				} else {
-					r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] => ", currentRule.Action())
+					r.logger.DebugEventContext(ctx, "route.rule.pre_matched", "pre-matched rule", log.Int("rule_index", currentRuleIndex), log.String("action", currentRule.Action().String()))
 				}
 			}
 		}
@@ -602,17 +603,17 @@ func (r *Router) actionSniff(
 	inputConn net.Conn, inputPacketConn N.PacketConn, inputBuffers []*buf.Buffer, inputPacketBuffers []*N.PacketBuffer,
 ) (buffer *buf.Buffer, packetBuffers []*N.PacketBuffer, fatalErr error) {
 	if sniff.Skip(metadata) {
-		r.logger.DebugContext(ctx, "sniff skipped due to port considered as server-first")
+		r.logger.DebugEventContext(ctx, "route.sniff.skipped", "sniff skipped due to port considered as server-first")
 		return
 	} else if metadata.Protocol != "" {
-		r.logger.DebugContext(ctx, "duplicate sniff skipped")
+		r.logger.DebugEventContext(ctx, "route.sniff.skipped", "duplicate sniff skipped")
 		return
 	}
 	if inputConn != nil {
 		if len(action.StreamSniffers) == 0 && len(action.PacketSniffers) > 0 {
 			return
 		} else if slices.Equal(metadata.SnifferNames, action.SnifferNames) && metadata.SniffError != nil && !errors.Is(metadata.SniffError, sniff.ErrNeedMoreData) {
-			r.logger.DebugContext(ctx, "packet sniff skipped due to previous error: ", metadata.SniffError)
+			r.logger.DebugEventContext(ctx, "route.sniff.skipped", "packet sniff skipped due to previous error", log.Err(metadata.SniffError))
 			return
 		}
 		var streamSniffers []sniff.StreamSniffer
@@ -649,11 +650,11 @@ func (r *Router) actionSniff(
 				}
 			}
 			if metadata.Domain != "" && metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
+				r.logger.DebugEventContext(ctx, "route.sniff.result", "sniffed protocol", log.String("protocol", metadata.Protocol), log.String("domain", metadata.Domain), log.String("client", metadata.Client))
 			} else if metadata.Domain != "" {
-				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
+				r.logger.DebugEventContext(ctx, "route.sniff.result", "sniffed protocol", log.String("protocol", metadata.Protocol), log.String("domain", metadata.Domain))
 			} else {
-				r.logger.DebugContext(ctx, "sniffed protocol: ", metadata.Protocol)
+				r.logger.DebugEventContext(ctx, "route.sniff.result", "sniffed protocol", log.String("protocol", metadata.Protocol))
 			}
 		}
 		if !sniffBuffer.IsEmpty() {
@@ -665,7 +666,7 @@ func (r *Router) actionSniff(
 		if len(action.PacketSniffers) == 0 && len(action.StreamSniffers) > 0 {
 			return
 		} else if slices.Equal(metadata.SnifferNames, action.SnifferNames) && metadata.SniffError != nil && !errors.Is(metadata.SniffError, sniff.ErrNeedMoreData) {
-			r.logger.DebugContext(ctx, "packet sniff skipped due to previous error: ", metadata.SniffError)
+			r.logger.DebugEventContext(ctx, "route.sniff.skipped", "packet sniff skipped due to previous error", log.Err(metadata.SniffError))
 			return
 		}
 		quicMoreData := func() bool {
@@ -705,7 +706,7 @@ func (r *Router) actionSniff(
 			metadata.SniffError = err
 			if errors.Is(err, sniff.ErrNeedMoreData) {
 				// TODO: replace with generic message when there are more multi-packet protocols
-				r.logger.DebugContext(ctx, "attempt to sniff fragmented QUIC client hello")
+				r.logger.DebugEventContext(ctx, "route.sniff.fragmented_quic", "attempt to sniff fragmented QUIC client hello")
 				continue
 			}
 			goto finally
@@ -765,7 +766,7 @@ func (r *Router) actionSniff(
 				metadata.SniffError = err
 				if errors.Is(err, sniff.ErrNeedMoreData) {
 					// TODO: replace with generic message when there are more multi-packet protocols
-					r.logger.DebugContext(ctx, "attempt to sniff fragmented QUIC client hello")
+					r.logger.DebugEventContext(ctx, "route.sniff.fragmented_quic", "attempt to sniff fragmented QUIC client hello")
 					continue
 				}
 			}
@@ -781,13 +782,13 @@ func (r *Router) actionSniff(
 				}
 			}
 			if metadata.Domain != "" && metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
+				r.logger.DebugEventContext(ctx, "route.sniff.packet_result", "sniffed packet protocol", log.String("protocol", metadata.Protocol), log.String("domain", metadata.Domain), log.String("client", metadata.Client))
 			} else if metadata.Domain != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
+				r.logger.DebugEventContext(ctx, "route.sniff.packet_result", "sniffed packet protocol", log.String("protocol", metadata.Protocol), log.String("domain", metadata.Domain))
 			} else if metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", client: ", metadata.Client)
+				r.logger.DebugEventContext(ctx, "route.sniff.packet_result", "sniffed packet protocol", log.String("protocol", metadata.Protocol), log.String("client", metadata.Client))
 			} else {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol)
+				r.logger.DebugEventContext(ctx, "route.sniff.packet_result", "sniffed packet protocol", log.String("protocol", metadata.Protocol))
 			}
 		}
 	}
@@ -817,7 +818,7 @@ func (r *Router) actionResolve(ctx context.Context, metadata *adapter.InboundCon
 			return err
 		}
 		metadata.DestinationAddresses = addresses
-		r.logger.DebugContext(ctx, "resolved [", strings.Join(F.MapToString(metadata.DestinationAddresses), " "), "]")
+		r.logger.DebugEventContext(ctx, "route.dns.resolved", "resolved destination", log.String("addresses", strings.Join(F.MapToString(metadata.DestinationAddresses), " ")))
 	}
 	return nil
 }

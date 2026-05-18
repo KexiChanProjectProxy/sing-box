@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"time"
 
@@ -30,7 +31,7 @@ type RealityServerConfig struct {
 	handshakeTimeout time.Duration
 }
 
-func NewRealityServer(ctx context.Context, logger log.ContextLogger, options option.InboundTLSOptions) (ServerConfig, error) {
+func NewRealityServer(ctx context.Context, logger log.StructuredLogger, options option.InboundTLSOptions) (ServerConfig, error) {
 	var tlsConfig utls.RealityConfig
 
 	if options.CertificateProvider != nil {
@@ -86,7 +87,8 @@ func NewRealityServer(ctx context.Context, logger log.ContextLogger, options opt
 	tlsConfig.SessionTicketsDisabled = true
 	tlsConfig.Log = func(format string, v ...any) {
 		if logger != nil {
-			logger.Trace(fmt.Sprintf(format, v...))
+			logger.TraceEvent("common.tls.message", F.ToString(fmt.Sprintf(format, v...)))
+
 		}
 	}
 	tlsConfig.Type = N.NetworkTCP

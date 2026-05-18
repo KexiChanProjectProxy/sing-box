@@ -2,6 +2,7 @@ package v2rayhttpupgrade
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/sagernet/sing-box/transport/v2rayhttp"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	aTLS "github.com/sagernet/sing/common/tls"
@@ -26,7 +26,7 @@ var _ adapter.V2RayServerTransport = (*Server)(nil)
 
 type Server struct {
 	ctx        context.Context
-	logger     logger.ContextLogger
+	logger     log.StructuredLogger
 	tlsConfig  tls.ServerConfig
 	handler    adapter.V2RayServerTransportHandler
 	httpServer *http.Server
@@ -35,7 +35,7 @@ type Server struct {
 	headers    http.Header
 }
 
-func NewServer(ctx context.Context, logger logger.ContextLogger, options option.V2RayHTTPUpgradeOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (*Server, error) {
+func NewServer(ctx context.Context, logger log.StructuredLogger, options option.V2RayHTTPUpgradeOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (*Server, error) {
 	server := &Server{
 		ctx:       ctx,
 		logger:    logger,
@@ -119,7 +119,8 @@ func (s *Server) invalidRequest(writer http.ResponseWriter, request *http.Reques
 	if statusCode > 0 {
 		writer.WriteHeader(statusCode)
 	}
-	s.logger.ErrorContext(request.Context(), E.Cause(err, "process connection from ", request.RemoteAddr))
+	s.logger.ErrorEventContext(request.Context(), "transport.message", F.ToString(E.Cause(err, "process connection from ", request.RemoteAddr)))
+
 }
 
 func (s *Server) Network() []string {

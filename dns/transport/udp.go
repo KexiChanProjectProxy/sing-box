@@ -15,7 +15,6 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio/deadline"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -30,7 +29,7 @@ func RegisterUDP(registry *dns.TransportRegistry) {
 
 type UDPTransport struct {
 	dns.TransportAdapter
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 
 	dialer     N.Dialer
 	serverAddr M.Socksaddr
@@ -49,7 +48,7 @@ type udpCallback struct {
 	done     chan struct{}
 }
 
-func NewUDP(ctx context.Context, logger log.ContextLogger, tag string, options option.RemoteDNSServerOptions) (adapter.DNSTransport, error) {
+func NewUDP(ctx context.Context, logger log.StructuredLogger, tag string, options option.RemoteDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewRemoteDialer(ctx, options)
 	if err != nil {
 		return nil, err
@@ -64,7 +63,7 @@ func NewUDP(ctx context.Context, logger log.ContextLogger, tag string, options o
 	return NewUDPRaw(logger, dns.NewTransportAdapterWithRemoteOptions(C.DNSTypeUDP, tag, options), transportDialer, serverAddr), nil
 }
 
-func NewUDPRaw(logger logger.ContextLogger, adapter dns.TransportAdapter, dialerInstance N.Dialer, serverAddr M.Socksaddr) *UDPTransport {
+func NewUDPRaw(logger log.StructuredLogger, adapter dns.TransportAdapter, dialerInstance N.Dialer, serverAddr M.Socksaddr) *UDPTransport {
 	t := &UDPTransport{
 		TransportAdapter: adapter,
 		logger:           logger,
@@ -119,7 +118,7 @@ func (t *UDPTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.M
 		return nil, err
 	}
 	if response.Truncated {
-		t.logger.InfoContext(ctx, "response truncated, retrying with TCP")
+		t.logger.InfoEventContext(ctx, "dns.response.truncated", "response truncated, retrying with TCP")
 		return t.exchangeTCP(ctx, message)
 	}
 	return response, nil
@@ -238,7 +237,7 @@ func (t *UDPTransport) recvLoop(conn net.Conn) {
 		err = message.Unpack(buffer.Bytes())
 		buffer.Release()
 		if err != nil {
-			t.logger.Debug("discarded malformed UDP response: ", err)
+			t.logger.DebugEvent("dns.response.malformed", "discarded malformed UDP response", log.Err(err))
 			continue
 		}
 

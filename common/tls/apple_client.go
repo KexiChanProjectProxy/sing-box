@@ -4,11 +4,11 @@ package tls
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/certificate"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing/common/logger"
 )
 
 const appleTLSEngineName = "Apple TLS engine"
@@ -32,7 +32,7 @@ func (c *appleClientConfig) resolveAnchors() (adapter.AppleAnchors, error) {
 	return certificate.AcquireAnchors(nil, c.store), nil
 }
 
-func newAppleClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
+func newAppleClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
 	base, validated, err := newSystemTLSConfig(ctx, serverAddress, options, allowEmptyServerName, appleTLSEngineName)
 	if err != nil {
 		return nil, err

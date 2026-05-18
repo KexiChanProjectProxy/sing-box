@@ -13,13 +13,13 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 )
 
 var _ adapter.OutboundManager = (*Manager)(nil)
 
 type Manager struct {
-	logger                  log.ContextLogger
+	logger                  log.StructuredLogger
 	registry                adapter.OutboundRegistry
 	endpoint                adapter.EndpointManager
 	defaultTag              string
@@ -33,7 +33,7 @@ type Manager struct {
 	defaultOutboundFallback func() (adapter.Outbound, error)
 }
 
-func NewManager(logger logger.ContextLogger, registry adapter.OutboundRegistry, endpoint adapter.EndpointManager, defaultTag string) *Manager {
+func NewManager(logger log.StructuredLogger, registry adapter.OutboundRegistry, endpoint adapter.EndpointManager, defaultTag string) *Manager {
 	return &Manager{
 		logger:        logger,
 		registry:      registry,
@@ -233,7 +233,8 @@ func (m *Manager) Remove(tag string) error {
 	if m.defaultOutbound == outbound {
 		if len(m.outbounds) > 0 {
 			m.defaultOutbound = m.outbounds[0]
-			m.logger.Info("updated default outbound to ", m.defaultOutbound.Tag())
+			m.logger.InfoEvent("adapter.message", F.ToString("updated default outbound to ", m.defaultOutbound.Tag()))
+
 		} else {
 			m.defaultOutbound = nil
 		}
@@ -258,7 +259,7 @@ func (m *Manager) Remove(tag string) error {
 	return nil
 }
 
-func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, inboundType string, options any) error {
+func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, inboundType string, options any) error {
 	if tag == "" {
 		return os.ErrInvalid
 	}
@@ -303,7 +304,8 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if tag == m.defaultTag || (m.defaultTag == "" && m.defaultOutbound == nil) {
 		m.defaultOutbound = outbound
 		if m.started {
-			m.logger.Info("updated default outbound to ", outbound.Tag())
+			m.logger.InfoEvent("adapter.message", F.ToString("updated default outbound to ", outbound.Tag()))
+
 		}
 	}
 	return nil

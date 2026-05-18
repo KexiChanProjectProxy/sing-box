@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/sagernet/sing-box/log"
 	"io"
 	mRand "math/rand"
 	"net"
@@ -33,7 +34,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/debug"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/ntp"
 	aTLS "github.com/sagernet/sing/common/tls"
 
@@ -51,11 +51,11 @@ type RealityClientConfig struct {
 	shortID   [8]byte
 }
 
-func NewRealityClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
+func NewRealityClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
 	return newRealityClient(ctx, logger, serverAddress, options, false)
 }
 
-func newRealityClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
+func newRealityClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
 	if options.UTLS == nil || !options.UTLS.Enabled {
 		return nil, E.New("uTLS is required by reality client")
 	}

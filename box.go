@@ -41,7 +41,7 @@ var _ adapter.SimpleLifecycle = (*Box)(nil)
 type Box struct {
 	createdAt           time.Time
 	logFactory          log.Factory
-	logger              log.ContextLogger
+	logger              log.StructuredLogger
 	network             *route.NetworkManager
 	endpoint            *endpoint.Manager
 	inbound             *inbound.Manager
@@ -464,7 +464,7 @@ func (s *Box) PreStart() error {
 		s.Close()
 		return err
 	}
-	s.logger.Info("sing-box pre-started (", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
+	s.logger.InfoEvent("box.pre_started", "sing-box pre-started", log.Float64("elapsed_seconds", time.Since(s.createdAt).Seconds()))
 	return nil
 }
 
@@ -483,7 +483,7 @@ func (s *Box) Start() error {
 		s.Close()
 		return err
 	}
-	s.logger.Info("sing-box started (", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
+	s.logger.InfoEvent("box.started", "sing-box started", log.Float64("elapsed_seconds", time.Since(s.createdAt).Seconds()))
 	return nil
 }
 
@@ -588,12 +588,12 @@ func (s *Box) Close() error {
 		done()
 	}
 	if s.httpClientService != nil {
-		s.logger.Trace("close ", s.httpClientService.Name())
+		s.logger.TraceEvent("box.close", "close service", log.String("service", s.httpClientService.Name()))
 		startTime := time.Now()
 		err = E.Append(err, s.httpClientService.Close(), func(err error) error {
 			return E.Cause(err, "close ", s.httpClientService.Name())
 		})
-		s.logger.Trace("close ", s.httpClientService.Name(), " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		s.logger.TraceEvent("box.close.completed", "close service completed", log.String("service", s.httpClientService.Name()), log.Float64("elapsed_seconds", time.Since(startTime).Seconds()))
 	}
 	for _, lifecycleService := range s.internalService {
 		done := adapter.LogElapsed(s.logger, "close ", lifecycleService.Name())

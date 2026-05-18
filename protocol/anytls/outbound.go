@@ -2,6 +2,7 @@ package anytls
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 
@@ -32,10 +33,10 @@ type Outbound struct {
 	tlsConfig tls.Config
 	client    *anytls.Client
 	uotClient *uot.Client
-	logger    log.ContextLogger
+	logger    log.StructuredLogger
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.AnyTLSOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSOutboundOptions) (adapter.Outbound, error) {
 	outbound := &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeAnyTLS, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.DialerOptions),
 		server:  options.ServerOptions.Build(),
@@ -115,10 +116,12 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	metadata.Destination = destination
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 		return h.client.CreateProxy(ctx, destination)
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+
 		return h.uotClient.DialContext(ctx, network, destination)
 	}
 	return nil, os.ErrInvalid
@@ -128,7 +131,8 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+
 	return h.uotClient.ListenPacket(ctx, destination)
 }
 

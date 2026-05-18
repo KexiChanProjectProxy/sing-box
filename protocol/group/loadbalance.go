@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"math/rand"
 	"net"
 	"sort"
@@ -32,7 +33,7 @@ type LoadBalance struct {
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
 	connection                   adapter.ConnectionManager
-	logger                       log.ContextLogger
+	logger                       log.StructuredLogger
 	tags                         []string
 	primaryTags                  []string
 	backupTags                   []string
@@ -54,7 +55,7 @@ type LoadBalance struct {
 	snapshot                     atomic.Pointer[CandidateSnapshot]
 }
 
-func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
+func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
 	err := options.Check()
 	if err != nil {
 		return nil, err
@@ -173,7 +174,8 @@ func (l *LoadBalance) DialContext(ctx context.Context, network string, destinati
 	}
 	conn, err := candidate.Outbound.DialContext(ctx, network, destination)
 	if err != nil {
-		l.logger.ErrorContext(ctx, err)
+		l.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+
 		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
 		return nil, err
 	}
@@ -194,7 +196,8 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	}
 	conn, err := candidate.Outbound.ListenPacket(ctx, destination)
 	if err != nil {
-		l.logger.ErrorContext(ctx, err)
+		l.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+
 		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
 		return nil, err
 	}
@@ -339,8 +342,8 @@ func (l *LoadBalance) selectEmptyPoolFallback() (Candidate, error) {
 		for _, tag := range l.primaryTags {
 			if detour, ok := l.primaryOutbounds[tag]; ok {
 				candidates = append(candidates, Candidate{
-					Tag:      tag,
-					Outbound: detour,
+					Tag:       tag,
+					Outbound:  detour,
 					IsPrimary: true,
 				})
 			}
@@ -348,8 +351,8 @@ func (l *LoadBalance) selectEmptyPoolFallback() (Candidate, error) {
 		for _, tag := range l.backupTags {
 			if detour, ok := l.backupOutbounds[tag]; ok {
 				candidates = append(candidates, Candidate{
-					Tag:      tag,
-					Outbound: detour,
+					Tag:       tag,
+					Outbound:  detour,
 					IsPrimary: false,
 				})
 			}

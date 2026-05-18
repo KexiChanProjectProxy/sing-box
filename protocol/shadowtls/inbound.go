@@ -2,6 +2,7 @@ package shadowtls
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -15,7 +16,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -27,12 +27,12 @@ func RegisterInbound(registry *inbound.Registry) {
 type Inbound struct {
 	inbound.Adapter
 	router   adapter.Router
-	logger   logger.ContextLogger
+	logger   log.StructuredLogger
 	listener *listener.Listener
 	service  *shadowtls.Service
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ShadowTLSInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.ShadowTLSInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeShadowTLS, tag),
 		router:  router,
@@ -113,9 +113,11 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
 		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugContext(ctx, "connection closed: ", err)
+			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
+
 		} else {
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
+			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
+
 		}
 	}
 }
@@ -133,9 +135,11 @@ func (h *inboundHandler) NewConnectionEx(ctx context.Context, conn net.Conn, sou
 	metadata.Destination = destination
 	if userName, _ := auth.UserFromContext[string](ctx); userName != "" {
 		metadata.User = userName
-		h.logger.InfoContext(ctx, "[", userName, "] inbound connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", metadata.Destination))
+
 	} else {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	}
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

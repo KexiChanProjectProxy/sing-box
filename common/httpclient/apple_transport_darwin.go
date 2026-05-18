@@ -29,10 +29,10 @@ import (
 	"github.com/sagernet/sing-box/common/certificate"
 	"github.com/sagernet/sing-box/common/proxybridge"
 	boxTLS "github.com/sagernet/sing-box/common/tls"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
 )
@@ -82,7 +82,7 @@ type appleSessionConfig struct {
 }
 
 type appleTransportShared struct {
-	logger   logger.ContextLogger
+	logger   log.StructuredLogger
 	bridge   *proxybridge.Bridge
 	config   appleSessionConfig
 	timeFunc func() time.Time
@@ -96,7 +96,7 @@ type appleTransport struct {
 	closed  bool
 }
 
-func newAppleTransport(ctx context.Context, logger logger.ContextLogger, rawDialer N.Dialer, options option.HTTPClientOptions) (innerTransport, error) {
+func newAppleTransport(ctx context.Context, logger log.StructuredLogger, rawDialer N.Dialer, options option.HTTPClientOptions) (innerTransport, error) {
 	sessionConfig, err := newAppleSessionConfig(ctx, options)
 	if err != nil {
 		return nil, err
@@ -382,7 +382,7 @@ func (t *appleTransport) CloseIdleConnections() {
 	t.access.Unlock()
 	newSession, err := t.shared.newSession()
 	if err != nil {
-		t.shared.logger.Error(E.Cause(err, "reset Apple HTTP session"))
+		t.shared.logger.ErrorEvent("common.httpclient.apple_session.error", "reset Apple HTTP session", log.Err(err))
 		return
 	}
 	t.access.Lock()

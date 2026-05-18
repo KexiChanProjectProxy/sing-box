@@ -34,7 +34,7 @@ type CertificateProvider struct {
 	localClient *local.Client
 }
 
-func NewCertificateProvider(ctx context.Context, _ log.ContextLogger, tag string, options option.TailscaleCertificateProviderOptions) (adapter.CertificateProviderService, error) {
+func NewCertificateProvider(ctx context.Context, _ log.StructuredLogger, tag string, options option.TailscaleCertificateProviderOptions) (adapter.CertificateProviderService, error) {
 	if options.Endpoint == "" {
 		return nil, E.New("missing tailscale endpoint tag")
 	}

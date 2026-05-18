@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -40,7 +41,7 @@ type URLTest struct {
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
 	connection                   adapter.ConnectionManager
-	logger                       log.ContextLogger
+	logger                       log.StructuredLogger
 	tags                         []string
 	link                         string
 	interval                     time.Duration
@@ -51,7 +52,7 @@ type URLTest struct {
 	preferDomain                 bool
 }
 
-func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.URLTestOutboundOptions) (adapter.Outbound, error) {
+func NewURLTest(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.URLTestOutboundOptions) (adapter.Outbound, error) {
 	outbound := &URLTest{
 		Adapter:                      outbound.NewAdapter(C.TypeURLTest, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.Outbounds),
 		ctx:                          ctx,
@@ -149,7 +150,8 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	if err == nil {
 		return s.group.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
 	}
-	s.logger.ErrorContext(ctx, err)
+	s.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+
 	s.group.history.DeleteURLTestHistory(outbound.Tag())
 	return nil, err
 }
@@ -170,7 +172,8 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	if err == nil {
 		return s.group.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
 	}
-	s.logger.ErrorContext(ctx, err)
+	s.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+
 	s.group.history.DeleteURLTestHistory(outbound.Tag())
 	return nil, err
 }
@@ -211,7 +214,7 @@ type URLTestGroup struct {
 	outbound                     adapter.OutboundManager
 	pause                        pause.Manager
 	pauseCallback                *list.Element[pause.Callback]
-	logger                       log.Logger
+	logger                       log.StructuredLogger
 	outbounds                    []adapter.Outbound
 	link                         string
 	interval                     time.Duration
@@ -231,7 +234,7 @@ type URLTestGroup struct {
 	lastActive                   common.TypedValue[time.Time]
 }
 
-func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
+func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.StructuredLogger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
 	if interval == 0 {
 		interval = C.DefaultURLTestInterval
 	}
@@ -414,10 +417,12 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 			defer cancel()
 			t, err := urltest.URLTest(testCtx, g.link, p)
 			if err != nil {
-				g.logger.Debug("outbound ", tag, " unavailable: ", err)
+				g.logger.DebugEvent("protocol.message", F.ToString("outbound ", tag, " unavailable: ", err))
+
 				g.history.DeleteURLTestHistory(realTag)
 			} else {
-				g.logger.Debug("outbound ", tag, " available: ", t, "ms")
+				g.logger.DebugEvent("protocol.message", F.ToString("outbound ", tag, " available: ", t, "ms"))
+
 				g.history.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: t,

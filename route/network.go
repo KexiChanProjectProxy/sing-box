@@ -16,13 +16,13 @@ import (
 	"github.com/sagernet/sing-box/common/settings"
 	"github.com/sagernet/sing-box/common/taskmonitor"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/winpowrprof"
 	"github.com/sagernet/sing/service"
@@ -35,7 +35,7 @@ var _ adapter.NetworkManager = (*NetworkManager)(nil)
 
 type NetworkManager struct {
 	ctx                    context.Context
-	logger                 logger.ContextLogger
+	logger                 log.StructuredLogger
 	router                 adapter.Router
 	interfaceFinder        *control.DefaultInterfaceFinder
 	networkInterfaces      common.TypedValue[[]adapter.NetworkInterface]
@@ -59,7 +59,7 @@ type NetworkManager struct {
 	started                bool
 }
 
-func NewNetworkManager(ctx context.Context, logger logger.ContextLogger, options option.RouteOptions, dnsOptions option.DNSOptions) (*NetworkManager, error) {
+func NewNetworkManager(ctx context.Context, logger log.StructuredLogger, options option.RouteOptions, dnsOptions option.DNSOptions) (*NetworkManager, error) {
 	defaultDomainResolver := common.PtrValueOrDefault(options.DefaultDomainResolver)
 	if options.AutoDetectInterface && !(C.IsLinux || C.IsDarwin || C.IsWindows) {
 		return nil, E.New("`auto_detect_interface` is only supported on Linux, Windows and macOS")
@@ -163,7 +163,7 @@ func (r *NetworkManager) Start(stage adapter.StartStage) error {
 			if err == nil {
 				r.powerListener = powerListener
 			} else {
-				r.logger.Warn("initialize power listener: ", err)
+				r.logger.WarnEvent("route.network.error", "initialize power listener", log.Err(err))
 			}
 		}
 		if r.powerListener != nil {
@@ -188,7 +188,7 @@ func (r *NetworkManager) Start(stage adapter.StartStage) error {
 			err = packageManager.Start()
 			monitor.Finish()
 			if err != nil {
-				r.logger.Warn("initialize package manager: ", err)
+				r.logger.WarnEvent("route.network.error", "initialize package manager", log.Err(err))
 			} else {
 				r.packageManager = packageManager
 			}
@@ -198,13 +198,13 @@ func (r *NetworkManager) Start(stage adapter.StartStage) error {
 			wifiMonitor, err := settings.NewWIFIMonitor(r.onWIFIStateChanged)
 			if err != nil {
 				if err != os.ErrInvalid {
-					r.logger.Warn(E.Cause(err, "create WIFI monitor"))
+					r.logger.WarnEvent("route.network.error", "create WIFI monitor", log.Err(err))
 				}
 			} else {
 				r.wifiMonitor = wifiMonitor
 				err = r.wifiMonitor.Start()
 				if err != nil {
-					r.logger.Warn(E.Cause(err, "start WIFI monitor"))
+					r.logger.WarnEvent("route.network.error", "start WIFI monitor", log.Err(err))
 				}
 			}
 		}
@@ -305,7 +305,7 @@ func (r *NetworkManager) UpdateInterfaces() error {
 				oldInterface.Expensive == newInterface.Expensive &&
 				oldInterface.Constrained == newInterface.Constrained
 		}) {
-			r.logger.Info("updated available networks: ", strings.Join(common.Map(newInterfaces, func(it adapter.NetworkInterface) string {
+			r.logger.InfoEvent("route.network.available_updated", "updated available networks", log.String("networks", strings.Join(common.Map(newInterfaces, func(it adapter.NetworkInterface) string {
 				var options []string
 				options = append(options, F.ToString(it.Type))
 				if it.Expensive {
@@ -315,7 +315,7 @@ func (r *NetworkManager) UpdateInterfaces() error {
 					options = append(options, "constrained")
 				}
 				return F.ToString(it.Name, " (", strings.Join(options, ", "), ")")
-			}), ", "))
+			}), ", ")))
 		}
 		return nil
 	}
@@ -435,9 +435,9 @@ func (r *NetworkManager) onWIFIStateChanged(state adapter.WIFIState) {
 		r.wifiState = state
 		r.wifiStateMutex.Unlock()
 		if state.SSID != "" {
-			r.logger.Info("WIFI state changed: SSID=", state.SSID, ", BSSID=", state.BSSID)
+			r.logger.InfoEvent("route.wifi.state_changed", "WIFI state changed", log.String("ssid", state.SSID), log.String("bssid", state.BSSID))
 		} else {
-			r.logger.Info("WIFI disconnected")
+			r.logger.InfoEvent("route.wifi.disconnected", "WIFI disconnected")
 		}
 	} else {
 		r.wifiStateMutex.Unlock()
@@ -488,7 +488,7 @@ func (r *NetworkManager) ResetNetwork() {
 func (r *NetworkManager) notifyInterfaceUpdate(defaultInterface *control.Interface, flags int) {
 	if defaultInterface == nil {
 		r.pauseManager.NetworkPause()
-		r.logger.Error("missing default interface")
+		r.logger.ErrorEvent("route.network.error", "missing default interface")
 		return
 	}
 
@@ -519,7 +519,7 @@ func (r *NetworkManager) notifyInterfaceUpdate(defaultInterface *control.Interfa
 			options = append(options, "constrained")
 		}
 	}
-	r.logger.Info("updated default interface ", defaultInterface.Name, ", ", strings.Join(options, ", "))
+	r.logger.InfoEvent("route.network.default_interface_updated", "updated default interface", log.String("interface", defaultInterface.Name), log.String("options", strings.Join(options, ", ")))
 	r.UpdateWIFIState()
 
 	if !r.started {
@@ -545,5 +545,5 @@ func (r *NetworkManager) notifyWindowsPowerEvent(event int) {
 }
 
 func (r *NetworkManager) OnPackagesUpdated(packages int, sharedUsers int) {
-	r.logger.Info("updated packages list: ", packages, " packages, ", sharedUsers, " shared users")
+	r.logger.InfoEvent("route.network.packages_updated", "updated packages list", log.Int("packages", packages), log.Int("shared_users", sharedUsers))
 }

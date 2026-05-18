@@ -7,6 +7,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 	"io"
 	"net"
 	"os"
@@ -24,7 +26,7 @@ import (
 type Conn struct {
 	aTLS.Conn
 	ctx             context.Context
-	logger          logger.ContextLogger
+	logger          log.StructuredLogger
 	conn            net.Conn
 	rawConn         *badtls.RawConn
 	syscallConn     syscall.Conn
@@ -35,7 +37,7 @@ type Conn struct {
 	pendingRxSplice bool
 }
 
-func NewConn(ctx context.Context, logger logger.ContextLogger, conn aTLS.Conn, txOffload, rxOffload bool) (aTLS.Conn, error) {
+func NewConn(ctx context.Context, logger log.StructuredLogger, conn aTLS.Conn, txOffload, rxOffload bool) (aTLS.Conn, error) {
 	err := Load()
 	if err != nil {
 		return nil, err
@@ -95,10 +97,12 @@ func (c *Conn) SyscallConnForRead() syscall.RawConn {
 		return nil
 	}
 	if !*c.rawConn.IsClient {
-		c.logger.WarnContext(c.ctx, "ktls: RX splice is unavailable on the server size, since it will cause an unknown failure")
+		c.logger.WarnEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: RX splice is unavailable on the server size, since it will cause an unknown failure"))
+
 		return nil
 	}
-	c.logger.DebugContext(c.ctx, "ktls: RX splice requested")
+	c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: RX splice requested"))
+
 	return c.rawSyscallConn
 }
 
@@ -128,6 +132,7 @@ func (c *Conn) SyscallConnForWrite() syscall.RawConn {
 	if !c.kernelTx {
 		return nil
 	}
-	c.logger.DebugContext(c.ctx, "ktls: TX splice requested")
+	c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: TX splice requested"))
+
 	return c.rawSyscallConn
 }

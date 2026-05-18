@@ -2,6 +2,7 @@ package rule
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
 	"net"
 	"net/netip"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/common/convertor/adguard"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	slogger "github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -1111,7 +1111,7 @@ func newRemoteRuleSetForTest(tag string, rules ...adapter.HeadlessRule) *RemoteR
 
 func mustAdGuardRule(t *testing.T, content string) adapter.HeadlessRule {
 	t.Helper()
-	rules, err := adguard.ToOptions(strings.NewReader(content), slogger.NOP())
+	rules, err := adguard.ToOptions(strings.NewReader(content), slog.NewNOPFactory().NewLogger(""))
 	require.NoError(t, err)
 	require.Len(t, rules, 1)
 	rule, err := NewHeadlessRule(context.Background(), rules[0])

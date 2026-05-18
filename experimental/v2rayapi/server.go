@@ -22,14 +22,14 @@ func init() {
 var _ adapter.V2RayServer = (*Server)(nil)
 
 type Server struct {
-	logger       log.Logger
+	logger       log.StructuredLogger
 	listen       string
 	tcpListener  net.Listener
 	grpcServer   *grpc.Server
 	statsService *StatsService
 }
 
-func NewServer(logger log.Logger, options option.V2RayAPIOptions) (adapter.V2RayServer, error) {
+func NewServer(logger log.StructuredLogger, options option.V2RayAPIOptions) (adapter.V2RayServer, error) {
 	grpcServer := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 	statsService := NewStatsService(common.PtrValueOrDefault(options.Stats))
 	if statsService != nil {
@@ -56,12 +56,12 @@ func (s *Server) Start(stage adapter.StartStage) error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info("grpc server started at ", listener.Addr())
+	s.logger.InfoEvent("v2rayapi.started", "grpc server started", log.String("address", listener.Addr().String()))
 	s.tcpListener = listener
 	go func() {
 		err = s.grpcServer.Serve(listener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error(err)
+			s.logger.ErrorEvent("v2rayapi.error", "grpc server error", log.Err(err))
 		}
 	}()
 	return nil

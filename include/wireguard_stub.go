@@ -14,7 +14,7 @@ import (
 )
 
 func registerWireGuardEndpoint(registry *endpoint.Registry) {
-	endpoint.Register[option.WireGuardEndpointOptions](registry, C.TypeWireGuard, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.WireGuardEndpointOptions) (adapter.Endpoint, error) {
+	endpoint.Register[option.WireGuardEndpointOptions](registry, C.TypeWireGuard, func(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.WireGuardEndpointOptions) (adapter.Endpoint, error) {
 		return nil, E.New(`WireGuard is not included in this build, rebuild with -tags with_wireguard`)
 	})
 }

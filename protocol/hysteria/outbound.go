@@ -2,6 +2,7 @@ package hysteria
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -34,11 +34,11 @@ var (
 
 type Outbound struct {
 	outbound.Adapter
-	logger logger.ContextLogger
+	logger log.StructuredLogger
 	client *hysteria.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.HysteriaOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.HysteriaOutboundOptions) (adapter.Outbound, error) {
 	options.UDPFragmentDefault = true
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, C.ErrTLSRequired
@@ -97,7 +97,8 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 		return h.client.DialConn(ctx, destination)
 	case N.NetworkUDP:
 		conn, err := h.ListenPacket(ctx, destination)
@@ -111,7 +112,8 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 }
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	return h.client.ListenPacket(ctx, destination)
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -31,7 +32,7 @@ func (s *Server) checkAndDownloadExternalUI() {
 	if len(entries) == 0 {
 		err = s.downloadExternalUI()
 		if err != nil {
-			s.logger.Error("download external ui error: ", err)
+			s.logger.ErrorEvent("clashapi.ui.download.error", "download external ui error", log.Err(err))
 		}
 	}
 }
@@ -54,7 +55,7 @@ func (s *Server) downloadExternalUI() error {
 		outbound := s.outbound.Default()
 		detour = outbound
 	}
-	s.logger.Info("downloading external ui using outbound/", detour.Type(), "[", detour.Tag(), "]")
+	s.logger.InfoEvent("clashapi.ui.download", "downloading external ui", log.String("outbound_type", detour.Type()), log.String("outbound_tag", detour.Tag()))
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			ForceAttemptHTTP2:   true,

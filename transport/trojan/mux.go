@@ -6,17 +6,18 @@ import (
 	"net"
 	"os"
 
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/task"
 	"github.com/sagernet/smux"
 )
 
-func HandleMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, handler Handler, logger logger.ContextLogger, onClose N.CloseHandlerFunc) error {
+func HandleMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, handler Handler, logger log.StructuredLogger, onClose N.CloseHandlerFunc) error {
 	session, err := smux.Server(conn, smuxConfig())
 	if err != nil {
 		return err
@@ -41,10 +42,11 @@ func HandleMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr,
 	return group.Run(ctx)
 }
 
-func newMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, handler Handler, logger logger.ContextLogger) {
+func newMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, handler Handler, logger log.StructuredLogger) {
 	err := newMuxConnection0(ctx, conn, source, handler)
 	if err != nil {
-		logger.ErrorContext(ctx, E.Cause(err, "process trojan-go multiplex connection"))
+		logger.ErrorEventContext(ctx, "transport.message", F.ToString(E.Cause(err, "process trojan-go multiplex connection")))
+
 	}
 }
 

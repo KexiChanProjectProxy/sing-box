@@ -23,7 +23,7 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -45,7 +45,7 @@ func RegistryTransport(registry *dns.TransportRegistry) {
 type DNSTransport struct {
 	dns.TransportAdapter
 	ctx                    context.Context
-	logger                 logger.ContextLogger
+	logger                 log.StructuredLogger
 	endpointTag            string
 	acceptDefaultResolvers bool
 	acceptSearchDomain     bool
@@ -60,7 +60,7 @@ type DNSTransport struct {
 	defaultResolvers       []adapter.DNSTransport
 }
 
-func NewDNSTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.TailscaleDNSServerOptions) (adapter.DNSTransport, error) {
+func NewDNSTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.TailscaleDNSServerOptions) (adapter.DNSTransport, error) {
 	if options.Endpoint == "" {
 		return nil, E.New("missing tailscale endpoint tag")
 	}
@@ -108,7 +108,8 @@ func (t *DNSTransport) Reset() {
 func (t *DNSTransport) onReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCfg *nDNS.Config) {
 	err := t.updateDNSServers(routerCfg, dnsCfg)
 	if err != nil {
-		t.logger.Error(E.Cause(err, "update DNS servers"))
+		t.logger.ErrorEvent("protocol.message", F.ToString(E.Cause(err, "update DNS servers")))
+
 	}
 }
 
@@ -160,10 +161,10 @@ func (t *DNSTransport) updateDNSServers(routeConfig *router.Config, dnsConfig *n
 	}
 
 	if len(defaultResolvers) > 0 {
-		t.logger.Info("updated ", len(routes), " routes, ", len(hosts), " hosts, ", len(searchDomains), " search domains, default resolvers: ",
-			strings.Join(common.Map(dnsConfig.DefaultResolvers, func(it *dnstype.Resolver) string { return it.Addr }), " "))
+		t.logger.InfoEvent("protocol.tailscale.dns.updated", "updated tailscale DNS routes", log.Int("routes", len(routes)), log.Int("hosts", len(hosts)), log.Int("search_domains", len(searchDomains)), log.String("default_resolvers", strings.Join(common.Map(dnsConfig.DefaultResolvers, func(it *dnstype.Resolver) string { return it.Addr }), " ")))
 	} else {
-		t.logger.Info("updated ", len(routes), " routes, ", len(hosts), " hosts, ", len(searchDomains), " search domains")
+		t.logger.InfoEvent("protocol.tailscale.dns.updated", "updated tailscale DNS routes", log.Int("routes", len(routes)), log.Int("hosts", len(hosts)), log.Int("search_domains", len(searchDomains)))
+
 	}
 	return nil
 }

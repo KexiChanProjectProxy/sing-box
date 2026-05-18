@@ -26,7 +26,7 @@ var _ adapter.Router = (*Router)(nil)
 
 type Router struct {
 	ctx               context.Context
-	logger            log.ContextLogger
+	logger            log.StructuredLogger
 	inbound           adapter.InboundManager
 	outbound          adapter.OutboundManager
 	dns               adapter.DNSRouter
@@ -107,7 +107,7 @@ func (r *Router) Start(stage adapter.StartStage) error {
 				err := resolver.Start()
 				monitor.Finish()
 				if err != nil {
-					r.logger.Error(E.Cause(err, "start neighbor resolver"))
+					r.logger.ErrorEvent("route.neighbor.error", "start neighbor resolver", log.Err(err))
 				} else {
 					r.neighborResolver = resolver
 				}
@@ -117,12 +117,12 @@ func (r *Router) Start(stage adapter.StartStage) error {
 				monitor.Finish()
 				if err != nil {
 					if err != os.ErrInvalid {
-						r.logger.Error(E.Cause(err, "create neighbor resolver"))
+						r.logger.ErrorEvent("route.neighbor.error", "create neighbor resolver", log.Err(err))
 					}
 				} else {
 					err = resolver.Start()
 					if err != nil {
-						r.logger.Error(E.Cause(err, "start neighbor resolver"))
+						r.logger.ErrorEvent("route.neighbor.error", "start neighbor resolver", log.Err(err))
 					} else {
 						r.neighborResolver = resolver
 					}
@@ -180,7 +180,7 @@ func (r *Router) Start(stage adapter.StartStage) error {
 				monitor.Finish()
 				if err != nil {
 					if err != os.ErrInvalid {
-						r.logger.Warn(E.Cause(err, "create process searcher"))
+						r.logger.WarnEvent("route.process.error", "create process searcher", log.Err(err))
 					}
 				} else {
 					r.processSearcher = searcher

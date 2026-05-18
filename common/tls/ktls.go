@@ -2,17 +2,17 @@ package tls
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
 	"net"
 
 	"github.com/sagernet/sing-box/common/ktls"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	aTLS "github.com/sagernet/sing/common/tls"
 )
 
 type KTLSClientConfig struct {
 	Config
-	logger             logger.ContextLogger
+	logger             log.StructuredLogger
 	kernelTx, kernelRx bool
 }
 
@@ -40,7 +40,7 @@ func (w *KTLSClientConfig) Clone() Config {
 
 type KTlSServerConfig struct {
 	ServerConfig
-	logger             logger.ContextLogger
+	logger             log.StructuredLogger
 	kernelTx, kernelRx bool
 }
 

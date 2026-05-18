@@ -5,6 +5,7 @@ package process
 import (
 	"context"
 	"errors"
+	F "github.com/sagernet/sing/common/format"
 	"net/netip"
 	"syscall"
 	"time"
@@ -17,7 +18,7 @@ import (
 var _ Searcher = (*linuxSearcher)(nil)
 
 type linuxSearcher struct {
-	logger           log.ContextLogger
+	logger           log.StructuredLogger
 	diagConns        [4]*socketDiagConn
 	processPathCache *uidProcessPathCache
 }
@@ -56,7 +57,8 @@ func (s *linuxSearcher) FindProcessInfo(ctx context.Context, network string, sou
 	}
 	processPath, err := s.processPathCache.findProcessPath(inode, uid)
 	if err != nil {
-		s.logger.DebugContext(ctx, "find process path: ", err)
+		s.logger.DebugEventContext(ctx, "common.process.message", F.ToString("find process path: ", err))
+
 	} else {
 		processInfo.ProcessPath = processPath
 	}

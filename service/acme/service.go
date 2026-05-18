@@ -32,7 +32,6 @@ import (
 	"github.com/libdns/libdns"
 	"github.com/mholt/acmez/v3/acme"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 func RegisterCertificateProvider(registry *certificate.Registry) {
@@ -53,7 +52,7 @@ type Service struct {
 	nextProtos []string
 }
 
-func NewCertificateProvider(ctx context.Context, logger log.ContextLogger, tag string, options option.ACMECertificateProviderOptions) (adapter.CertificateProviderService, error) {
+func NewCertificateProvider(ctx context.Context, logger log.StructuredLogger, tag string, options option.ACMECertificateProviderOptions) (adapter.CertificateProviderService, error) {
 	if len(options.Domain) == 0 {
 		return nil, E.New("missing domain")
 	}
@@ -83,11 +82,7 @@ func NewCertificateProvider(ctx context.Context, logger log.ContextLogger, tag s
 		storage = certmagic.Default.Storage
 	}
 
-	zapLogger := zap.New(zapcore.NewCore(
-		zapcore.NewConsoleEncoder(boxtls.ACMEEncoderConfig()),
-		&boxtls.ACMELogWriter{Logger: logger},
-		zap.DebugLevel,
-	))
+	zapLogger := zap.New(&boxtls.ACMELogWriter{Logger: logger})
 
 	config := &certmagic.Config{
 		DefaultServerName: options.DefaultServerName,
@@ -315,7 +310,7 @@ func createZeroSSLExternalAccountBinding(ctx context.Context, acmeIssuer *certma
 	}, account, nil
 }
 
-func newACMEHTTPClient(ctx context.Context, logger log.ContextLogger, options option.ACMECertificateProviderOptions) (*http.Client, error) {
+func newACMEHTTPClient(ctx context.Context, logger log.StructuredLogger, options option.ACMECertificateProviderOptions) (*http.Client, error) {
 	httpClientOptions := common.PtrValueOrDefault(options.HTTPClient)
 	httpClientManager := service.FromContext[adapter.HTTPClientManager](ctx)
 	transport, err := httpClientManager.ResolveTransport(ctx, logger, httpClientOptions)

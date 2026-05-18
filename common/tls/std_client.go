@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"github.com/sagernet/sing-box/log"
 	"net"
 	"os"
 	"strings"
@@ -18,7 +19,6 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/ntp"
 )
 
@@ -111,11 +111,11 @@ func (c *STDClientConfig) SetECHConfigList(EncryptedClientHelloConfigList []byte
 	c.config.EncryptedClientHelloConfigList = EncryptedClientHelloConfigList
 }
 
-func NewSTDClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
+func NewSTDClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions) (Config, error) {
 	return newSTDClient(ctx, logger, serverAddress, options, false)
 }
 
-func newSTDClient(ctx context.Context, logger logger.ContextLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
+func newSTDClient(ctx context.Context, logger log.StructuredLogger, serverAddress string, options option.OutboundTLSOptions, allowEmptyServerName bool) (Config, error) {
 	var serverName string
 	if options.ServerName != "" {
 		serverName = options.ServerName

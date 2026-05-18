@@ -20,7 +20,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -36,7 +35,7 @@ var _ adapter.InterfaceUpdateListener = (*Outbound)(nil)
 type Outbound struct {
 	outbound.Adapter
 	ctx               context.Context
-	logger            logger.ContextLogger
+	logger            log.StructuredLogger
 	dialer            N.Dialer
 	serverAddr        M.Socksaddr
 	user              string
@@ -52,7 +51,7 @@ type Outbound struct {
 	client            *ssh.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SSHOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.SSHOutboundOptions) (adapter.Outbound, error) {
 	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package tun
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"os"
@@ -39,7 +40,7 @@ type Inbound struct {
 	ctx                         context.Context
 	router                      adapter.Router
 	networkManager              adapter.NetworkManager
-	logger                      log.ContextLogger
+	logger                      log.StructuredLogger
 	tunOptions                  tun.Options
 	udpTimeout                  time.Duration
 	dnsHijackAddress            []netip.Addr
@@ -57,7 +58,7 @@ type Inbound struct {
 	routeExcludeAddressSet      []*netipx.IPSet
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TunInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.TunInboundOptions) (adapter.Inbound, error) {
 	//nolint:staticcheck
 	if len(options.Inet4Address) > 0 || len(options.Inet6Address) > 0 ||
 		len(options.Inet4RouteAddress) > 0 || len(options.Inet6RouteAddress) > 0 ||
@@ -331,7 +332,8 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			for _, routeRuleSet := range t.routeRuleSet {
 				ipSets := routeRuleSet.ExtractIPSet()
 				if len(ipSets) == 0 {
-					t.logger.Warn("route_address_set: no destination IP CIDR rules found in rule-set: ", routeRuleSet.Name())
+					t.logger.WarnEvent("protocol.message", F.ToString("route_address_set: no destination IP CIDR rules found in rule-set: ", routeRuleSet.Name()))
+
 				}
 				routeRuleSet.IncRef()
 				t.routeAddressSet = append(t.routeAddressSet, ipSets...)
@@ -343,7 +345,8 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			for _, routeExcludeRuleSet := range t.routeExcludeRuleSet {
 				ipSets := routeExcludeRuleSet.ExtractIPSet()
 				if len(ipSets) == 0 {
-					t.logger.Warn("route_address_set: no destination IP CIDR rules found in rule-set: ", routeExcludeRuleSet.Name())
+					t.logger.WarnEvent("protocol.message", F.ToString("route_address_set: no destination IP CIDR rules found in rule-set: ", routeExcludeRuleSet.Name()))
+
 				}
 				routeExcludeRuleSet.IncRef()
 				t.routeExcludeAddressSet = append(t.routeExcludeAddressSet, ipSets...)
@@ -389,7 +392,8 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 		if err != nil {
 			return E.Cause(err, "configure tun interface")
 		}
-		t.logger.Trace("creating stack")
+		t.logger.TraceEvent("protocol.message", F.ToString("creating stack"))
+
 		t.tunIf = tunInterface
 		var (
 			forwarderBindInterface bool
@@ -414,7 +418,8 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			return err
 		}
 		t.tunStack = tunStack
-		t.logger.Info("started at ", t.tunOptions.Name)
+		t.logger.InfoEvent("protocol.message", F.ToString("started at ", t.tunOptions.Name))
+
 	case adapter.StartStatePostStart:
 		monitor := taskmonitor.New(t.logger, C.StartTimeout)
 		monitor.Start("starting tun stack")
@@ -479,10 +484,12 @@ func (t *Inbound) PrepareConnection(network string, source M.Socksaddr, destinat
 		case rule.IsBypassed(err):
 			err = nil
 		case rule.IsRejected(err):
-			t.logger.Trace("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())
+			t.logger.TraceEvent("protocol.message", F.ToString("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+
 		default:
 			if network == N.NetworkICMP {
-				t.logger.Warn(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+				t.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())))
+
 			}
 		}
 	}
@@ -502,10 +509,13 @@ func (t *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, source M.S
 		}
 	}
 	if metadata.Protocol == C.ProtocolDNS {
-		t.logger.InfoContext(ctx, "inbound DNS connection from ", metadata.Source)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound DNS connection from ", metadata.Source))
+
 	} else {
-		t.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
-		t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", metadata.Source))
+
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	}
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -523,10 +533,13 @@ func (t *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 		}
 	}
 	if metadata.Protocol == C.ProtocolDNS {
-		t.logger.InfoContext(ctx, "inbound DNS packet connection from ", metadata.Source)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound DNS packet connection from ", metadata.Source))
+
 	} else {
-		t.logger.InfoContext(ctx, "inbound packet connection from ", metadata.Source)
-		t.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", metadata.Source))
+
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
+
 	}
 	t.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -551,12 +564,15 @@ func (t *autoRedirectHandler) PrepareConnection(network string, source M.Socksad
 	if err != nil {
 		switch {
 		case rule.IsBypassed(err):
-			t.logger.Trace("bypass ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())
+			t.logger.TraceEvent("protocol.message", F.ToString("bypass ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+
 		case rule.IsRejected(err):
-			t.logger.Trace("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())
+			t.logger.TraceEvent("protocol.message", F.ToString("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+
 		default:
 			if network == N.NetworkICMP {
-				t.logger.Warn(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+				t.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())))
+
 			}
 		}
 	}
@@ -576,10 +592,13 @@ func (t *autoRedirectHandler) NewConnectionEx(ctx context.Context, conn net.Conn
 		}
 	}
 	if metadata.Protocol == C.ProtocolDNS {
-		t.logger.InfoContext(ctx, "inbound redirect DNS connection from ", metadata.Source)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound redirect DNS connection from ", metadata.Source))
+
 	} else {
-		t.logger.InfoContext(ctx, "inbound redirect connection from ", metadata.Source)
-		t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound redirect connection from ", metadata.Source))
+
+		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	}
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

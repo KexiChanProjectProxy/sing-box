@@ -5,6 +5,8 @@ package tailscale
 import (
 	"encoding/hex"
 	"errors"
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 	"io"
 	"os"
 	"sync"
@@ -20,14 +22,14 @@ type tunDeviceAdapter struct {
 	linuxTUN   singTun.LinuxTUN
 	events     chan wgTun.Event
 	mtu        int
-	logger     logger.ContextLogger
+	logger     log.StructuredLogger
 	debugTun   bool
 	readCount  atomic.Uint32
 	writeCount atomic.Uint32
 	closeOnce  sync.Once
 }
 
-func newTunDeviceAdapter(tun singTun.Tun, mtu int, logger logger.ContextLogger) (wgTun.Device, error) {
+func newTunDeviceAdapter(tun singTun.Tun, mtu int, logger log.StructuredLogger) (wgTun.Device, error) {
 	if tun == nil {
 		return nil, os.ErrInvalid
 	}
@@ -151,5 +153,6 @@ func (a *tunDeviceAdapter) debugPacket(direction string, packet []byte) {
 	if len(sample) > 64 {
 		sample = sample[:64]
 	}
-	a.logger.Trace("tailscale tun ", direction, " len=", len(packet), " head=", hex.EncodeToString(sample))
+	a.logger.TraceEvent("protocol.message", F.ToString("tailscale tun ", direction, " len=", len(packet), " head=", hex.EncodeToString(sample)))
+
 }

@@ -2,18 +2,18 @@ package wireguard
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/log"
 	"net/netip"
 	"time"
 
 	"github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
 
 type EndpointOptions struct {
 	Context      context.Context
-	Logger       logger.ContextLogger
+	Logger       log.StructuredLogger
 	System       bool
 	Handler      tun.Handler
 	UDPTimeout   time.Duration

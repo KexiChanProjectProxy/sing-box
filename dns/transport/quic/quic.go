@@ -40,7 +40,7 @@ type Transport struct {
 	connection *transport.ConnPool[*quic.Conn]
 }
 
-func NewQUIC(ctx context.Context, logger log.ContextLogger, tag string, options option.RemoteTLSDNSServerOptions) (adapter.DNSTransport, error) {
+func NewQUIC(ctx context.Context, logger log.StructuredLogger, tag string, options option.RemoteTLSDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewRemoteDialer(ctx, options.RemoteDNSServerOptions)
 	if err != nil {
 		return nil, err

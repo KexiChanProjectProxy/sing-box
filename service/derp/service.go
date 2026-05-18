@@ -28,9 +28,7 @@ import (
 	boxScale "github.com/sagernet/sing-box/protocol/tailscale"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/json/badoption"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	aTLS "github.com/sagernet/sing/common/tls"
@@ -59,7 +57,7 @@ func Register(registry *boxService.Registry) {
 type Service struct {
 	boxService.Adapter
 	ctx                  context.Context
-	logger               logger.ContextLogger
+	logger               log.StructuredLogger
 	listener             *listener.Listener
 	stunListener         *listener.Listener
 	tlsConfig            tls.ServerConfig
@@ -73,7 +71,7 @@ type Service struct {
 	meshWith             []*option.DERPMeshOptions
 }
 
-func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.DERPServiceOptions) (adapter.Service, error) {
+func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.DERPServiceOptions) (adapter.Service, error) {
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, E.New("TLS is required for DERP server")
 	}
@@ -115,7 +113,7 @@ func NewService(ctx context.Context, logger log.ContextLogger, tag string, optio
 	return &Service{
 		Adapter: boxService.NewAdapter(C.TypeDERP, tag),
 		ctx:     ctx,
-		logger:  logger,
+		logger:  logger.(log.StructuredLogger),
 		listener: listener.New(listener.Options{
 			Context: ctx,
 			Logger:  logger,
@@ -143,7 +141,7 @@ func (d *Service) Start(stage adapter.StartStage) error {
 		}
 
 		server := derpserver.New(config.PrivateKey, func(format string, args ...any) {
-			d.logger.Debug(fmt.Sprintf(format, args...))
+			d.logger.DebugEvent("service.derp.message", fmt.Sprintf(format, args...))
 		})
 
 		if len(d.verifyClientURL) > 0 {
@@ -303,7 +301,7 @@ func (d *Service) startMeshWithHost(derpServer *derpserver.Server, server *optio
 		}
 	}
 	logf := func(format string, args ...any) {
-		d.logger.Debug(F.ToString("mesh(", hostname, "): ", fmt.Sprintf(format, args...)))
+		d.logger.DebugEvent("service.derp.mesh.message", fmt.Sprintf(format, args...), log.String("host", hostname))
 	}
 	var meshHost string
 	if server.ServerPort == 0 || server.ServerPort == 443 {
@@ -329,7 +327,7 @@ func (d *Service) startMeshWithHost(derpServer *derpserver.Server, server *optio
 	})
 	add := func(m derp.PeerPresentMessage) { derpServer.AddPacketForwarder(m.Key, meshClient) }
 	remove := func(m derp.PeerGoneMessage) { derpServer.RemovePacketForwarder(m.Peer, meshClient) }
-	notifyError := func(err error) { d.logger.Error(err) }
+	notifyError := func(err error) { d.logger.ErrorEvent("service.derp.mesh.error", "mesh connection", log.Err(err)) }
 	go meshClient.RunWatchConnectionLoop(context.Background(), derpServer.PublicKey(), logf, add, remove, notifyError)
 	return nil
 }

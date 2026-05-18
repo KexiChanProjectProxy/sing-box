@@ -2,6 +2,7 @@ package socks
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -12,7 +13,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/uot"
@@ -29,13 +29,13 @@ var _ adapter.Outbound = (*Outbound)(nil)
 type Outbound struct {
 	outbound.Adapter
 	dnsRouter adapter.DNSRouter
-	logger    logger.ContextLogger
+	logger    log.StructuredLogger
 	client    *socks.Client
 	resolve   bool
 	uotClient *uot.Client
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SOCKSOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.SOCKSOutboundOptions) (adapter.Outbound, error) {
 	var version socks.Version
 	var err error
 	if options.Version != "" {
@@ -73,13 +73,16 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	metadata.Destination = destination
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	case N.NetworkUDP:
 		if h.uotClient != nil {
-			h.logger.InfoContext(ctx, "outbound UoT connect packet connection to ", destination)
+			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT connect packet connection to ", destination))
+
 			return h.uotClient.DialContext(ctx, network, destination)
 		}
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	default:
 		return nil, E.Extend(N.ErrUnknownNetwork, network)
 	}
@@ -98,7 +101,8 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
 	if h.uotClient != nil {
-		h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+
 		return h.uotClient.ListenPacket(ctx, destination)
 	}
 	if h.resolve && destination.IsDomain() {
@@ -112,6 +116,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 		}
 		return packetConn, nil
 	}
-	h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	return h.client.ListenPacket(ctx, destination)
 }

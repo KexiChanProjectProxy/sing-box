@@ -14,7 +14,7 @@ import (
 )
 
 func registerOCMService(registry *service.Registry) {
-	service.Register[option.OCMServiceOptions](registry, C.TypeOCM, func(ctx context.Context, logger log.ContextLogger, tag string, options option.OCMServiceOptions) (adapter.Service, error) {
+	service.Register[option.OCMServiceOptions](registry, C.TypeOCM, func(ctx context.Context, logger log.StructuredLogger, tag string, options option.OCMServiceOptions) (adapter.Service, error) {
 		return nil, E.New(`OCM is not included in this build, rebuild with -tags with_ocm`)
 	})
 }

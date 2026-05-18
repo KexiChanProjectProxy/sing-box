@@ -1,10 +1,9 @@
 package libbox
 
 import (
+	"github.com/sagernet/sing-box/log"
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/control"
-	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/x/list"
 )
 
@@ -15,7 +14,7 @@ var (
 
 type platformDefaultInterfaceMonitor struct {
 	*platformInterfaceWrapper
-	logger      logger.Logger
+	logger      log.StructuredLogger
 	callbacks   list.List[tun.DefaultInterfaceUpdateCallback]
 	myInterface string
 }
@@ -72,7 +71,7 @@ func (m *platformDefaultInterfaceMonitor) updateDefaultInterface(interfaceName s
 	m.isConstrained = isConstrained
 	err := m.networkManager.UpdateInterfaces()
 	if err != nil {
-		m.logger.Error(E.Cause(err, "update interfaces"))
+		m.logger.ErrorEvent("monitor.interfaces.error", "update interfaces", log.Err(err))
 	}
 	m.defaultInterfaceAccess.Lock()
 	if interfaceIndex32 == -1 {
@@ -88,7 +87,7 @@ func (m *platformDefaultInterfaceMonitor) updateDefaultInterface(interfaceName s
 	newInterface, err := m.networkManager.InterfaceFinder().ByIndex(int(interfaceIndex32))
 	if err != nil {
 		m.defaultInterfaceAccess.Unlock()
-		m.logger.Error(E.Cause(err, "find updated interface: ", interfaceName))
+		m.logger.ErrorEvent("monitor.interfaces.find.error", "find updated interface", log.String("interface", interfaceName), log.Err(err))
 		return
 	}
 	m.defaultInterface = newInterface

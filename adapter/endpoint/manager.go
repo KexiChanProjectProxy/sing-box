@@ -16,7 +16,7 @@ import (
 var _ adapter.EndpointManager = (*Manager)(nil)
 
 type Manager struct {
-	logger        log.ContextLogger
+	logger        log.StructuredLogger
 	registry      adapter.EndpointRegistry
 	access        sync.Mutex
 	started       bool
@@ -25,7 +25,7 @@ type Manager struct {
 	endpointByTag map[string]adapter.Endpoint
 }
 
-func NewManager(logger log.ContextLogger, registry adapter.EndpointRegistry) *Manager {
+func NewManager(logger log.StructuredLogger, registry adapter.EndpointRegistry) *Manager {
 	return &Manager{
 		logger:        logger,
 		registry:      registry,
@@ -117,7 +117,7 @@ func (m *Manager) Remove(tag string) error {
 	return nil
 }
 
-func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, outboundType string, options any) error {
+func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, outboundType string, options any) error {
 	endpoint, err := m.registry.Create(ctx, router, logger, tag, outboundType, options)
 	if err != nil {
 		return err

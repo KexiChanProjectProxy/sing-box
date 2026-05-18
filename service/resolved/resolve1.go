@@ -164,9 +164,9 @@ func (t *resolve1Manager) log(sender dbus.Sender, message ...any) {
 		} else if metadata.ProcessInfo.UserId != 0 {
 			prefix = F.ToString("uid:", metadata.ProcessInfo.UserId)
 		}
-		t.logger.Info("(", prefix, ") ", F.ToString(message...))
+		t.logger.InfoEvent("resolved.message", F.ToString(message...), log.String("prefix", prefix))
 	} else {
-		t.logger.Info(F.ToString(message...))
+		t.logger.InfoEvent("resolved.message", F.ToString(message...))
 	}
 }
 

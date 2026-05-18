@@ -16,7 +16,7 @@ import (
 var _ adapter.ServiceManager = (*Manager)(nil)
 
 type Manager struct {
-	logger       log.ContextLogger
+	logger       log.StructuredLogger
 	registry     adapter.ServiceRegistry
 	access       sync.Mutex
 	started      bool
@@ -25,7 +25,7 @@ type Manager struct {
 	serviceByTag map[string]adapter.Service
 }
 
-func NewManager(logger log.ContextLogger, registry adapter.ServiceRegistry) *Manager {
+func NewManager(logger log.StructuredLogger, registry adapter.ServiceRegistry) *Manager {
 	return &Manager{
 		logger:       logger,
 		registry:     registry,
@@ -114,7 +114,7 @@ func (m *Manager) Remove(tag string) error {
 	return nil
 }
 
-func (m *Manager) Create(ctx context.Context, logger log.ContextLogger, tag string, serviceType string, options any) error {
+func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag string, serviceType string, options any) error {
 	service, err := m.registry.Create(ctx, logger, tag, serviceType, options)
 	if err != nil {
 		return err

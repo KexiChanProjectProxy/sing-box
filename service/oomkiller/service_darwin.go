@@ -36,6 +36,7 @@ import (
 	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/byteformats"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
@@ -99,7 +100,7 @@ func goMemoryPressureCallback(status C.ulong) {
 	}
 	sample := readMemorySample(policyModeNetworkExtension)
 	for _, s := range services {
-		s.logger.Warn("memory pressure: critical, usage: ", byteformats.FormatMemoryBytes(sample.usage))
+		s.logger.WarnEvent("oom.pressure.critical", "memory pressure critical", log.String("usage", byteformats.FormatMemoryBytes(sample.usage)))
 		s.writeOOMDraft(sample.usage)
 		s.adaptiveTimer.notifyPressure()
 	}
@@ -119,9 +120,9 @@ func (s *Service) writeOOMDraft(memoryUsage uint64) {
 		return
 	}
 	if err != nil {
-		s.logger.Warn("failed to write OOM draft: ", err)
+		s.logger.WarnEvent("oom.draft.write.error", "failed to write OOM draft", log.Err(err))
 	} else {
-		s.logger.Warn("OOM draft saved")
+		s.logger.WarnEvent("oom.draft.saved", "OOM draft saved")
 	}
 }
 
@@ -133,8 +134,8 @@ func (s *Service) discardOOMDraft() {
 	}
 	err := reporter.DiscardDraft()
 	if err != nil {
-		s.logger.Warn("failed to discard OOM draft: ", err)
+		s.logger.WarnEvent("oom.draft.discard.error", "failed to discard OOM draft", log.Err(err))
 	} else {
-		s.logger.Info("OOM draft discarded")
+		s.logger.InfoEvent("oom.draft.discarded", "OOM draft discarded")
 	}
 }

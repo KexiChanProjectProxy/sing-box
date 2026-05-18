@@ -24,7 +24,6 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	sHTTP "github.com/sagernet/sing/protocol/http"
@@ -40,7 +39,7 @@ func RegisterHTTP3Transport(registry *dns.TransportRegistry) {
 
 type HTTP3Transport struct {
 	dns.TransportAdapter
-	logger          logger.ContextLogger
+	logger          log.StructuredLogger
 	dialer          N.Dialer
 	destination     *url.URL
 	headers         http.Header
@@ -50,7 +49,7 @@ type HTTP3Transport struct {
 	transport       *http3.Transport
 }
 
-func NewHTTP3(ctx context.Context, logger log.ContextLogger, tag string, options option.RemoteHTTPSDNSServerOptions) (adapter.DNSTransport, error) {
+func NewHTTP3(ctx context.Context, logger log.StructuredLogger, tag string, options option.RemoteHTTPSDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewRemoteDialer(ctx, options.RemoteDNSServerOptions)
 	if err != nil {
 		return nil, err

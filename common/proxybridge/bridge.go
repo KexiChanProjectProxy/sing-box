@@ -12,7 +12,7 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/protocol/socks"
@@ -21,7 +21,7 @@ import (
 
 type Bridge struct {
 	ctx           context.Context
-	logger        logger.ContextLogger
+	logger        log.StructuredLogger
 	tag           string
 	dialer        N.Dialer
 	connection    adapter.ConnectionManager
@@ -31,7 +31,7 @@ type Bridge struct {
 	authenticator *auth.Authenticator
 }
 
-func New(ctx context.Context, logger logger.ContextLogger, tag string, dialer N.Dialer) (*Bridge, error) {
+func New(ctx context.Context, logger log.StructuredLogger, tag string, dialer N.Dialer) (*Bridge, error) {
 	username := randomHex(16)
 	password := randomHex(16)
 	tcpListener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -88,10 +88,12 @@ func (b *Bridge) acceptLoop() {
 				return
 			}
 			if E.IsClosedOrCanceled(hErr) {
-				b.logger.DebugContext(ctx, E.Cause(hErr, b.tag, " connection closed"))
+				b.logger.DebugEventContext(ctx, "common.proxybridge.message", F.ToString(E.Cause(hErr, b.tag, " connection closed")))
+
 				return
 			}
-			b.logger.ErrorContext(ctx, E.Cause(hErr, b.tag))
+			b.logger.ErrorEventContext(ctx, "common.proxybridge.message", F.ToString(E.Cause(hErr, b.tag)))
+
 		}()
 	}
 }
@@ -101,7 +103,8 @@ func (b *Bridge) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Network = N.NetworkTCP
-	b.logger.InfoContext(ctx, b.tag, " connection to ", metadata.Destination)
+	b.logger.InfoEventContext(ctx, "common.proxybridge.message", F.ToString(b.tag, " connection to ", metadata.Destination))
+
 	b.connection.NewConnection(ctx, b.dialer, conn, metadata, onClose)
 }
 
@@ -110,6 +113,7 @@ func (b *Bridge) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, s
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Network = N.NetworkUDP
-	b.logger.InfoContext(ctx, b.tag, " packet connection to ", metadata.Destination)
+	b.logger.InfoEventContext(ctx, "common.proxybridge.message", F.ToString(b.tag, " packet connection to ", metadata.Destination))
+
 	b.connection.NewPacketConnection(ctx, b.dialer, conn, metadata, onClose)
 }

@@ -3,13 +3,13 @@ package trojan
 import (
 	"context"
 	"encoding/binary"
+	"github.com/sagernet/sing-box/log"
 	"net"
 
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/rw"
@@ -25,10 +25,10 @@ type Service[K comparable] struct {
 	keys            map[[56]byte]K
 	handler         Handler
 	fallbackHandler N.TCPConnectionHandlerEx
-	logger          logger.ContextLogger
+	logger          log.StructuredLogger
 }
 
-func NewService[K comparable](handler Handler, fallbackHandler N.TCPConnectionHandlerEx, logger logger.ContextLogger) *Service[K] {
+func NewService[K comparable](handler Handler, fallbackHandler N.TCPConnectionHandlerEx, logger log.StructuredLogger) *Service[K] {
 	return &Service[K]{
 		users:           make(map[K][56]byte),
 		keys:            make(map[[56]byte]K),

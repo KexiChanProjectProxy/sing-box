@@ -10,7 +10,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 
 	mDNS "github.com/miekg/dns"
 )
@@ -23,13 +22,13 @@ var _ adapter.FakeIPTransport = (*Transport)(nil)
 
 type Transport struct {
 	dns.TransportAdapter
-	logger       logger.ContextLogger
+	logger       log.StructuredLogger
 	store        adapter.FakeIPStore
 	inet4Enabled bool
 	inet6Enabled bool
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.FakeIPDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.FakeIPDNSServerOptions) (adapter.DNSTransport, error) {
 	inet4Range := options.Inet4Range.Build(netip.Prefix{})
 	inet6Range := options.Inet6Range.Build(netip.Prefix{})
 	if !inet4Range.IsValid() && !inet6Range.IsValid() {

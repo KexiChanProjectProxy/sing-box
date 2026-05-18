@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	F "github.com/sagernet/sing/common/format"
 	"io"
 	"net/http"
 	"net/netip"
@@ -81,11 +82,11 @@ type server struct {
 	realms     map[string]*realmSession
 	sessions   map[string]*realmSession
 	userCounts map[string]int
-	logger     log.ContextLogger
+	logger     log.StructuredLogger
 	tokenMap   map[string]*realmUser
 }
 
-func newServer(logger log.ContextLogger, tokenMap map[string]*realmUser) *server {
+func newServer(logger log.StructuredLogger, tokenMap map[string]*realmUser) *server {
 	return &server{
 		realms:     make(map[string]*realmSession),
 		sessions:   make(map[string]*realmSession),
@@ -309,11 +310,13 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	s.userCounts[user.name]++
 	sess.timer = time.AfterFunc(sessionTTL, func() {
 		if s.removeExpiredSession(sess) {
-			s.logger.Debug("[", sess.username, "] session expired realm=", sess.realmID)
+			s.logger.DebugEvent("protocol.message", F.ToString("[", sess.username, "] session expired realm=", sess.realmID))
+
 		}
 	})
 	s.access.Unlock()
-	s.logger.InfoContext(r.Context(), "[", user.name, "] registered realm=", id)
+	s.logger.InfoEventContext(r.Context(), "protocol.message", F.ToString("[", user.name, "] registered realm=", id))
+
 	render.JSON(w, r, render.M{
 		"session_id": sess.id,
 		"ttl":        int(sessionTTL.Seconds()),
@@ -322,7 +325,8 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleDeregister(w http.ResponseWriter, r *http.Request) {
 	sess := r.Context().Value(contextKeySession).(*realmSession)
-	s.logger.InfoContext(r.Context(), "[", sess.username, "] deregistered realm=", sess.realmID)
+	s.logger.InfoEventContext(r.Context(), "protocol.message", F.ToString("[", sess.username, "] deregistered realm=", sess.realmID))
+
 	s.removeSession(sess)
 	render.NoContent(w, r)
 }
@@ -353,7 +357,8 @@ func (s *server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	sess.timer.Reset(sessionTTL)
 	s.access.Unlock()
-	s.logger.DebugContext(r.Context(), "[", sess.username, "] heartbeat realm=", sess.realmID)
+	s.logger.DebugEventContext(r.Context(), "protocol.message", F.ToString("[", sess.username, "] heartbeat realm=", sess.realmID))
+
 	s.sendEvent(sess, realmEvent{kind: "heartbeat_ack", data: render.M{"ttl": int(sessionTTL.Seconds())}})
 	render.JSON(w, r, render.M{"ttl": int(sessionTTL.Seconds())})
 }
@@ -445,7 +450,7 @@ func (s *server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, render.M{"error": "rate_limited", "message": "server event buffer full"})
 		return
 	}
-	s.logger.DebugContext(r.Context(), "[", user.name, "] connect realm=", id)
+	s.logger.DebugEventContext(r.Context(), "protocol.message", F.ToString("[", user.name, "] connect realm=", id))
 
 	timer := time.NewTimer(connectResponseTimeout)
 	defer timer.Stop()
@@ -504,7 +509,8 @@ func (s *server) handleConnectResponse(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, render.M{"error": "attempt_not_found", "message": "no pending attempt for nonce"})
 		return
 	}
-	s.logger.DebugContext(r.Context(), "[", sess.username, "] connect-response realm=", sess.realmID)
+	s.logger.DebugEventContext(r.Context(), "protocol.message", F.ToString("[", sess.username, "] connect-response realm=", sess.realmID))
+
 	render.NoContent(w, r)
 }
 

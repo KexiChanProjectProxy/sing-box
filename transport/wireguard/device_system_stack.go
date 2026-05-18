@@ -4,6 +4,7 @@ package wireguard
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net/netip"
 	"sync"
 	"time"
@@ -31,7 +32,7 @@ var _ Device = (*systemStackDevice)(nil)
 type systemStackDevice struct {
 	*systemDevice
 	ctx       context.Context
-	logger    logger.ContextLogger
+	logger    log.StructuredLogger
 	stack     *stack.Stack
 	endpoint  *deviceEndpoint
 	writeBufs [][]byte
@@ -178,7 +179,8 @@ func (w *systemStackDevice) CreateDestination(metadata adapter.InboundContext, r
 	if err != nil {
 		return nil, err
 	}
-	w.logger.InfoContext(ctx, "linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString())
+	w.logger.InfoEventContext(ctx, "transport.message", F.ToString("linked ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString()))
+
 	return destination, nil
 }
 

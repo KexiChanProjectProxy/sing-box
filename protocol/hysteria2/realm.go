@@ -3,6 +3,7 @@ package hysteria2
 import (
 	"context"
 	"errors"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"time"
@@ -35,14 +36,14 @@ type RealmService struct {
 	boxService.Adapter
 	ctx        context.Context
 	cancel     context.CancelFunc
-	logger     log.ContextLogger
+	logger     log.StructuredLogger
 	listener   *listener.Listener
 	tlsConfig  tls.ServerConfig
 	httpServer *http.Server
 	server     *server
 }
 
-func NewRealmService(ctx context.Context, logger log.ContextLogger, tag string, options option.HysteriaRealmServiceOptions) (adapter.Service, error) {
+func NewRealmService(ctx context.Context, logger log.StructuredLogger, tag string, options option.HysteriaRealmServiceOptions) (adapter.Service, error) {
 	if len(options.Users) == 0 {
 		return nil, E.New("missing users")
 	}
@@ -65,7 +66,8 @@ func NewRealmService(ctx context.Context, logger log.ContextLogger, tag string, 
 	chiRouter.Use(middleware.RequestSize(maxRequestBodyBytes))
 	chiRouter.Use(func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger.DebugContext(r.Context(), r.Method, " ", r.RequestURI, " ", sHTTP.SourceAddress(r))
+			logger.DebugEventContext(r.Context(), "protocol.message", F.ToString(r.Method, " ", r.RequestURI, " ", sHTTP.SourceAddress(r)))
+
 			handler.ServeHTTP(w, r)
 		})
 	})
@@ -144,7 +146,8 @@ func (s *RealmService) Start(stage adapter.StartStage) error {
 	go func() {
 		err = s.httpServer.Serve(tcpListener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error("serve error: ", err)
+			s.logger.ErrorEvent("protocol.message", F.ToString("serve error: ", err))
+
 		}
 	}()
 	return nil

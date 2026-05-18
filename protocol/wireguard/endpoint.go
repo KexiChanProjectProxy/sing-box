@@ -2,6 +2,7 @@ package wireguard
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"sync/atomic"
@@ -19,7 +20,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -39,13 +39,13 @@ type Endpoint struct {
 	ctx            context.Context
 	router         adapter.Router
 	dnsRouter      adapter.DNSRouter
-	logger         logger.ContextLogger
+	logger         log.StructuredLogger
 	localAddresses []netip.Prefix
 	endpoint       *wireguard.Endpoint
 	started        atomic.Bool
 }
 
-func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.WireGuardEndpointOptions) (adapter.Endpoint, error) {
+func NewEndpoint(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.WireGuardEndpointOptions) (adapter.Endpoint, error) {
 	ep := &Endpoint{
 		Adapter:        endpoint.NewAdapterWithDialerOptions(C.TypeWireGuard, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, options.DialerOptions),
 		ctx:            ctx,
@@ -159,10 +159,12 @@ func (w *Endpoint) PrepareConnection(network string, source M.Socksaddr, destina
 		case rule.IsBypassed(err):
 			err = nil
 		case rule.IsRejected(err):
-			w.logger.Trace("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())
+			w.logger.TraceEvent("protocol.message", F.ToString("reject ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+
 		default:
 			if network == N.NetworkICMP {
-				w.logger.Warn(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString()))
+				w.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "link ", network, " connection from ", source.AddrString(), " to ", destination.AddrString())))
+
 			}
 		}
 	}
@@ -186,8 +188,10 @@ func (w *Endpoint) NewConnectionEx(ctx context.Context, conn net.Conn, source M.
 		}
 	}
 	metadata.Destination = destination
-	w.logger.InfoContext(ctx, "inbound connection from ", source)
-	w.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", source))
+
+	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+
 	w.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -208,17 +212,21 @@ func (w *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 			conn = bufio.NewNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, metadata.Destination)
 		}
 	}
-	w.logger.InfoContext(ctx, "inbound packet connection from ", source)
-	w.logger.InfoContext(ctx, "inbound packet connection to ", destination)
+	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", source))
+
+	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", destination))
+
 	w.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (w *Endpoint) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch network {
 	case N.NetworkTCP:
-		w.logger.InfoContext(ctx, "outbound connection to ", destination)
+		w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+
 	case N.NetworkUDP:
-		w.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	}
 	if !w.started.Load() {
 		return nil, E.New("WireGuard is not ready yet")
@@ -236,7 +244,8 @@ func (w *Endpoint) DialContext(ctx context.Context, network string, destination 
 }
 
 func (w *Endpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {
-	w.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+
 	if !w.started.Load() {
 		return nil, netip.Addr{}, E.New("WireGuard is not ready yet")
 	}

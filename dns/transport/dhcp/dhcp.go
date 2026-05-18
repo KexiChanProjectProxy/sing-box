@@ -21,7 +21,6 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/task"
@@ -43,7 +42,7 @@ type Transport struct {
 	dns.TransportAdapter
 	ctx               context.Context
 	dialer            N.Dialer
-	logger            logger.ContextLogger
+	logger            log.StructuredLogger
 	networkManager    adapter.NetworkManager
 	interfaceName     string
 	interfaceCallback *list.Element[tun.DefaultInterfaceUpdateCallback]
@@ -56,7 +55,7 @@ type Transport struct {
 	attempts          int
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.DHCPDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.DHCPDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewLocalDialer(ctx, options.LocalDNSServerOptions)
 	if err != nil {
 		return nil, err
@@ -73,7 +72,7 @@ func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, opt
 	}, nil
 }
 
-func NewRawTransport(transportAdapter dns.TransportAdapter, ctx context.Context, dialer N.Dialer, logger log.ContextLogger) *Transport {
+func NewRawTransport(transportAdapter dns.TransportAdapter, ctx context.Context, dialer N.Dialer, logger log.StructuredLogger) *Transport {
 	return &Transport{
 		TransportAdapter: transportAdapter,
 		ctx:              ctx,
@@ -95,7 +94,7 @@ func (t *Transport) Start(stage adapter.StartStage) error {
 	go func() {
 		_, err := t.fetch()
 		if err != nil {
-			t.logger.Error(E.Cause(err, "fetch DNS servers"))
+			t.logger.ErrorEvent("dns.server.error", "fetch DNS servers", log.Err(err))
 		}
 	}()
 	return nil
@@ -186,7 +185,7 @@ func (t *Transport) updateServers() error {
 		return E.Cause(err, "dhcp: prepare interface")
 	}
 
-	t.logger.Info("dhcp: query DNS servers on ", iface.Name)
+	t.logger.InfoEvent("dns.dhcp.query", "dhcp: query DNS servers", log.String("interface", iface.Name))
 	fetchCtx, cancel := context.WithTimeout(t.ctx, C.DHCPTimeout)
 	err = t.fetchServers0(fetchCtx, iface)
 	cancel()
@@ -206,7 +205,7 @@ func (t *Transport) updateServers() error {
 func (t *Transport) interfaceUpdated(defaultInterface *control.Interface, flags int) {
 	err := t.updateServers()
 	if err != nil {
-		t.logger.Error("update servers: ", err)
+		t.logger.ErrorEvent("dns.server.error", "update servers", log.Err(err))
 	}
 }
 
@@ -274,17 +273,17 @@ func (t *Transport) fetchServersResponse(iface *control.Interface, packetConn ne
 
 		dhcpPacket, err := dhcpv4.FromBytes(buffer.Bytes())
 		if err != nil {
-			t.logger.Trace("dhcp: parse DHCP response: ", err)
+			t.logger.TraceEvent("dns.dhcp.response.parse_error", "dhcp: parse DHCP response", log.Err(err))
 			return err
 		}
 
 		if dhcpPacket.MessageType() != dhcpv4.MessageTypeOffer {
-			t.logger.Trace("dhcp: expected OFFER response, but got ", dhcpPacket.MessageType())
+			t.logger.TraceEvent("dns.dhcp.response.unexpected_type", "dhcp: expected OFFER response", log.String("message_type", dhcpPacket.MessageType().String()))
 			continue
 		}
 
 		if dhcpPacket.TransactionID != transactionID {
-			t.logger.Trace("dhcp: expected transaction ID ", transactionID, ", but got ", dhcpPacket.TransactionID)
+			t.logger.TraceEvent("dns.dhcp.response.transaction_mismatch", "dhcp: expected transaction ID", log.String("expected_transaction_id", transactionID.String()), log.String("actual_transaction_id", dhcpPacket.TransactionID.String()))
 			continue
 		}
 
@@ -303,7 +302,7 @@ func (t *Transport) recreateServers(iface *control.Interface, dhcpPacket *dhcpv4
 		return M.SocksaddrFrom(M.AddrFromIP(it), 53)
 	})
 	if len(serverAddrs) > 0 && !slices.Equal(t.servers, serverAddrs) {
-		t.logger.Info("dhcp: updated DNS servers from ", iface.Name, ": [", strings.Join(common.Map(serverAddrs, M.Socksaddr.String), ","), "], search: [", strings.Join(t.search, ","), "]")
+		t.logger.InfoEvent("dns.dhcp.servers.updated", "dhcp: updated DNS servers", log.String("interface", iface.Name), log.String("servers", strings.Join(common.Map(serverAddrs, M.Socksaddr.String), ",")), log.String("search", strings.Join(t.search, ",")))
 	}
 	t.servers = serverAddrs
 	return nil

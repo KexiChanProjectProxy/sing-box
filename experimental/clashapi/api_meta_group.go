@@ -10,6 +10,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/urltest"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/protocol/group"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/batch"
@@ -107,10 +108,10 @@ func getGroupDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 				b.Go(realTag, func() (any, error) {
 					t, err := urltest.URLTest(ctx, url, p)
 					if err != nil {
-						server.logger.Debug("outbound ", tag, " unavailable: ", err)
+						server.logger.DebugEvent("clashapi.outbound.unavailable", "outbound unavailable", log.String("outbound", tag), log.Err(err))
 						server.urlTestHistory.DeleteURLTestHistory(realTag)
 					} else {
-						server.logger.Debug("outbound ", tag, " available: ", t, "ms")
+						server.logger.DebugEvent("clashapi.outbound.available", "outbound available", log.String("outbound", tag), log.Int64("latency_ms", int64(t)))
 						server.urlTestHistory.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
 							Time:  time.Now(),
 							Delay: t,

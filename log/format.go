@@ -1,7 +1,10 @@
 package log
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +14,7 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+// Formatter formats log entries for display.
 type Formatter struct {
 	BaseTime         time.Time
 	DisableColors    bool
@@ -18,6 +22,7 @@ type Formatter struct {
 	FullTimestamp    bool
 	TimestampFormat  string
 	DisableLineBreak bool
+	FormatMode       string
 }
 
 func (f Formatter) Format(ctx context.Context, level Level, tag string, message string, timestamp time.Time) string {
@@ -153,6 +158,128 @@ func (f Formatter) FormatWithSimple(ctx context.Context, level Level, tag string
 		message += "\n"
 	}
 	return message, messageSimple
+}
+
+// FormatRecord formats a Record as a human-readable text line.
+func (f Formatter) FormatRecord(rec Record) string {
+	message := rec.Message
+	if rec.Event != "" {
+		message = rec.Event + ": " + message
+	}
+	for _, field := range rec.Fields {
+		message += " " + field.Key() + "=" + f.formatFieldValue(field)
+	}
+	return f.Format(recordContext(rec), rec.Level, rec.Tag, message, rec.Timestamp)
+}
+
+// FormatRecordJSON formats a Record as a single JSONL line with deterministic key order.
+func (f Formatter) FormatRecordJSON(rec Record) string {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	writeComma := func() {
+		if first {
+			first = false
+			return
+		}
+		buf.WriteByte(',')
+	}
+	writeString := func(key string, value string) {
+		writeComma()
+		writeJSONString(&buf, key)
+		buf.WriteByte(':')
+		writeJSONString(&buf, value)
+	}
+	writeString("time", rec.Timestamp.UTC().Format(time.RFC3339Nano))
+	writeString("level", FormatLevel(rec.Level))
+	if rec.Tag != "" {
+		writeString("logger", rec.Tag)
+	}
+	if rec.Event != "" {
+		writeString("event", rec.Event)
+	}
+	writeString("message", rec.Message)
+	if rec.HasContext() {
+		writeComma()
+		buf.WriteString(`"context_id":`)
+		buf.WriteString(strconv.FormatUint(uint64(rec.ContextID), 10))
+		writeComma()
+		buf.WriteString(`"context_age_ms":`)
+		buf.WriteString(strconv.FormatFloat(rec.ContextAgeMs, 'f', -1, 64))
+	}
+	for _, field := range rec.Fields {
+		writeComma()
+		writeJSONString(&buf, field.Key())
+		buf.WriteByte(':')
+		f.writeJSONValue(&buf, field)
+	}
+	buf.WriteByte('}')
+	if !f.DisableLineBreak {
+		buf.WriteByte('\n')
+	}
+	return buf.String()
+}
+
+func (f Formatter) formatFieldValue(field Field) string {
+	switch field.Type() {
+	case FieldTypeString:
+		return field.StringValue()
+	case FieldTypeBool:
+		return strconv.FormatBool(field.BoolValue())
+	case FieldTypeInt:
+		return strconv.Itoa(field.IntValue())
+	case FieldTypeInt64:
+		return strconv.FormatInt(field.Int64Value(), 10)
+	case FieldTypeUint:
+		return strconv.FormatUint(uint64(field.UintValue()), 10)
+	case FieldTypeUint64:
+		return strconv.FormatUint(field.Uint64Value(), 10)
+	case FieldTypeFloat64:
+		return strconv.FormatFloat(field.Float64Value(), 'f', -1, 64)
+	case FieldTypeDuration:
+		return strconv.FormatFloat(field.DurationMs(), 'f', -1, 64)
+	case FieldTypeError, FieldTypeStringer:
+		return field.StringValue()
+	default:
+		return fmt.Sprint(field.Value())
+	}
+}
+
+func (f Formatter) writeJSONValue(buf *bytes.Buffer, field Field) {
+	switch field.Type() {
+	case FieldTypeString:
+		writeJSONString(buf, field.StringValue())
+	case FieldTypeBool:
+		buf.WriteString(strconv.FormatBool(field.BoolValue()))
+	case FieldTypeInt:
+		buf.WriteString(strconv.Itoa(field.IntValue()))
+	case FieldTypeInt64:
+		buf.WriteString(strconv.FormatInt(field.Int64Value(), 10))
+	case FieldTypeUint:
+		buf.WriteString(strconv.FormatUint(uint64(field.UintValue()), 10))
+	case FieldTypeUint64:
+		buf.WriteString(strconv.FormatUint(field.Uint64Value(), 10))
+	case FieldTypeFloat64:
+		buf.WriteString(strconv.FormatFloat(field.Float64Value(), 'f', -1, 64))
+	case FieldTypeDuration:
+		buf.WriteString(strconv.FormatFloat(field.DurationMs(), 'f', -1, 64))
+	case FieldTypeError, FieldTypeStringer:
+		writeJSONString(buf, field.StringValue())
+	default:
+		writeJSONString(buf, fmt.Sprint(field.Value()))
+	}
+}
+
+func writeJSONString(buf *bytes.Buffer, value string) {
+	encoded, _ := json.Marshal(value)
+	buf.Write(encoded)
+}
+
+func recordContext(rec Record) context.Context {
+	if !rec.HasContext() {
+		return context.Background()
+	}
+	return ContextWithID(context.Background(), ID{ID: rec.ContextID, CreatedAt: rec.Timestamp.Add(-time.Duration(rec.ContextAgeMs * float64(time.Millisecond)))})
 }
 
 func xd(value int, x int) string {

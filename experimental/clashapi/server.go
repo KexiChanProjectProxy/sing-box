@@ -48,7 +48,7 @@ type Server struct {
 	dnsRouter      adapter.DNSRouter
 	outbound       adapter.OutboundManager
 	endpoint       adapter.EndpointManager
-	logger         log.Logger
+	logger         log.StructuredLogger
 	httpServer     *http.Server
 	trafficManager *trafficontrol.Manager
 	urlTestHistory adapter.URLTestHistoryStorage
@@ -180,11 +180,11 @@ func (s *Server) Start(stage adapter.StartStage) error {
 			if err != nil {
 				return E.Cause(err, "external controller listen error")
 			}
-			s.logger.Info("restful api listening at ", listener.Addr())
+			s.logger.InfoEvent("clashapi.started", "restful api listening", log.String("address", listener.Addr().String()))
 			go func() {
 				err = s.httpServer.Serve(listener)
 				if err != nil && !errors.Is(err, http.ErrServerClosed) {
-					s.logger.Error("external controller serve error: ", err)
+					s.logger.ErrorEvent("clashapi.serve.error", "external controller serve error", log.Err(err))
 				}
 			}()
 		}
@@ -235,10 +235,10 @@ func (s *Server) SetMode(newMode string) {
 	if cacheFile != nil {
 		err := cacheFile.StoreMode(newMode)
 		if err != nil {
-			s.logger.Error(E.Cause(err, "save mode"))
+			s.logger.ErrorEvent("clashapi.mode.save.error", "save mode", log.Err(err))
 		}
 	}
-	s.logger.Info("updated mode: ", newMode)
+	s.logger.InfoEvent("clashapi.mode.updated", "updated mode", log.String("mode", string(newMode)))
 }
 
 func (s *Server) HistoryStorage() adapter.URLTestHistoryStorage {

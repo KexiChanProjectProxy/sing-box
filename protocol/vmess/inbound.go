@@ -22,7 +22,6 @@ import (
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
@@ -38,7 +37,7 @@ type Inbound struct {
 	inbound.Adapter
 	ctx       context.Context
 	router    adapter.ConnectionRouterEx
-	logger    logger.ContextLogger
+	logger    log.StructuredLogger
 	listener  *listener.Listener
 	service   *vmess.Service[int]
 	users     []option.VMessUser
@@ -46,7 +45,7 @@ type Inbound struct {
 	transport adapter.V2RayServerTransport
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.VMessInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.VMessInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeVMess, tag),
 		ctx:     ctx,
@@ -125,7 +124,8 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 		go func() {
 			sErr := h.transport.Serve(tcpListener)
 			if sErr != nil && !E.IsClosed(sErr) {
-				h.logger.Error("transport serve error: ", sErr)
+				h.logger.ErrorEvent("protocol.message", F.ToString("transport serve error: ", sErr))
+
 			}
 		}()
 	}
@@ -137,7 +137,8 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 		go func() {
 			sErr := h.transport.ServePacket(udpConn)
 			if sErr != nil && !E.IsClosed(sErr) {
-				h.logger.Error("transport serve error: ", sErr)
+				h.logger.ErrorEvent("protocol.message", F.ToString("transport serve error: ", sErr))
+
 			}
 		}()
 	}
@@ -158,7 +159,8 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		tlsConn, err := tls.ServerHandshake(ctx, conn, h.tlsConfig)
 		if err != nil {
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake"))
+			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake")))
+
 			return
 		}
 		conn = tlsConn
@@ -166,7 +168,8 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.service.NewConnection(adapter.WithContext(ctx, &metadata), conn, metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
+		h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
+
 	}
 }
 
@@ -184,7 +187,8 @@ func (h *Inbound) newConnectionEx(ctx context.Context, conn net.Conn, metadata a
 	} else {
 		metadata.User = user
 	}
-	h.logger.InfoContext(ctx, "[", user, "] inbound connection to ", metadata.Destination)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound connection to ", metadata.Destination))
+
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -205,9 +209,11 @@ func (h *Inbound) newPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	if metadata.Destination.Fqdn == packetaddr.SeqPacketMagicAddress {
 		metadata.Destination = M.Socksaddr{}
 		conn = packetaddr.NewConn(bufio.NewNetPacketConn(conn), metadata.Destination)
-		h.logger.InfoContext(ctx, "[", user, "] inbound packet addr connection")
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound packet addr connection"))
+
 	} else {
-		h.logger.InfoContext(ctx, "[", user, "] inbound packet connection to ", metadata.Destination)
+		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound packet connection to ", metadata.Destination))
+
 	}
 	h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -223,6 +229,7 @@ func (h *inboundTransportHandler) NewConnectionEx(ctx context.Context, conn net.
 	//nolint:staticcheck
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck
-	h.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
+	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", metadata.Source))
+
 	(*Inbound)(h).NewConnection(ctx, conn, metadata, onClose)
 }

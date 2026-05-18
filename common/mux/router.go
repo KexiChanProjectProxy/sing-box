@@ -10,7 +10,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-mux"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	N "github.com/sagernet/sing/common/network"
 )
 
@@ -19,7 +18,7 @@ type Router struct {
 	service *mux.Service
 }
 
-func NewRouterWithOptions(router adapter.ConnectionRouterEx, logger logger.ContextLogger, options option.InboundMultiplexOptions) (adapter.ConnectionRouterEx, error) {
+func NewRouterWithOptions(router adapter.ConnectionRouterEx, logger log.StructuredLogger, options option.InboundMultiplexOptions) (adapter.ConnectionRouterEx, error) {
 	if !options.Enabled {
 		return router, nil
 	}

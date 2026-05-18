@@ -74,7 +74,7 @@ func TestConsistentHashRemovalRemaps(t *testing.T) {
 
 	// Record initial selections for 1000 keys
 	type selection struct {
-		key      string
+		key       string
 		candidate string
 	}
 	var initialSelections []selection
@@ -257,10 +257,10 @@ type MockOutbound struct {
 	tag string
 }
 
-func (m *MockOutbound) Type() string                     { return "mock" }
-func (m *MockOutbound) Tag() string                      { return m.tag }
-func (m *MockOutbound) Network() []string                { return []string{"tcp", "udp"} }
-func (m *MockOutbound) Dependencies() []string           { return nil }
+func (m *MockOutbound) Type() string           { return "mock" }
+func (m *MockOutbound) Tag() string            { return m.tag }
+func (m *MockOutbound) Network() []string      { return []string{"tcp", "udp"} }
+func (m *MockOutbound) Dependencies() []string { return nil }
 func (m *MockOutbound) DialContext(ctx context.Context, network string, destination metadata.Socksaddr) (net.Conn, error) {
 	return nil, nil
 }

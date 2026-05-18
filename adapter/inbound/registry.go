@@ -10,12 +10,12 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
-type ConstructorFunc[T any] func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options T) (adapter.Inbound, error)
+type ConstructorFunc[T any] func(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options T) (adapter.Inbound, error)
 
 func Register[Options any](registry *Registry, outboundType string, constructor ConstructorFunc[Options]) {
 	registry.register(outboundType, func() any {
 		return new(Options)
-	}, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, rawOptions any) (adapter.Inbound, error) {
+	}, func(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, rawOptions any) (adapter.Inbound, error) {
 		var options *Options
 		if rawOptions != nil {
 			options = rawOptions.(*Options)
@@ -28,7 +28,7 @@ var _ adapter.InboundRegistry = (*Registry)(nil)
 
 type (
 	optionsConstructorFunc func() any
-	constructorFunc        func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options any) (adapter.Inbound, error)
+	constructorFunc        func(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options any) (adapter.Inbound, error)
 )
 
 type Registry struct {
@@ -54,7 +54,7 @@ func (m *Registry) CreateOptions(outboundType string) (any, bool) {
 	return optionsConstructor(), true
 }
 
-func (m *Registry) Create(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, outboundType string, options any) (adapter.Inbound, error) {
+func (m *Registry) Create(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, outboundType string, options any) (adapter.Inbound, error) {
 	m.access.Lock()
 	defer m.access.Unlock()
 	constructor, loaded := m.constructor[outboundType]

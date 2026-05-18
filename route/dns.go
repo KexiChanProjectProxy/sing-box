@@ -8,11 +8,11 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
+	"github.com/sagernet/sing-box/log"
 	dnsOutbound "github.com/sagernet/sing-box/protocol/dns"
 	R "github.com/sagernet/sing-box/route/rule"
 	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/udpnat2"
@@ -62,10 +62,10 @@ func (r *Router) hijackDNSPacket(ctx context.Context, conn N.PacketConn, packetB
 	return nil
 }
 
-func ExchangeDNSPacket(ctx context.Context, router adapter.DNSRouter, logger logger.ContextLogger, conn N.PacketConn, buffer *buf.Buffer, metadata adapter.InboundContext, destination M.Socksaddr) {
+func ExchangeDNSPacket(ctx context.Context, router adapter.DNSRouter, logger log.StructuredLogger, conn N.PacketConn, buffer *buf.Buffer, metadata adapter.InboundContext, destination M.Socksaddr) {
 	err := exchangeDNSPacket(ctx, router, conn, buffer, metadata, destination)
 	if err != nil && !R.IsRejected(err) && !E.IsClosedOrCanceled(err) {
-		logger.ErrorContext(ctx, E.Cause(err, "process DNS packet"))
+		logger.ErrorEventContext(ctx, "route.dns.error", "process DNS packet", log.Err(err))
 	}
 }
 
@@ -90,7 +90,7 @@ func exchangeDNSPacket(ctx context.Context, router adapter.DNSRouter, conn N.Pac
 
 type dnsHijacker struct {
 	router   adapter.DNSRouter
-	logger   logger.ContextLogger
+	logger   log.StructuredLogger
 	conn     N.PacketConn
 	ctx      context.Context
 	metadata adapter.InboundContext

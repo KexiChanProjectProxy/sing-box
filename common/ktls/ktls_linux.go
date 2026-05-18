@@ -5,6 +5,8 @@ package ktls
 import (
 	"crypto/tls"
 	"errors"
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 	"io"
 	"os"
 	"strings"
@@ -162,7 +164,8 @@ func (c *Conn) setupKernel(txOffload, rxOffload bool) error {
 			}
 		}
 		c.kernelTx = true
-		c.logger.DebugContext(c.ctx, "ktls: kernel TLS TX enabled")
+		c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: kernel TLS TX enabled"))
+
 	}
 
 	if rxOffload {
@@ -185,7 +188,8 @@ func (c *Conn) setupKernel(txOffload, rxOffload bool) error {
 			}
 		}
 		c.kernelRx = true
-		c.logger.DebugContext(c.ctx, "ktls: kernel TLS RX enabled")
+		c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: kernel TLS RX enabled"))
+
 	}
 	return nil
 }

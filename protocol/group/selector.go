@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -26,9 +26,9 @@ func RegisterSelector(registry *outbound.Registry) {
 }
 
 var (
-	_ adapter.OutboundGroup           = (*Selector)(nil)
-	_ adapter.ConnectionHandler       = (*Selector)(nil)
-	_ adapter.PacketConnectionHandler = (*Selector)(nil)
+	_ adapter.OutboundGroup            = (*Selector)(nil)
+	_ adapter.ConnectionHandler        = (*Selector)(nil)
+	_ adapter.PacketConnectionHandler  = (*Selector)(nil)
 	_ adapter.OutboundWithPreferDomain = (*Selector)(nil)
 )
 
@@ -37,7 +37,7 @@ type Selector struct {
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
 	connection                   adapter.ConnectionManager
-	logger                       logger.ContextLogger
+	logger                       log.StructuredLogger
 	tags                         []string
 	defaultTag                   string
 	outbounds                    map[string]adapter.Outbound
@@ -47,7 +47,7 @@ type Selector struct {
 	preferDomain                 bool
 }
 
-func NewSelector(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SelectorOutboundOptions) (adapter.Outbound, error) {
+func NewSelector(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.SelectorOutboundOptions) (adapter.Outbound, error) {
 	outbound := &Selector{
 		Adapter:                      outbound.NewAdapter(C.TypeSelector, tag, nil, options.Outbounds),
 		ctx:                          ctx,
@@ -140,7 +140,8 @@ func (s *Selector) SelectOutbound(tag string) bool {
 		if cacheFile != nil {
 			err := cacheFile.StoreSelected(s.Tag(), tag)
 			if err != nil {
-				s.logger.Error("store selected: ", err)
+				s.logger.ErrorEvent("protocol.message", F.ToString("store selected: ", err))
+
 			}
 		}
 	}

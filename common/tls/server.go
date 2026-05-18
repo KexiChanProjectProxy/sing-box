@@ -14,12 +14,12 @@ import (
 
 type ServerOptions struct {
 	Context        context.Context
-	Logger         log.ContextLogger
+	Logger         log.StructuredLogger
 	Options        option.InboundTLSOptions
 	KTLSCompatible bool
 }
 
-func NewServer(ctx context.Context, logger log.ContextLogger, options option.InboundTLSOptions) (ServerConfig, error) {
+func NewServer(ctx context.Context, logger log.StructuredLogger, options option.InboundTLSOptions) (ServerConfig, error) {
 	return NewServerWithOptions(ServerOptions{
 		Context: ctx,
 		Logger:  logger,

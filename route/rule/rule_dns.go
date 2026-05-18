@@ -15,7 +15,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func NewDNSRule(ctx context.Context, logger log.ContextLogger, options option.DNSRule, checkServer bool, legacyDNSMode bool) (adapter.DNSRule, error) {
+func NewDNSRule(ctx context.Context, logger log.StructuredLogger, options option.DNSRule, checkServer bool, legacyDNSMode bool) (adapter.DNSRule, error) {
 	switch options.Type {
 	case "", C.RuleTypeDefault:
 		if !options.DefaultOptions.IsValid() {
@@ -76,7 +76,7 @@ func (r *DefaultDNSRule) matchStates(metadata *adapter.InboundContext) ruleMatch
 	return r.abstractDefaultRule.matchStates(metadata)
 }
 
-func NewDefaultDNSRule(ctx context.Context, logger log.ContextLogger, options option.DefaultDNSRule, legacyDNSMode bool) (*DefaultDNSRule, error) {
+func NewDefaultDNSRule(ctx context.Context, logger log.StructuredLogger, options option.DefaultDNSRule, legacyDNSMode bool) (*DefaultDNSRule, error) {
 	rule := &DefaultDNSRule{
 		abstractDefaultRule: abstractDefaultRule{
 			invert: options.Invert,
@@ -462,7 +462,7 @@ func (r *LogicalDNSRule) matchStatesForMatch(metadata *adapter.InboundContext) r
 	return stateSet
 }
 
-func NewLogicalDNSRule(ctx context.Context, logger log.ContextLogger, options option.LogicalDNSRule, legacyDNSMode bool) (*LogicalDNSRule, error) {
+func NewLogicalDNSRule(ctx context.Context, logger log.StructuredLogger, options option.LogicalDNSRule, legacyDNSMode bool) (*LogicalDNSRule, error) {
 	r := &LogicalDNSRule{
 		abstractLogicalRule: abstractLogicalRule{
 			rules:  make([]adapter.HeadlessRule, len(options.Rules)),

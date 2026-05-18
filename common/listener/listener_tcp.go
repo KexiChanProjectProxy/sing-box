@@ -1,6 +1,7 @@
 package listener
 
 import (
+	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"strings"
@@ -77,7 +78,8 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.logger.Info("tcp server started at ", tcpListener.Addr())
+	l.logger.InfoEvent("common.listener.message", F.ToString("tcp server started at ", tcpListener.Addr()))
+
 	l.tcpListener = tcpListener
 	return tcpListener, err
 }
@@ -90,14 +92,16 @@ func (l *Listener) loopTCPIn() {
 		if err != nil {
 			//nolint:staticcheck
 			if netError, isNetError := err.(net.Error); isNetError && netError.Temporary() {
-				l.logger.Error(err)
+				l.logger.ErrorEvent("common.listener.message", F.ToString(err))
+
 				continue
 			}
 			if l.shutdown.Load() && E.IsClosed(err) {
 				return
 			}
 			l.tcpListener.Close()
-			l.logger.Error("tcp listener closed: ", err)
+			l.logger.ErrorEvent("common.listener.message", F.ToString("tcp listener closed: ", err))
+
 			continue
 		}
 		//nolint:staticcheck
@@ -105,7 +109,8 @@ func (l *Listener) loopTCPIn() {
 		metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
 		metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 		ctx := log.ContextWithNewID(l.ctx)
-		l.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
+		l.logger.InfoEventContext(ctx, "common.listener.message", F.ToString("inbound connection from ", metadata.Source))
+
 		go l.connHandler.NewConnection(ctx, conn, metadata, nil)
 	}
 }

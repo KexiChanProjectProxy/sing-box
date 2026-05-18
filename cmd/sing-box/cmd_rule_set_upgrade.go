@@ -58,7 +58,7 @@ func upgradeRuleSet(sourcePath string) error {
 	switch plainRuleSetCompat.Version {
 	case C.RuleSetVersion1:
 	default:
-		log.Info("already up-to-date")
+		os.Stderr.WriteString("already up-to-date\n")
 		return nil
 	}
 	plainRuleSetCompat.Options, err = plainRuleSetCompat.Upgrade()

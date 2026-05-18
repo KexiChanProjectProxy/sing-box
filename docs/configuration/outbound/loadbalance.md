@@ -86,7 +86,7 @@ Select top N healthy primary outbounds by latency. `0` means all healthy primary
 
 ==Optional==
 
-Selection strategy. Only `consistent_hash` is supported. Default: `consistent_hash`.
+Selection strategy. Supported values: `consistent_hash`, `random`. Default: `consistent_hash`.
 
 #### hash
 
@@ -122,7 +122,7 @@ Salt prepended to hash key input for additional randomization. Default: `""`.
 
 ==Optional==
 
-Action when no healthy candidate exists. Only `error` is supported, which causes dials to fail with an error. Default: `error`.
+Action when no healthy candidate exists. Supported values: `error`, `random`. `error` causes dials to fail; `random` selects randomly from all configured primary and backup outbounds without health filtering. Default: `error`.
 
 #### interrupt_exist_connections
 
@@ -149,3 +149,7 @@ Healthy primary outbounds are always preferred over backup outbounds. Backup out
 ### Consistent Hash
 
 With the `consistent_hash` strategy, the same hash key consistently selects the same candidate as long as the candidate set does not change. When a candidate is removed, only keys that mapped to that candidate are remapped.
+
+### Random Strategy
+
+With the `random` strategy, each connection request selects a candidate randomly from the current healthy candidate pool. No hash key computation is performed, and no session affinity is provided. Every selection is independent.

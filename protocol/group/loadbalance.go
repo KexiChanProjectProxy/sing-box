@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"sort"
 	"strings"
@@ -227,7 +228,14 @@ func (l *LoadBalance) CheckOutbounds() {
 func (l *LoadBalance) selectCandidate(metadata adapter.InboundContext) (Candidate, error) {
 	snapshot := l.snapshot.Load()
 	if snapshot == nil || len(snapshot.Candidates) == 0 {
-		return Candidate{}, l.emptyPoolError()
+		return l.selectEmptyPoolFallback()
+	}
+	if l.strategy == "random" {
+		candidate, err := SelectRandomFromSnapshot(snapshot)
+		if err != nil {
+			return Candidate{}, E.Cause(err, "loadbalance")
+		}
+		return candidate, nil
 	}
 	key := l.computeHashKey(metadata)
 	onEmptyKey := "random"
@@ -323,6 +331,34 @@ func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adap
 
 func (l *LoadBalance) emptyPoolError() error {
 	return E.New("loadbalance: empty candidate pool")
+}
+
+func (l *LoadBalance) selectEmptyPoolFallback() (Candidate, error) {
+	if l.emptyPoolAction == "random" {
+		var candidates []Candidate
+		for _, tag := range l.primaryTags {
+			if detour, ok := l.primaryOutbounds[tag]; ok {
+				candidates = append(candidates, Candidate{
+					Tag:      tag,
+					Outbound: detour,
+					IsPrimary: true,
+				})
+			}
+		}
+		for _, tag := range l.backupTags {
+			if detour, ok := l.backupOutbounds[tag]; ok {
+				candidates = append(candidates, Candidate{
+					Tag:      tag,
+					Outbound: detour,
+					IsPrimary: false,
+				})
+			}
+		}
+		if len(candidates) > 0 {
+			return candidates[rand.Intn(len(candidates))], nil
+		}
+	}
+	return Candidate{}, l.emptyPoolError()
 }
 
 func sameCandidateSet(previous []Candidate, next []Candidate) bool {

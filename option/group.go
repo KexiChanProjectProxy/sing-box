@@ -54,10 +54,10 @@ func (o LoadBalanceOutboundOptions) Check() error {
 	if len(o.PrimaryOutbounds) == 0 {
 		return E.New("missing primary_outbounds")
 	}
-	if o.Strategy != "" && o.Strategy != "consistent_hash" {
+	if o.Strategy != "" && o.Strategy != "consistent_hash" && o.Strategy != "random" {
 		return E.New("unsupported strategy: ", o.Strategy)
 	}
-	if o.EmptyPoolAction != "" && o.EmptyPoolAction != "error" {
+	if o.EmptyPoolAction != "" && o.EmptyPoolAction != "error" && o.EmptyPoolAction != "random" {
 		return E.New("unsupported empty_pool_action: ", o.EmptyPoolAction)
 	}
 	if o.Hash != nil {

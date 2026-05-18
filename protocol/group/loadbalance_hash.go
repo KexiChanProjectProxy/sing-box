@@ -23,9 +23,16 @@ type CandidateSnapshot struct {
 }
 
 var (
-	ErrEmptyHashKey     = errors.New("empty hash key")
+	ErrEmptyHashKey       = errors.New("empty hash key")
 	ErrEmptyCandidatePool = errors.New("empty candidate pool")
 )
+
+func SelectRandomFromSnapshot(snapshot *CandidateSnapshot) (Candidate, error) {
+	if snapshot == nil || len(snapshot.Candidates) == 0 {
+		return Candidate{}, ErrEmptyCandidatePool
+	}
+	return snapshot.Candidates[rand.Intn(len(snapshot.Candidates))], nil
+}
 
 const defaultVirtualNodes = 100
 

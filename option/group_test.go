@@ -132,6 +132,26 @@ func TestLoadBalanceCheckInvalidOnEmptyKey(t *testing.T) {
 	require.Contains(t, err.Error(), "unsupported hash.on_empty_key")
 }
 
+func TestLoadBalanceCheckRandomStrategy(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a", "b"], "strategy": "random"}`), &options)
+	require.NoError(t, err)
+	err = options.Check()
+	require.NoError(t, err, "random strategy should be accepted but got error: %v", err)
+}
+
+func TestLoadBalanceCheckRandomEmptyPoolAction(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a", "b"], "empty_pool_action": "random"}`), &options)
+	require.NoError(t, err)
+	err = options.Check()
+	require.NoError(t, err, "random empty_pool_action should be accepted but got error: %v", err)
+}
+
 func TestLoadBalanceCheckInvalidKeyPart(t *testing.T) {
 	t.Parallel()
 

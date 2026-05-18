@@ -371,3 +371,68 @@ func TestConsistentHashEdgeCases(t *testing.T) {
 		t.Errorf("expected ErrEmptyHashKey, got %v", err)
 	}
 }
+
+func TestSelectRandomFromSnapshot_NonEmpty(t *testing.T) {
+	snapshot := &CandidateSnapshot{
+		Candidates: []Candidate{
+			{Tag: "a", Latency: 100, IsPrimary: true},
+			{Tag: "b", Latency: 200, IsPrimary: true},
+			{Tag: "c", Latency: 300, IsPrimary: true},
+		},
+		Generation: 1,
+	}
+
+	candidate, err := SelectRandomFromSnapshot(snapshot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	validTags := map[string]bool{"a": true, "b": true, "c": true}
+	if !validTags[candidate.Tag] {
+		t.Errorf("expected one of [a, b, c], got %s", candidate.Tag)
+	}
+}
+
+func TestSelectRandomFromSnapshot_Empty(t *testing.T) {
+	snapshot := &CandidateSnapshot{
+		Candidates: []Candidate{},
+		Generation: 1,
+	}
+
+	_, err := SelectRandomFromSnapshot(snapshot)
+	if err == nil {
+		t.Fatalf("expected error for empty snapshot, got nil")
+	}
+	if !errors.Is(err, ErrEmptyCandidatePool) {
+		t.Errorf("expected ErrEmptyCandidatePool, got %v", err)
+	}
+
+	_, err = SelectRandomFromSnapshot(nil)
+	if err == nil {
+		t.Fatalf("expected error for nil snapshot, got nil")
+	}
+	if !errors.Is(err, ErrEmptyCandidatePool) {
+		t.Errorf("expected ErrEmptyCandidatePool, got %v", err)
+	}
+}
+
+func TestSelectRandomFromSnapshot_AlwaysValidCandidate(t *testing.T) {
+	snapshot := &CandidateSnapshot{
+		Candidates: []Candidate{
+			{Tag: "x", Latency: 100, IsPrimary: true},
+			{Tag: "y", Latency: 200, IsPrimary: true},
+		},
+		Generation: 1,
+	}
+
+	validTags := map[string]bool{"x": true, "y": true}
+	for i := 0; i < 50; i++ {
+		candidate, err := SelectRandomFromSnapshot(snapshot)
+		if err != nil {
+			t.Fatalf("iteration %d: unexpected error: %v", i, err)
+		}
+		if !validTags[candidate.Tag] {
+			t.Errorf("iteration %d: expected one of [x, y], got %s", i, candidate.Tag)
+		}
+	}
+}

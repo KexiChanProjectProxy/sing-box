@@ -14,7 +14,8 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-tun"
+	"github.com/sagernet/sing-box/route"
+	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/batch"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -126,6 +127,9 @@ func (s *URLTest) CheckOutbounds() {
 
 func (s *URLTest) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	s.group.Touch()
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
 	var outbound adapter.Outbound
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
@@ -152,6 +156,9 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 
 func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	s.group.Touch()
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
 	outbound := s.group.selectedOutboundUDP
 	if outbound == nil {
 		outbound, _ = s.group.Select(N.NetworkUDP)
@@ -170,11 +177,17 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 
 func (s *URLTest) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = route.ApplyPreferDomain(ctx, &metadata, s)
+	}
 	s.connection.NewConnection(ctx, s, conn, metadata, onClose)
 }
 
 func (s *URLTest) NewPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = route.ApplyPreferDomain(ctx, &metadata, s)
+	}
 	s.connection.NewPacketConnection(ctx, s, conn, metadata, onClose)
 }
 

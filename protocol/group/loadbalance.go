@@ -167,6 +167,9 @@ func (l *LoadBalance) DialContext(ctx context.Context, network string, destinati
 	if err != nil {
 		return nil, err
 	}
+	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
 	conn, err := candidate.Outbound.DialContext(ctx, network, destination)
 	if err != nil {
 		l.logger.ErrorContext(ctx, err)
@@ -185,6 +188,9 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	if err != nil {
 		return nil, err
 	}
+	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
 	conn, err := candidate.Outbound.ListenPacket(ctx, destination)
 	if err != nil {
 		l.logger.ErrorContext(ctx, err)
@@ -196,11 +202,17 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 
 func (l *LoadBalance) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
+	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = route.ApplyPreferDomain(ctx, &metadata, l)
+	}
 	l.connection.NewConnection(ctx, l, conn, metadata, onClose)
 }
 
 func (l *LoadBalance) NewPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
+	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = route.ApplyPreferDomain(ctx, &metadata, l)
+	}
 	l.connection.NewPacketConnection(ctx, l, conn, metadata, onClose)
 }
 

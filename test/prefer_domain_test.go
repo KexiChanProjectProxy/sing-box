@@ -425,3 +425,310 @@ func TestPreferDomainHTTP(t *testing.T) {
 	})
 	testTCP(t, clientPort, testPort)
 }
+
+func TestPreferDomainSelectorInherit(t *testing.T) {
+	startInstance(t, option.Options{
+		Inbounds: []option.Inbound{
+			{
+				Type: C.TypeMixed,
+				Tag:  "mixed-in",
+				Options: &option.HTTPMixedInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: clientPort,
+					},
+				},
+			},
+			{
+				Type: C.TypeDirect,
+				Options: &option.DirectInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: testPort,
+					},
+				},
+			},
+		},
+		Outbounds: []option.Outbound{
+			{
+				Type: C.TypeDirect,
+				Tag: "direct-out",
+			},
+			{
+				Type: C.TypeSelector,
+				Tag: "selector-out",
+				Options: &option.SelectorOutboundOptions{
+					PreferDomain: true,
+					Outbounds:    []string{"direct-out"},
+				},
+			},
+		},
+		Route: &option.RouteOptions{
+			Rules: []option.Rule{
+				{
+					Type: C.RuleTypeDefault,
+					DefaultOptions: option.DefaultRule{
+						RawDefaultRule: option.RawDefaultRule{
+							Inbound: []string{"mixed-in"},
+						},
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "selector-out",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	testSuit(t, clientPort, testPort)
+}
+
+func TestPreferDomainURLTestInherit(t *testing.T) {
+	startInstance(t, option.Options{
+		Inbounds: []option.Inbound{
+			{
+				Type: C.TypeMixed,
+				Tag:  "mixed-in",
+				Options: &option.HTTPMixedInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: clientPort,
+					},
+				},
+			},
+			{
+				Type: C.TypeDirect,
+				Options: &option.DirectInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: testPort,
+					},
+				},
+			},
+		},
+		Outbounds: []option.Outbound{
+			{
+				Type: C.TypeDirect,
+				Tag: "direct-out",
+			},
+			{
+				Type: C.TypeURLTest,
+				Tag: "urltest-out",
+				Options: &option.URLTestOutboundOptions{
+					PreferDomain: true,
+					Outbounds:    []string{"direct-out"},
+					URL:          "http://127.0.0.1:1",
+				},
+			},
+		},
+		Route: &option.RouteOptions{
+			Rules: []option.Rule{
+				{
+					Type: C.RuleTypeDefault,
+					DefaultOptions: option.DefaultRule{
+						RawDefaultRule: option.RawDefaultRule{
+							Inbound: []string{"mixed-in"},
+						},
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "urltest-out",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	testSuit(t, clientPort, testPort)
+}
+
+func TestPreferDomainLoadBalanceInherit(t *testing.T) {
+	startInstance(t, option.Options{
+		Inbounds: []option.Inbound{
+			{
+				Type: C.TypeMixed,
+				Tag:  "mixed-in",
+				Options: &option.HTTPMixedInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: clientPort,
+					},
+				},
+			},
+			{
+				Type: C.TypeDirect,
+				Options: &option.DirectInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: testPort,
+					},
+				},
+			},
+		},
+		Outbounds: []option.Outbound{
+			{
+				Type: C.TypeDirect,
+				Tag: "direct-out",
+			},
+			{
+				Type: C.TypeLoadBalance,
+				Tag: "lb-out",
+				Options: &option.LoadBalanceOutboundOptions{
+					PreferDomain:   true,
+					PrimaryOutbounds: []string{"direct-out"},
+					URL:             "http://127.0.0.1:1",
+					Interval:        badoption.Duration(300),
+					Timeout:         badoption.Duration(100),
+				},
+			},
+		},
+		Route: &option.RouteOptions{
+			Rules: []option.Rule{
+				{
+					Type: C.RuleTypeDefault,
+					DefaultOptions: option.DefaultRule{
+						RawDefaultRule: option.RawDefaultRule{
+							Inbound: []string{"mixed-in"},
+						},
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "lb-out",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	testTCP(t, clientPort, testPort)
+}
+
+func TestPreferDomainNestedSelectorURLTest(t *testing.T) {
+	startInstance(t, option.Options{
+		Inbounds: []option.Inbound{
+			{
+				Type: C.TypeMixed,
+				Tag:  "mixed-in",
+				Options: &option.HTTPMixedInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: clientPort,
+					},
+				},
+			},
+			{
+				Type: C.TypeDirect,
+				Options: &option.DirectInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: testPort,
+					},
+				},
+			},
+		},
+		Outbounds: []option.Outbound{
+			{
+				Type: C.TypeDirect,
+				Tag: "direct-out",
+			},
+			{
+				Type: C.TypeURLTest,
+				Tag: "urltest-out",
+				Options: &option.URLTestOutboundOptions{
+					Outbounds: []string{"direct-out"},
+					URL:       "http://127.0.0.1:1",
+				},
+			},
+			{
+				Type: C.TypeSelector,
+				Tag: "selector-out",
+				Options: &option.SelectorOutboundOptions{
+					PreferDomain: true,
+					Outbounds:    []string{"urltest-out"},
+				},
+			},
+		},
+		Route: &option.RouteOptions{
+			Rules: []option.Rule{
+				{
+					Type: C.RuleTypeDefault,
+					DefaultOptions: option.DefaultRule{
+						RawDefaultRule: option.RawDefaultRule{
+							Inbound: []string{"mixed-in"},
+						},
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "selector-out",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	testSuit(t, clientPort, testPort)
+}
+
+func TestPreferDomainNoInheritWhenParentFalse(t *testing.T) {
+	startInstance(t, option.Options{
+		Inbounds: []option.Inbound{
+			{
+				Type: C.TypeMixed,
+				Tag:  "mixed-in",
+				Options: &option.HTTPMixedInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: clientPort,
+					},
+				},
+			},
+			{
+				Type: C.TypeDirect,
+				Options: &option.DirectInboundOptions{
+					ListenOptions: option.ListenOptions{
+						Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+						ListenPort: testPort,
+					},
+				},
+			},
+		},
+		Outbounds: []option.Outbound{
+			{
+				Type: C.TypeDirect,
+				Tag: "direct-out",
+			},
+			{
+				Type: C.TypeSelector,
+				Tag: "selector-out",
+				Options: &option.SelectorOutboundOptions{
+					PreferDomain: false,
+					Outbounds:    []string{"direct-out"},
+				},
+			},
+		},
+		Route: &option.RouteOptions{
+			Rules: []option.Rule{
+				{
+					Type: C.RuleTypeDefault,
+					DefaultOptions: option.DefaultRule{
+						RawDefaultRule: option.RawDefaultRule{
+							Inbound: []string{"mixed-in"},
+						},
+						RuleAction: option.RuleAction{
+							Action: C.RuleActionTypeRoute,
+							RouteOptions: option.RouteActionOptions{
+								Outbound: "selector-out",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	testSuit(t, clientPort, testPort)
+}

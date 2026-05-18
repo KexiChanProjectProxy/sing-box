@@ -406,7 +406,7 @@ func TestApplyPreferDomain(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			originalDest := tc.metadata.Destination
-			applyPreferDomain(tc.metadata, tc.outbound)
+			ApplyPreferDomain(context.Background(), tc.metadata, tc.outbound)
 			if tc.expectUnchanged {
 				require.Equal(t, originalDest, tc.metadata.Destination, "destination should not have changed")
 			} else {
@@ -432,7 +432,7 @@ func TestApplyPreferDomainIdempotentWithGroup(t *testing.T) {
 	outbound := &mockOutbound{tag: "idempotent-selector", preferDomain: true}
 
 	// First call: should rewrite
-	applyPreferDomain(meta, outbound)
+	ApplyPreferDomain(context.Background(), meta, outbound)
 	require.Equal(t, metadata.Socksaddr{
 		Fqdn: "idempotent.example.com",
 		Port: 443,
@@ -440,6 +440,270 @@ func TestApplyPreferDomainIdempotentWithGroup(t *testing.T) {
 
 	// Second call: should be a no-op since destination already matches domain
 	originalDest := meta.Destination
-	applyPreferDomain(meta, outbound)
+	ApplyPreferDomain(context.Background(), meta, outbound)
 	require.Equal(t, originalDest, meta.Destination, "second call should be idempotent")
+}
+
+func TestApplyPreferDomainInheritance(t *testing.T) {
+	t.Parallel()
+
+	destinationWithPort443 := metadata.Socksaddr{
+		Fqdn: "original.example.com",
+		Port: 443,
+	}
+
+	testCases := []struct {
+		name                 string
+		inheritedPrefer      bool
+		outboundPreferDomain bool
+		protocol            string
+		expectRewrite       bool
+		expectEffectiveFlag bool
+	}{
+		{
+			name:                "Inherited true + child PreferDomain false causes rewrite",
+			inheritedPrefer:     true,
+			outboundPreferDomain: false,
+			protocol:            C.ProtocolTLS,
+			expectRewrite:       true,
+			expectEffectiveFlag: true,
+		},
+		{
+			name:                "Inherited false + child PreferDomain false does not rewrite",
+			inheritedPrefer:     false,
+			outboundPreferDomain: false,
+			protocol:            C.ProtocolTLS,
+			expectRewrite:       false,
+			expectEffectiveFlag: false,
+		},
+		{
+			name:                "Inherited true + child PreferDomain true causes rewrite (idempotent)",
+			inheritedPrefer:     true,
+			outboundPreferDomain: true,
+			protocol:            C.ProtocolHTTP,
+			expectRewrite:       true,
+			expectEffectiveFlag: true,
+		},
+		{
+			name:                "Inherited false + child PreferDomain true causes rewrite (child's own preference)",
+			inheritedPrefer:     false,
+			outboundPreferDomain: true,
+			protocol:            C.ProtocolQUIC,
+			expectRewrite:       true,
+			expectEffectiveFlag: true,
+		},
+		{
+			name:                "Inherited true + outbound without OutboundWithPreferDomain does not rewrite (protocol mismatch) but context flag is still true",
+			inheritedPrefer:     true,
+			outboundPreferDomain: false, // will use mockOutboundNoInterface
+			protocol:            C.ProtocolDNS,
+			expectRewrite:       false,
+			expectEffectiveFlag: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var outbound adapter.Outbound
+			if tc.outboundPreferDomain {
+				outbound = &mockOutbound{tag: "test", preferDomain: true}
+			} else {
+				outbound = &mockOutbound{tag: "test", preferDomain: false}
+			}
+
+			// If we need an outbound without the interface, override
+			if tc.name == "Inherited true + outbound without OutboundWithPreferDomain does not rewrite (protocol mismatch) but context flag is still true" {
+				outbound = &mockOutboundNoInterface{tag: "test"}
+			}
+
+			meta := &adapter.InboundContext{
+				Protocol:    tc.protocol,
+				Domain:      "rewrite.example.com",
+				Destination: destinationWithPort443,
+			}
+
+			originalDest := meta.Destination
+
+			// Create context with inherited prefer_domain value
+			ctx := context.Background()
+			if tc.inheritedPrefer {
+				ctx = adapter.ContextWithPreferDomain(ctx, true)
+			}
+
+			// Call ApplyPreferDomain and capture returned context
+			returnedCtx := ApplyPreferDomain(ctx, meta, outbound)
+
+			// Verify context propagation
+			effectiveFlag := adapter.PreferDomainFromContext(returnedCtx)
+			require.Equal(t, tc.expectEffectiveFlag, effectiveFlag, "effective flag mismatch")
+
+			// Verify metadata.Destination
+			if tc.expectRewrite {
+				require.Equal(t, metadata.Socksaddr{
+					Fqdn: "rewrite.example.com",
+					Port: 443,
+				}, meta.Destination, "destination should be rewritten")
+			} else {
+				require.Equal(t, originalDest, meta.Destination, "destination should not have changed")
+			}
+		})
+	}
+}
+
+// TestApplyPreferDomainContextPropagation verifies that ApplyPreferDomain
+// correctly propagates the effective prefer_domain flag through context.
+func TestApplyPreferDomainContextPropagation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Effective flag is true when outbound PreferDomain is true", func(t *testing.T) {
+		t.Parallel()
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolTLS,
+			Domain:      "example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 443},
+		}
+		outbound := &mockOutbound{tag: "test", preferDomain: true}
+
+		ctx := ApplyPreferDomain(context.Background(), meta, outbound)
+
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective flag should be true")
+	})
+
+	t.Run("Effective flag is true even when protocol does not match (for nested inheritance)", func(t *testing.T) {
+		t.Parallel()
+		// DNS protocol does not trigger rewrite, but the effective flag should still be set
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolDNS,
+			Domain:      "example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 443},
+		}
+		outbound := &mockOutbound{tag: "test", preferDomain: true}
+
+		ctx := ApplyPreferDomain(context.Background(), meta, outbound)
+
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective flag should be true for nested inheritance")
+		// Destination should NOT be rewritten because DNS protocol doesn't match
+		require.Equal(t, metadata.Socksaddr{Fqdn: "original.com", Port: 443}, meta.Destination)
+	})
+
+	t.Run("Effective flag is false when both inherited and outbound are false", func(t *testing.T) {
+		t.Parallel()
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolHTTP,
+			Domain:      "example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 80},
+		}
+		outbound := &mockOutbound{tag: "test", preferDomain: false}
+
+		ctx := ApplyPreferDomain(context.Background(), meta, outbound)
+
+		require.False(t, adapter.PreferDomainFromContext(ctx), "effective flag should be false")
+	})
+
+	t.Run("Effective flag inherits from context when outbound is false", func(t *testing.T) {
+		t.Parallel()
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolHTTP,
+			Domain:      "example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 80},
+		}
+		outbound := &mockOutbound{tag: "test", preferDomain: false}
+
+		// Set inherited=true in context
+		ctx := adapter.ContextWithPreferDomain(context.Background(), true)
+		ctx = ApplyPreferDomain(ctx, meta, outbound)
+
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective flag should be inherited true")
+	})
+}
+
+// TestApplyPreferDomainNestedInheritance verifies that effective prefer_domain
+// propagates correctly through nested chain: outer group → inner group → child.
+func TestApplyPreferDomainNestedInheritance(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Chain outer(true) inner(false) child(false) stays true throughout", func(t *testing.T) {
+		t.Parallel()
+		// Chain: outer group (preferDomain: true) → inner group (preferDomain: false) → child (preferDomain: false)
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolTLS,
+			Domain:      "nested.example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 443},
+		}
+
+		// Step 1: outer group with preferDomain: true
+		outerOutbound := &mockOutbound{tag: "outer", preferDomain: true}
+		ctx := ApplyPreferDomain(context.Background(), meta, outerOutbound)
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective should be true after outer")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be rewritten by outer")
+
+		// Step 2: inner group with preferDomain: false (but inherited is true, so effective stays true)
+		innerOutbound := &mockOutbound{tag: "inner", preferDomain: false}
+		ctx = ApplyPreferDomain(ctx, meta, innerOutbound)
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective should still be true (inherited || inner.false = true)")
+		// Idempotent: destination already matches domain
+		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be unchanged (idempotent)")
+
+		// Step 3: child with preferDomain: false (inherited is still true, so effective stays true)
+		childOutbound := &mockOutbound{tag: "child", preferDomain: false}
+		ctx = ApplyPreferDomain(ctx, meta, childOutbound)
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective should still be true (inherited || child.false = true)")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be unchanged (idempotent)")
+	})
+
+	t.Run("Chain outer(false) inner(true) child(false) becomes true at inner and stays true", func(t *testing.T) {
+		t.Parallel()
+		// Chain: outer group (preferDomain: false) → inner group (preferDomain: true) → child (preferDomain: false)
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolTLS,
+			Domain:      "nested.example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 443},
+		}
+
+		// Step 1: outer group with preferDomain: false
+		outerOutbound := &mockOutbound{tag: "outer", preferDomain: false}
+		ctx := ApplyPreferDomain(context.Background(), meta, outerOutbound)
+		require.False(t, adapter.PreferDomainFromContext(ctx), "effective should be false after outer")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "original.com", Port: 443}, meta.Destination, "destination should not be rewritten by outer")
+
+		// Step 2: inner group with preferDomain: true (inherited is false, so effective becomes true)
+		innerOutbound := &mockOutbound{tag: "inner", preferDomain: true}
+		ctx = ApplyPreferDomain(ctx, meta, innerOutbound)
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective should be true (inherited false || inner true = true)")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be rewritten by inner")
+
+		// Step 3: child with preferDomain: false (inherited is true, so effective stays true)
+		childOutbound := &mockOutbound{tag: "child", preferDomain: false}
+		ctx = ApplyPreferDomain(ctx, meta, childOutbound)
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective should still be true (inherited || child.false = true)")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be unchanged (idempotent)")
+	})
+
+	t.Run("Chain outer(false) inner(false) child(true) becomes true at child only", func(t *testing.T) {
+		t.Parallel()
+		// Chain: outer group (preferDomain: false) → inner group (preferDomain: false) → child (preferDomain: true)
+		meta := &adapter.InboundContext{
+			Protocol:    C.ProtocolQUIC,
+			Domain:      "nested.example.com",
+			Destination: metadata.Socksaddr{Fqdn: "original.com", Port: 443},
+		}
+
+		// Step 1: outer group with preferDomain: false
+		outerOutbound := &mockOutbound{tag: "outer", preferDomain: false}
+		ctx := ApplyPreferDomain(context.Background(), meta, outerOutbound)
+		require.False(t, adapter.PreferDomainFromContext(ctx), "effective should be false after outer")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "original.com", Port: 443}, meta.Destination, "destination should not be rewritten")
+
+		// Step 2: inner group with preferDomain: false
+		innerOutbound := &mockOutbound{tag: "inner", preferDomain: false}
+		ctx = ApplyPreferDomain(ctx, meta, innerOutbound)
+		require.False(t, adapter.PreferDomainFromContext(ctx), "effective should still be false")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "original.com", Port: 443}, meta.Destination, "destination should not be rewritten")
+
+		// Step 3: child with preferDomain: true (inherited is false, so effective becomes true)
+		childOutbound := &mockOutbound{tag: "child", preferDomain: true}
+		ctx = ApplyPreferDomain(ctx, meta, childOutbound)
+		require.True(t, adapter.PreferDomainFromContext(ctx), "effective should be true (inherited false || child true = true)")
+		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be rewritten by child")
+	})
 }

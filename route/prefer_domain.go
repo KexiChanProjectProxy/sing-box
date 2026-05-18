@@ -1,6 +1,7 @@
 package route
 
 import (
+	"context"
 	"net/netip"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -8,26 +9,32 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 )
 
-func applyPreferDomain(metadata *adapter.InboundContext, outbound adapter.Outbound) {
+func ApplyPreferDomain(ctx context.Context, metadata *adapter.InboundContext, outbound adapter.Outbound) context.Context {
+	inheritedPreferDomain := adapter.PreferDomainFromContext(ctx)
 	outboundWithPrefer, ok := outbound.(adapter.OutboundWithPreferDomain)
-	if !ok || !outboundWithPrefer.PreferDomain() {
-		return
+	outboundPreferDomain := ok && outboundWithPrefer.PreferDomain()
+	effectivePreferDomain := inheritedPreferDomain || outboundPreferDomain
+
+	ctx = adapter.ContextWithPreferDomain(ctx, effectivePreferDomain)
+
+	if !effectivePreferDomain {
+		return ctx
 	}
 
 	switch metadata.Protocol {
 	case C.ProtocolHTTP, C.ProtocolTLS, C.ProtocolQUIC:
 	default:
-		return
+		return ctx
 	}
 
 	if metadata.Domain == "" {
-		return
+		return ctx
 	}
 
 	addr, err := netip.ParseAddr(metadata.Domain)
 	if err == nil {
 		if metadata.Destination.Addr == addr {
-			return
+			return ctx
 		}
 		metadata.Destination = M.Socksaddr{
 			Addr: addr,
@@ -35,11 +42,13 @@ func applyPreferDomain(metadata *adapter.InboundContext, outbound adapter.Outbou
 		}
 	} else {
 		if metadata.Destination.Fqdn == metadata.Domain {
-			return
+			return ctx
 		}
 		metadata.Destination = M.Socksaddr{
 			Fqdn: metadata.Domain,
 			Port: metadata.Destination.Port,
 		}
 	}
+
+	return ctx
 }

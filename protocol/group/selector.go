@@ -11,6 +11,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/route"
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -148,6 +149,9 @@ func (s *Selector) SelectOutbound(tag string) bool {
 }
 
 func (s *Selector) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
 	conn, err := s.selected.Load().DialContext(ctx, network, destination)
 	if err != nil {
 		return nil, err
@@ -156,6 +160,9 @@ func (s *Selector) DialContext(ctx context.Context, network string, destination 
 }
 
 func (s *Selector) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
 	conn, err := s.selected.Load().ListenPacket(ctx, destination)
 	if err != nil {
 		return nil, err
@@ -166,6 +173,9 @@ func (s *Selector) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 func (s *Selector) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
 	selected := s.selected.Load()
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = route.ApplyPreferDomain(ctx, &metadata, selected)
+	}
 	if outboundHandler, isHandler := selected.(adapter.ConnectionHandler); isHandler {
 		outboundHandler.NewConnection(ctx, conn, metadata, onClose)
 	} else {
@@ -176,6 +186,9 @@ func (s *Selector) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 func (s *Selector) NewPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
 	selected := s.selected.Load()
+	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = route.ApplyPreferDomain(ctx, &metadata, selected)
+	}
 	if outboundHandler, isHandler := selected.(adapter.PacketConnectionHandler); isHandler {
 		outboundHandler.NewPacketConnection(ctx, conn, metadata, onClose)
 	} else {

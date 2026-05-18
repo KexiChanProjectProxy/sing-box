@@ -11,6 +11,20 @@ import (
 	N "github.com/sagernet/sing/common/network"
 )
 
+type preferDomainContextKey struct{}
+
+func ContextWithPreferDomain(ctx context.Context, effective bool) context.Context {
+	return context.WithValue(ctx, (*preferDomainContextKey)(nil), effective)
+}
+
+func PreferDomainFromContext(ctx context.Context) bool {
+	value := ctx.Value((*preferDomainContextKey)(nil))
+	if value == nil {
+		return false
+	}
+	return value.(bool)
+}
+
 // Note: for proxy protocols, outbound creates early connections by default.
 
 type Outbound interface {

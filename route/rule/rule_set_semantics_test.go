@@ -1111,7 +1111,7 @@ func newRemoteRuleSetForTest(tag string, rules ...adapter.HeadlessRule) *RemoteR
 
 func mustAdGuardRule(t *testing.T, content string) adapter.HeadlessRule {
 	t.Helper()
-	rules, err := adguard.ToOptions(strings.NewReader(content), slog.NewNOPFactory().NewLogger(""))
+	rules, err := adguard.ToOptions(strings.NewReader(content), log.NewNOPFactory().Logger())
 	require.NoError(t, err)
 	require.Len(t, rules, 1)
 	rule, err := NewHeadlessRule(context.Background(), rules[0])

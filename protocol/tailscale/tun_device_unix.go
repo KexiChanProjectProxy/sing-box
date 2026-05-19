@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 
 	singTun "github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing/common/logger"
 	wgTun "github.com/sagernet/wireguard-go/tun"
 )
 

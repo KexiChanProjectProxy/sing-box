@@ -5,7 +5,6 @@ package ktls
 import (
 	"crypto/tls"
 	"errors"
-	"github.com/sagernet/sing-box/log"
 	F "github.com/sagernet/sing/common/format"
 	"io"
 	"os"

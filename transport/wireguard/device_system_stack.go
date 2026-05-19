@@ -23,7 +23,6 @@ import (
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing-tun/ping"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/wireguard-go/device"
 )
 

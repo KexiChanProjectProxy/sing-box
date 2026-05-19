@@ -187,6 +187,8 @@ This option does not enable sniffing automatically.
 Only applies to already-sniffed HTTP, TLS, and QUIC traffic.
 Other protocols (DNS, STUN, BitTorrent, DTLS, SSH, RDP, NTP) are not affected.
 
+When used in a group outbound (such as `selector` or `urltest`), the group's `prefer_domain` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the domain rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `prefer_domain` setting applies as usual.
+
 #### domain_resolver
 
 !!! warning ""

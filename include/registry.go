@@ -26,6 +26,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/http"
 	"github.com/sagernet/sing-box/protocol/mixed"
 	"github.com/sagernet/sing-box/protocol/naive"
+	"github.com/sagernet/sing-box/protocol/noisyshuttle"
 	"github.com/sagernet/sing-box/protocol/redirect"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/shadowtls"
@@ -65,6 +66,7 @@ func InboundRegistry() *inbound.Registry {
 	shadowtls.RegisterInbound(registry)
 	vless.RegisterInbound(registry)
 	anytls.RegisterInbound(registry)
+	noisyshuttle.RegisterInbound(registry)
 
 	registerQUICInbounds(registry)
 	registerCloudflaredInbound(registry)
@@ -95,6 +97,7 @@ func OutboundRegistry() *outbound.Registry {
 	shadowtls.RegisterOutbound(registry)
 	vless.RegisterOutbound(registry)
 	anytls.RegisterOutbound(registry)
+	noisyshuttle.RegisterOutbound(registry)
 
 	registerQUICOutbounds(registry)
 	registerStubForRemovedOutbounds(registry)

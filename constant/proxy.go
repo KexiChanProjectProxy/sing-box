@@ -35,6 +35,7 @@ const (
 	TypeHysteriaRealm      = "hysteria-realm"
 	TypeACME               = "acme"
 	TypeCloudflareOriginCA = "cloudflare-origin-ca"
+	TypeNoisyShuttle      = "noisy-shuttle"
 )
 
 const (
@@ -95,6 +96,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "Tailscale"
 	case TypeCloudflared:
 		return "Cloudflared"
+	case TypeNoisyShuttle:
+		return "NoisyShuttle"
 	case TypeSelector:
 		return "Selector"
 	case TypeURLTest:

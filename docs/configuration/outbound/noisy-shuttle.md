@@ -1,5 +1,7 @@
 ### Structure
 
+**Note:** This is a sing-box-native protocol variant. It is NOT wire compatible with the Rust noisy-shuttle implementation.
+
 ```json
 {
   "type": "noisy-shuttle",
@@ -16,15 +18,16 @@
     "max_requests": 0,
     "idle_timeout": "5m",
     "max_age": "0s",
-    "keepalive_interval": "30s"
+    "keepalive_interval": "30s",
+    "keepalive_timeout": "60s"
   },
   "handshake": {
     "padding_min": 0,
     "padding_max": 24,
     "auth_timeout": "5s"
   },
-  "multiplex": {},
-  "transport": {},
+  "udp_timeout": "60s",
+  "udp_max_packet_size": 1500,
 
   ... // Dial Fields
 }
@@ -68,7 +71,7 @@ Session multiplex options.
 
 ##### session.enabled
 
-Enable session multiplexing. Default is `true`.
+Enable session multiplexing. Default is `false` (disabled). Must be explicitly enabled.
 
 ##### session.max_streams
 
@@ -90,6 +93,10 @@ Maximum age for sessions. `0` means no expiry. Default is `0s`.
 
 Interval for sending keepalive packets. Default is `30s`.
 
+##### session.keepalive_timeout
+
+Timeout for keepalive response. Default is `2x keepalive_interval` (60s).
+
 #### handshake
 
 Handshake options for outbound connections.
@@ -106,13 +113,13 @@ Maximum padding length for outbound handshake. Default is `24`.
 
 Authentication timeout for handshake. Default is `5s`.
 
-#### multiplex
+#### udp_timeout
 
-See [Multiplex](/configuration/shared/multiplex#outbound) for details.
+UDP session timeout. Default is `60s`.
 
-#### transport
+#### udp_max_packet_size
 
-V2Ray Transport configuration, see [V2Ray Transport](/configuration/shared/v2ray-transport/).
+Maximum UDP packet size. Default is `1500`.
 
 ### Dial Fields
 
@@ -155,12 +162,15 @@ See [Dial Fields](/configuration/shared/dial/) for details.
     "max_requests": 0,
     "idle_timeout": "5m",
     "max_age": "0s",
-    "keepalive_interval": "30s"
+    "keepalive_interval": "30s",
+    "keepalive_timeout": "60s"
   },
   "handshake": {
     "padding_min": 0,
     "padding_max": 24,
     "auth_timeout": "5s"
-  }
+  },
+  "udp_timeout": "60s",
+  "udp_max_packet_size": 1500
 }
 ```

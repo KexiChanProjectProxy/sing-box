@@ -1,5 +1,7 @@
 ### Structure
 
+**Note:** This is a sing-box-native protocol variant. It is NOT wire compatible with the Rust noisy-shuttle implementation.
+
 ```json
 {
   "type": "noisy-shuttle",
@@ -25,14 +27,15 @@
     "max_requests": 0,
     "idle_timeout": "5m",
     "max_age": "0s",
-    "keepalive_interval": "30s"
+    "keepalive_interval": "30s",
+    "keepalive_timeout": "60s"
   },
   "handshake": {
     "max_padding": 256,
     "auth_timeout": "5s"
   },
-  "multiplex": {},
-  "transport": {}
+  "udp_timeout": "60s",
+  "udp_max_packet_size": 1500
 }
 ```
 
@@ -72,7 +75,7 @@ Session multiplex options.
 
 ##### session.enabled
 
-Enable session multiplexing. Default is `true`.
+Enable session multiplexing. Default is `false` (disabled). Must be explicitly enabled.
 
 ##### session.max_streams
 
@@ -94,6 +97,10 @@ Maximum age for sessions. `0` means no expiry. Default is `0s`.
 
 Interval for sending keepalive packets. Default is `30s`.
 
+##### session.keepalive_timeout
+
+Timeout for keepalive response. Default is `2x keepalive_interval` (60s).
+
 #### handshake
 
 Handshake options for inbound connections.
@@ -106,13 +113,13 @@ Maximum padding length for inbound handshake. Default is `256`.
 
 Authentication timeout for handshake. Default is `5s`.
 
-#### multiplex
+#### udp_timeout
 
-See [Multiplex](/configuration/shared/multiplex#inbound) for details.
+UDP session timeout. Default is `60s`.
 
-#### transport
+#### udp_max_packet_size
 
-V2Ray Transport configuration, see [V2Ray Transport](/configuration/shared/v2ray-transport/).
+Maximum UDP packet size. Default is `1500`.
 
 ### Minimal Example
 
@@ -162,11 +169,14 @@ V2Ray Transport configuration, see [V2Ray Transport](/configuration/shared/v2ray
     "max_requests": 0,
     "idle_timeout": "5m",
     "max_age": "0s",
-    "keepalive_interval": "30s"
+    "keepalive_interval": "30s",
+    "keepalive_timeout": "60s"
   },
   "handshake": {
     "max_padding": 256,
     "auth_timeout": "5s"
-  }
+  },
+  "udp_timeout": "60s",
+  "udp_max_packet_size": 1500
 }
 ```

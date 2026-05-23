@@ -1,5 +1,7 @@
 ### 结构
 
+**注意：** 这是 sing-box 原生协议变体。它与 Rust noisy-shuttle 实现不兼容。
+
 ```json
 {
   "type": "noisy-shuttle",
@@ -16,15 +18,16 @@
     "max_requests": 0,
     "idle_timeout": "5m",
     "max_age": "0s",
-    "keepalive_interval": "30s"
+    "keepalive_interval": "30s",
+    "keepalive_timeout": "60s"
   },
   "handshake": {
     "padding_min": 0,
     "padding_max": 24,
     "auth_timeout": "5s"
   },
-  "multiplex": {},
-  "transport": {},
+  "udp_timeout": "60s",
+  "udp_max_packet_size": 1500,
 
   ... // 拨号字段
 }
@@ -68,7 +71,7 @@ TLS 配置，参阅 [TLS](/zh/configuration/shared/tls/#出站)。
 
 ##### session.enabled
 
-启用会话复用。默认值为 `true`。
+启用会话复用。默认值为 `false`（禁用），必须显式启用。
 
 ##### session.max_streams
 
@@ -90,6 +93,10 @@ TLS 配置，参阅 [TLS](/zh/configuration/shared/tls/#出站)。
 
 发送 keepalive 数据包的间隔。默认值为 `30s`。
 
+##### session.keepalive_timeout
+
+keepalive 响应超时时间。默认值为 `2x keepalive_interval`（60s）。
+
 #### handshake
 
 出站连接握手选项。
@@ -106,13 +113,13 @@ TLS 配置，参阅 [TLS](/zh/configuration/shared/tls/#出站)。
 
 握手认证超时时间。默认值为 `5s`。
 
-#### multiplex
+#### udp_timeout
 
-参阅 [多路复用](/zh/configuration/shared/multiplex#出站)。
+UDP 会话超时时间。默认值为 `60s`。
 
-#### transport
+#### udp_max_packet_size
 
-V2Ray 传输配置，参阅 [V2Ray 传输层](/zh/configuration/shared/v2ray-transport/)。
+UDP 数据包最大大小。默认值为 `1500`。
 
 ### 拨号字段
 
@@ -155,12 +162,15 @@ V2Ray 传输配置，参阅 [V2Ray 传输层](/zh/configuration/shared/v2ray-tra
     "max_requests": 0,
     "idle_timeout": "5m",
     "max_age": "0s",
-    "keepalive_interval": "30s"
+    "keepalive_interval": "30s",
+    "keepalive_timeout": "60s"
   },
   "handshake": {
     "padding_min": 0,
     "padding_max": 24,
     "auth_timeout": "5s"
-  }
+  },
+  "udp_timeout": "60s",
+  "udp_max_packet_size": 1500
 }
 ```

@@ -2,6 +2,7 @@ package noisyshuttle
 
 import (
 	"context"
+	"encoding/hex"
 	"io"
 	"net"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/common/listener"
-	"github.com/sagernet/sing-box/common/mux"
 	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -26,6 +26,40 @@ import (
 
 func RegisterInbound(registry *inbound.Registry) {
 	inbound.Register(registry, C.TypeNoisyShuttle, NewInbound)
+}
+
+type replayFilter struct {
+	mu       sync.Mutex
+	entries  map[string]struct{}
+	order    []string
+	maxSize  int
+}
+
+func newReplayFilter(maxSize int) *replayFilter {
+	if maxSize <= 0 {
+		maxSize = 256
+	}
+	return &replayFilter{
+		entries: make(map[string]struct{}),
+		order:   make([]string, 0, maxSize),
+		maxSize: maxSize,
+	}
+}
+
+func (f *replayFilter) checkAndAdd(hash string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, exists := f.entries[hash]; exists {
+		return false
+	}
+	if len(f.entries) >= f.maxSize {
+		oldest := f.order[0]
+		delete(f.entries, oldest)
+		f.order = f.order[1:]
+	}
+	f.entries[hash] = struct{}{}
+	f.order = append(f.order, hash)
+	return true
 }
 
 type Inbound struct {
@@ -46,6 +80,7 @@ type Inbound struct {
 	closing           bool
 	natManager        *NATManager
 	network           []string
+	replayFilter      *replayFilter
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.NoisyShuttleInboundOptions) (adapter.Inbound, error) {
@@ -67,6 +102,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		IdleTimeout:       time.Duration(options.Session.IdleTimeout),
 		MaxAge:            time.Duration(options.Session.MaxAge),
 		KeepaliveInterval: time.Duration(options.Session.KeepaliveInterval),
+		KeepaliveTimeout:  time.Duration(options.Session.KeepaliveTimeout),
 	}
 	if sessionOpts.IdleTimeout == 0 {
 		sessionOpts.IdleTimeout = 5 * time.Minute
@@ -74,11 +110,17 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	if sessionOpts.KeepaliveInterval == 0 {
 		sessionOpts.KeepaliveInterval = 30 * time.Second
 	}
+	if sessionOpts.KeepaliveTimeout == 0 {
+		sessionOpts.KeepaliveTimeout = 2 * sessionOpts.KeepaliveInterval
+	}
 	network := options.Network.Build()
 	if len(network) == 0 {
 		network = []string{N.NetworkTCP}
 	}
-	capabilities := uint16(CapabilityReuse | CapabilityKeepalive)
+	capabilities := uint16(CapabilityKeepalive)
+	if options.Session.Enabled && options.Session.MaxStreams > 1 {
+		capabilities |= CapabilityReuse
+	}
 	if containsUDP(network) {
 		capabilities |= CapabilityUDPAssociate
 	}
@@ -93,11 +135,18 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		sessionOpts:  sessionOpts,
 		capabilities: capabilities,
 		network:      network,
+		replayFilter: newReplayFilter(256),
 	}
 	natConfig := &NATManagerConfig{
 		MaxMappings:   16,
-		IdleTimeout:   60 * time.Second,
-		MaxPacketSize: 1500,
+		IdleTimeout:   time.Duration(options.UDPTimeout),
+		MaxPacketSize: int(options.UDPMaxPacketSize),
+	}
+	if natConfig.IdleTimeout <= 0 {
+		natConfig.IdleTimeout = 60 * time.Second
+	}
+	if natConfig.MaxPacketSize <= 0 {
+		natConfig.MaxPacketSize = 1500
 	}
 	inbound.natManager = NewNATManager(natConfig)
 	if options.TLS == nil {
@@ -107,7 +156,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		Context:        ctx,
 		Logger:         logger,
 		Options:        common.PtrValueOrDefault(options.TLS),
-		KTLSCompatible: !common.PtrValueOrDefault(options.Multiplex).Enabled,
+		KTLSCompatible: true,
 	})
 	if err != nil {
 		return nil, err
@@ -120,10 +169,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		}
 		inbound.fallbackAddr = fallbackAddr
 	}
-	inbound.router, err = mux.NewRouterWithOptions(inbound.router, logger, common.PtrValueOrDefault(options.Multiplex))
-	if err != nil {
-		return nil, err
-	}
+	inbound.router = router
 	inbound.listener = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
@@ -177,6 +223,11 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	passwordHash, _, err := DecodePreface(conn, h.maxPadding)
 	if err != nil {
 		h.handleAuthFailure(ctx, conn, metadata, onClose, err, "preface decode failed")
+		return
+	}
+	hashHex := hex.EncodeToString(passwordHash[:])
+	if !h.replayFilter.checkAndAdd(hashHex) {
+		h.handleAuthFailure(ctx, conn, metadata, onClose, E.New("replay detected"), "replay attack detected")
 		return
 	}
 	userIndex := h.matchUser(passwordHash)

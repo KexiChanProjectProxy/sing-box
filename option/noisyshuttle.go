@@ -9,14 +9,14 @@ import (
 
 type NoisyShuttleInboundOptions struct {
 	ListenOptions
-	Users []NoisyShuttleUser `json:"users,omitempty"`
+	Users           []NoisyShuttleUser                 `json:"users,omitempty"`
 	InboundTLSOptionsContainer
-	Fallback  *ServerOptions                      `json:"fallback,omitempty"`
-	Network   NetworkList                         `json:"network,omitempty"`
-	Session   NoisyShuttleSessionOptions          `json:"session,omitempty"`
-	Handshake NoisyShuttleInboundHandshakeOptions `json:"handshake,omitempty"`
-	Multiplex *InboundMultiplexOptions            `json:"multiplex,omitempty"`
-	Transport *V2RayTransportOptions              `json:"transport,omitempty"`
+	Fallback        *ServerOptions                     `json:"fallback,omitempty"`
+	Network         NetworkList                        `json:"network,omitempty"`
+	Session         NoisyShuttleSessionOptions         `json:"session,omitempty"`
+	Handshake       NoisyShuttleInboundHandshakeOptions `json:"handshake,omitempty"`
+	UDPTimeout      badoption.Duration                 `json:"udp_timeout,omitempty"`
+	UDPMaxPacketSize int                               `json:"udp_max_packet_size,omitempty"`
 }
 
 type NoisyShuttleUser struct {
@@ -27,13 +27,13 @@ type NoisyShuttleUser struct {
 type NoisyShuttleOutboundOptions struct {
 	DialerOptions
 	ServerOptions
-	Password string      `json:"password"`
-	Network  NetworkList `json:"network,omitempty"`
+	Password         string                         `json:"password"`
+	Network          NetworkList                    `json:"network,omitempty"`
 	OutboundTLSOptionsContainer
-	Session   NoisyShuttleSessionOptions           `json:"session,omitempty"`
-	Handshake NoisyShuttleOutboundHandshakeOptions `json:"handshake,omitempty"`
-	Multiplex *OutboundMultiplexOptions            `json:"multiplex,omitempty"`
-	Transport *V2RayTransportOptions               `json:"transport,omitempty"`
+	Session          NoisyShuttleSessionOptions      `json:"session,omitempty"`
+	Handshake        NoisyShuttleOutboundHandshakeOptions `json:"handshake,omitempty"`
+	UDPTimeout       badoption.Duration              `json:"udp_timeout,omitempty"`
+	UDPMaxPacketSize int                            `json:"udp_max_packet_size,omitempty"`
 }
 
 type NoisyShuttleSessionOptions struct {
@@ -43,6 +43,7 @@ type NoisyShuttleSessionOptions struct {
 	IdleTimeout       badoption.Duration `json:"idle_timeout,omitempty"`
 	MaxAge            badoption.Duration `json:"max_age,omitempty"`
 	KeepaliveInterval badoption.Duration `json:"keepalive_interval,omitempty"`
+	KeepaliveTimeout  badoption.Duration `json:"keepalive_timeout,omitempty"`
 }
 
 type NoisyShuttleInboundHandshakeOptions struct {

@@ -47,6 +47,7 @@ const (
 	ErrorIdleTimeout              = 0x12
 	ErrorShutdownDrain            = 0x13
 	ErrorUnsupportedFragmentation = 0x14
+	ErrorReplay                   = 0x15
 	ErrorInternal                 = 0x7f
 
 	SessionStateConnecting = iota

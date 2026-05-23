@@ -49,6 +49,7 @@ type SessionOptions struct {
 	IdleTimeout       time.Duration
 	MaxAge            time.Duration
 	KeepaliveInterval time.Duration
+	KeepaliveTimeout  time.Duration
 }
 
 type HandshakeOptions struct {
@@ -62,7 +63,10 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	if err != nil {
 		return nil, err
 	}
-	capabilities := uint16(CapabilityReuse | CapabilityKeepalive)
+	capabilities := uint16(CapabilityKeepalive)
+	if options.Session.Enabled {
+		capabilities |= CapabilityReuse
+	}
 	networkList := options.Network
 	if networkList == "" {
 		networkList = "tcp"
@@ -97,6 +101,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		IdleTimeout:       time.Duration(options.Session.IdleTimeout),
 		MaxAge:            time.Duration(options.Session.MaxAge),
 		KeepaliveInterval: time.Duration(options.Session.KeepaliveInterval),
+		KeepaliveTimeout:  time.Duration(options.Session.KeepaliveTimeout),
 	}
 	if sessionOpts.MaxStreams == 0 {
 		sessionOpts.MaxStreams = 16
@@ -106,6 +111,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	}
 	if sessionOpts.KeepaliveInterval == 0 {
 		sessionOpts.KeepaliveInterval = 30 * time.Second
+	}
+	if sessionOpts.KeepaliveTimeout == 0 {
+		sessionOpts.KeepaliveTimeout = 2 * sessionOpts.KeepaliveInterval
 	}
 	outbound := &Outbound{
 		Adapter:        outbound.NewAdapterWithDialerOptions(C.TypeNoisyShuttle, tag, networkSlice, options.DialerOptions),

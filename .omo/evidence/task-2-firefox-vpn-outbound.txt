@@ -1,0 +1,13 @@
+Timestamp: 2026-07-03T08:11:14-04:00
+Status: PASS
+Commands:
+- (workdir=/home/kexi/sing-box/test) go test . -run 'TestFirefoxVPN(Registers|Dependencies|MissingDependency)'
+- (workdir=/home/kexi/sing-box/test) go test . -run 'TestFirefoxVPNRegistersAndStartsWithDualDependencies|TestFirefoxVPNMissingApiDetourFails|TestFirefoxVPNMissingDataDetourFails|TestFirefoxVPNCircularDependencyFails' -v
+Summary:
+- PASS: Firefox VPN outbound registered through include.OutboundRegistry.
+- PASS: Startup honors both detour and api_detour dependency edges.
+- PASS: Missing detour/api_detour tags fail with outbound dependency errors.
+- PASS: Circular dependency via selector -> firefox-vpn -> selector is reported.
+- PASS: Equal detour/api_detour dependencies are deduplicated in constructor coverage.
+Notes:
+- The repo's integration tests live in the nested /test Go module, so commands were executed from /home/kexi/sing-box/test with 'go test .' rather than from the repo root.

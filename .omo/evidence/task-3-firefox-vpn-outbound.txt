@@ -1,0 +1,12 @@
+# Firefox VPN Outbound Task 3 Evidence
+
+- Timestamp: 2026-07-03T08:25:29-04:00
+- Command: go test ./protocol/firefoxvpn -count=1 -run 'TestFirefoxVPN(ControlPlane|Fxa|Guardian|Refresh)' -v
+- Result: PASS
+- Summary:
+  - Verified FxA login request derives and sends hex authPW.
+  - Verified Hawk OAuth exchange sends Authorization header and expected grant payload.
+  - Verified refresh-token grant payload and refresh-token preservation.
+  - Verified Guardian proxy-pass Bearer request, JWT claim parsing, and non-2xx / empty-token failures.
+  - Verified control-plane HTTP client uses system-root TLS defaults (RootCAs=nil) and default injectable endpoints.
+- Redaction: No raw credentials, OAuth tokens, refresh tokens, or proxy-pass JWTs recorded.

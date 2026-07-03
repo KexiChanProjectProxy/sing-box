@@ -1,0 +1,31 @@
+Task 1: Fix firefox-vpn option tests and verify public config surface
+Timestamp: 2026-07-03
+Command: go test ./option -run 'TestFirefoxVPNOptionsRoundTrip|TestFirefoxVPNValidation' -v
+
+Result: PASS
+
+Test Output:
+=== RUN   TestFirefoxVPNOptionsRoundTrip
+--- PASS: TestFirefoxVPNOptionsRoundTrip (0.00s)
+=== RUN   TestFirefoxVPNValidation
+=== RUN   TestFirefoxVPNValidation/missing_email
+--- PASS: TestFirefoxVPNValidation/missing_email (0.00s)
+=== RUN   TestFirefoxVPNValidation/missing_password
+--- PASS: TestFirefoxVPNValidation/missing_password (0.00s)
+=== RUN   TestFirefoxVPNValidation/missing_server
+--- PASS: TestFirefoxVPNValidation/missing_server (0.00s)
+=== RUN   TestFirefoxVPNValidation/missing_server_port
+--- PASS: TestFirefoxVPNValidation/missing_server_port (0.00s)
+--- PASS: TestFirefoxVPNValidation (0.00s)
+=== RUN   TestFirefoxVPNValidationRejectsPacketMode
+--- PASS: TestFirefoxVPNValidationRejectsPacketMode (0.00s)
+PASS
+
+Full suite (also verified):
+=== RUN   TestFirefoxVPNOptionsRegistryCharacterization
+--- PASS: TestFirefoxVPNOptionsRegistryCharacterization (0.00s)
+
+Fixes applied:
+1. option/firefox_vpn_test.go line 67: json.MarshalContext(ctx, outbound) → json.MarshalContext(ctx, &outbound)
+   Root cause: Outbound.MarshalJSONContext has pointer receiver; non-addressable value skips custom marshal.
+2. option/firefox_vpn_test.go TestFirefoxVPNOptionsRegistryCharacterization: Changed from testing tor type to testing firefox-vpn type.

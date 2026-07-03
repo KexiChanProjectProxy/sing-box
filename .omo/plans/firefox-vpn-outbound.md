@@ -154,10 +154,10 @@ Your next move: start implementation now, or ask me to run a high-accuracy revie
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. All verification work is agent-executed; once receipts are collected, surface results and wait for the user's explicit sign-off before declaring the implementation complete.
-- [ ] F1. Plan compliance audit - verify every changed file maps to Todos 1-9, every guardrail in Scope OUT still holds, and evidence files exist for all completed todos.
-- [ ] F2. Code quality review - run `go test ./...`, inspect diagnostics, and review for secret persistence, over-generalized adapter refactors, and unintended UDP/MASQUE code paths.
-- [ ] F3. Agent-run end-to-end smoke test - run `go test ./test/firefoxvpn -run 'TestFirefoxVPNHappyPath|TestFirefoxVPNListenPacketRejected' -v` and require one successful TCP tunnel plus one explicit packet-mode rejection.
-- [ ] F4. Scope fidelity - verify the public config surface matches the approved choices: CONNECT-only, memory-only, `api_detour`, config-file `email/password`, TDD-backed implementation.
+- [x] F1. Plan compliance audit - verify every changed file maps to Todos 1-9, every guardrail in Scope OUT still holds, and evidence files exist for all completed todos.
+- [x] F2. Code quality review - run `go test ./...`, inspect diagnostics, and review for secret persistence, over-generalized adapter refactors, and unintended UDP/MASQUE code paths.
+- [x] F3. Agent-run end-to-end smoke test - run `go test ./test/firefoxvpn -run 'TestFirefoxVPNHappyPath|TestFirefoxVPNListenPacketRejected' -v` and require one successful TCP tunnel plus one explicit packet-mode rejection.
+- [x] F4. Scope fidelity - verify the public config surface matches the approved choices: CONNECT-only, memory-only, `api_detour`, config-file `email/password`, TDD-backed implementation.
 
 ## Commit strategy
 - Default commit model: one commit per todo marked `Commit: Y`, using the todo's message as the preferred subject.

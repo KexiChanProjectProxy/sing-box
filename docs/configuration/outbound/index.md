@@ -37,6 +37,7 @@
 | `selector`     | [Selector](./selector/)         |
 | `urltest`      | [URLTest](./urltest/)           |
 | `naive`        | [NaiveProxy](./naive/)          |
+| `firefox-vpn`  | [Firefox VPN](./firefox-vpn/)   |
 
 #### tag
 

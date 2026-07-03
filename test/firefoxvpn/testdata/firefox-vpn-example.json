@@ -1,0 +1,12 @@
+{
+  "outbounds": [
+    {
+      "type": "firefox-vpn",
+      "tag": "firefox-vpn-out",
+      "server": "vpn.example.com",
+      "server_port": 443,
+      "email": "user@example.com",
+      "password": "user-password"
+    }
+  ]
+}

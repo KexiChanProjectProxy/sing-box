@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -29,7 +30,10 @@ type fakeFxAServer struct {
 	Port      uint16
 	RootCAPEM []byte
 
-	server *httptest.Server
+	mu            sync.Mutex
+	loginCalls    int
+	sessionTokens []string
+	server        *httptest.Server
 }
 
 type fakeGuardianServer struct {
@@ -48,7 +52,10 @@ type fakeH2ProxyServer struct {
 	CertificatePEM []byte
 
 	ExpectedProxyPassToken string
-	server                 *httptest.Server
+
+	mu                  sync.Mutex
+	connectDestinations []string
+	server              *httptest.Server
 }
 
 type echoBackend struct {
@@ -59,14 +66,32 @@ type echoBackend struct {
 	wg       sync.WaitGroup
 }
 
+type observableProxy struct {
+	tag      string
+	listener net.Listener
+
+	mu                 sync.Mutex
+	destinations       []string
+	hostAliases        map[string]string
+	forcedConnectError error
+
+	wg sync.WaitGroup
+}
+
 func newFakeFxAServer(t *testing.T) *fakeFxAServer {
 	t.Helper()
+	serverState := &fakeFxAServer{Hostname: fakeFxAHost}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/v1/account/login":
 			require.Equal(t, http.MethodPost, request.Method)
-			_, _ = writer.Write([]byte(`{"sessionToken":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff","uid":"fxa-user","verified":true,"authAt":1700000000}`))
+			serverState.mu.Lock()
+			serverState.loginCalls++
+			sessionToken := fmt.Sprintf("%064x", serverState.loginCalls)
+			serverState.sessionTokens = append(serverState.sessionTokens, sessionToken)
+			serverState.mu.Unlock()
+			_, _ = writer.Write([]byte(`{"sessionToken":"` + sessionToken + `","uid":"fxa-user","verified":true,"authAt":1700000000}`))
 		case "/v1/oauth/token":
 			require.Equal(t, http.MethodPost, request.Method)
 			var tokenRequest struct {
@@ -84,7 +109,10 @@ func newFakeFxAServer(t *testing.T) *fakeFxAServer {
 	})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return &fakeFxAServer{BaseURL: server.URL, Hostname: fakeFxAHost, Port: uint16(server.Listener.Addr().(*net.TCPAddr).Port), server: server}
+	serverState.BaseURL = server.URL
+	serverState.Port = uint16(server.Listener.Addr().(*net.TCPAddr).Port)
+	serverState.server = server
+	return serverState
 }
 
 func newFakeGuardianServer(t *testing.T, proxyPassToken string) *fakeGuardianServer {
@@ -107,6 +135,26 @@ func newFakeGuardianServer(t *testing.T, proxyPassToken string) *fakeGuardianSer
 	return &fakeGuardianServer{BaseURL: server.URL, Hostname: fakeGuardianHost, Port: uint16(server.Listener.Addr().(*net.TCPAddr).Port), server: server}
 }
 
+func (s *fakeFxAServer) EndpointURL() string {
+	return "http://" + net.JoinHostPort(s.Hostname, strconv.Itoa(int(s.Port)))
+}
+
+func (s *fakeFxAServer) LoginCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loginCalls
+}
+
+func (s *fakeFxAServer) SessionTokens() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.sessionTokens...)
+}
+
+func (s *fakeGuardianServer) EndpointURL() string {
+	return "http://" + net.JoinHostPort(s.Hostname, strconv.Itoa(int(s.Port)))
+}
+
 func newFakeH2ProxyServer(t *testing.T) *fakeH2ProxyServer {
 	t.Helper()
 	proxy := &fakeH2ProxyServer{ServerName: fakeProxyHost}
@@ -124,6 +172,9 @@ func newFakeH2ProxyServer(t *testing.T) *fakeH2ProxyServer {
 			_, _ = writer.Write([]byte("unexpected proxy authorization"))
 			return
 		}
+		proxy.mu.Lock()
+		proxy.connectDestinations = append(proxy.connectDestinations, request.Host)
+		proxy.mu.Unlock()
 		upstream, err := net.Dial("tcp", request.Host)
 		if err != nil {
 			writer.WriteHeader(http.StatusBadGateway)
@@ -153,6 +204,16 @@ func newFakeH2ProxyServer(t *testing.T) *fakeH2ProxyServer {
 	proxy.CertificatePEM = server.rootCAPEM
 	proxy.server = server.server
 	return proxy
+}
+
+func (s *fakeH2ProxyServer) EndpointAddress() string {
+	return net.JoinHostPort(s.ServerName, strconv.Itoa(int(s.Port)))
+}
+
+func (s *fakeH2ProxyServer) ConnectDestinations() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.connectDestinations...)
 }
 
 func newEchoBackend(t *testing.T) *echoBackend {

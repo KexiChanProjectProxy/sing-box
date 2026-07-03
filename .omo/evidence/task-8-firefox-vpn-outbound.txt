@@ -1,0 +1,7 @@
+Timestamp: 2026-07-03T10:50:24-04:00
+Command: (cd /home/kexi/sing-box/test && go test ./firefoxvpn -run 'TestFirefoxVPN(ApiDetour|DataDetour|RestartRequiresLogin|BrokenDetour|EqualDetours|NoPersistence)' -v)
+Summary: PASS
+Notes:
+- Observable SOCKS detour proxies verified control-plane destinations (FxA + Guardian) separately from the data-plane detour destination (Firefox VPN h2 upstream).
+- Restart regression confirmed fresh login calls with distinct session tokens after box restart.
+- Broken api_detour failed control-plane startup; broken detour failed tunnel establishment.

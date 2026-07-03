@@ -1,0 +1,14 @@
+2026-07-03T10:26:30-04:00
+Command: (cd /home/kexi/sing-box/test && go test ./firefoxvpn -run 'TestFirefoxVPNHappyPath' -v)
+Result: PASS
+
+Summary:
+- Built local fake FxA + Guardian control-plane servers, fake TLS+h2 CONNECT proxy, and TCP echo backend under test/firefoxvpn.
+- Added TestFirefoxVPNHappyPath that boots sing-box via startInstance and verifies mixed-inbound TCP echo through the firefox-vpn outbound end-to-end.
+- Verification output:
+  === RUN   TestFirefoxVPNHappyPath
+  === PAUSE TestFirefoxVPNHappyPath
+  === CONT  TestFirefoxVPNHappyPath
+  --- PASS: TestFirefoxVPNHappyPath (0.02s)
+  PASS
+  ok  	test/firefoxvpn	0.032s

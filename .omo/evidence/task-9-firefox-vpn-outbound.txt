@@ -1,0 +1,20 @@
+Task 9: Firefox VPN Outbound Documentation
+Date: 2026-07-03
+
+Files created/modified:
+  - docs/configuration/outbound/firefox-vpn.md (English)
+  - docs/configuration/outbound/firefox-vpn.zh.md (Chinese)
+  - docs/configuration/outbound/index.md (added Firefox VPN row)
+  - docs/configuration/outbound/index.zh.md (added Firefox VPN row)
+  - test/firefoxvpn/docs_test.go (parse + field coverage tests)
+  - test/firefoxvpn/testdata/firefox-vpn-example.json (example config)
+
+Test verification:
+  Command: (cd test && go test ./firefoxvpn -run 'TestFirefoxVPNExampleConfigParses|TestFirefoxVPNDocsCoverAllPublicFields' -v)
+  Result: PASS (0.016s)
+
+Index verification:
+  Command: grep 'firefox-vpn' docs/configuration/outbound/index.md docs/configuration/outbound/index.zh.md
+  Result: Both files contain the Firefox VPN row.
+
+Summary: PASS

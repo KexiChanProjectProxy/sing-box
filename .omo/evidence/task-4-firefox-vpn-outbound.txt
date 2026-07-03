@@ -1,0 +1,15 @@
+Timestamp: 2026-07-03T08:37:40-04:00
+Task: Todo 4 - Firefox VPN outbound runtime auth controller
+Command: go test ./protocol/firefoxvpn -count=1 -run 'TestFirefoxVPN(RuntimeAuth|ProxyPassRenewal|MemoryOnly|Backoff|NoSecretLogging)' -v
+Result: PASS
+Summary:
+- PASS TestFirefoxVPNRuntimeAuth_prefersRefreshTokenWhenAccessTokenExpires
+- PASS TestFirefoxVPNProxyPassRenewal_renewsBeforeExpiry
+- PASS TestFirefoxVPNMemoryOnly_doesNotPersistState
+- PASS TestFirefoxVPNBackoff_retriesBoundedly
+- PASS TestFirefoxVPNNoSecretLogging_redactsRuntimeFailures
+- Package result: ok github.com/sagernet/sing-box/protocol/firefoxvpn 0.524s
+
+Notes:
+- Evidence redacts runtime secrets by recording only test names and package summary.
+- Runtime auth state remains in memory; no token persistence artifacts were introduced.

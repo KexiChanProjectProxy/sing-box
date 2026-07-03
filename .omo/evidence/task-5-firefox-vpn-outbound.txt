@@ -1,0 +1,4 @@
+Timestamp: 2026-07-03T12:56:43Z
+Command: go test ./protocol/firefoxvpn -count=1 -run '\''TestFirefoxVPN(H2Session|ConnectTunnel|ConcurrentStreams|Timeouts)'\'' -v
+Result: PASS
+Summary: single TLS+h2 session CONNECT transport, stream wrapper, client-side stream cap, explicit dial/stream timeouts, and non-2xx propagation verified.

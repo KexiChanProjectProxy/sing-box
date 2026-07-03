@@ -38,7 +38,7 @@ func TestFirefoxVPNGuardianFetchProxyPass_sendsBearerTokenAndParsesClaims_whenTo
 	}))
 	defer server.Close()
 
-	client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{guardianBaseURL: server.URL})
+	client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{guardianBaseURL: server.URL})
 
 	proxyPass, err := client.FetchProxyPass(context.Background(), "access-token")
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestFirefoxVPNGuardian_returnsErrorsForHTTPFailureAndEmptyToken_whenUpstrea
 		}))
 		defer server.Close()
 
-		client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{guardianBaseURL: server.URL})
+		client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{guardianBaseURL: server.URL})
 		_, err := client.FetchProxyPass(context.Background(), "access-token")
 		require.ErrorContains(t, err, "guardian proxy-pass failed")
 	})
@@ -74,7 +74,7 @@ func TestFirefoxVPNGuardian_returnsErrorsForHTTPFailureAndEmptyToken_whenUpstrea
 		}))
 		defer server.Close()
 
-		client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{guardianBaseURL: server.URL})
+		client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{guardianBaseURL: server.URL})
 		_, err := client.FetchProxyPass(context.Background(), "access-token")
 		require.ErrorContains(t, err, "missing token")
 	})

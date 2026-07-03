@@ -47,7 +47,7 @@ func TestFirefoxVPNFxaLogin_sendsDerivedAuthPW_whenCredentialsValid(t *testing.T
 	}))
 	defer server.Close()
 
-	client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{fxaBaseURL: server.URL})
+	client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{fxaBaseURL: server.URL})
 
 	response, err := client.Login(context.Background(), "user@example.com", "correct horse battery staple")
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestFirefoxVPNFxaOAuthToken_sendsHawkAuthorization_whenSessionTokenValid(t 
 	}))
 	defer server.Close()
 
-	client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{fxaBaseURL: server.URL})
+	client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{fxaBaseURL: server.URL})
 	client.now = func() time.Time { return time.Unix(1_700_000_000, 0) }
 	client.nonce = strings.NewReader("ABCDEF")
 
@@ -109,7 +109,7 @@ func TestFirefoxVPNRefreshToken_sendsRefreshGrant_whenRefreshTokenValid(t *testi
 	}))
 	defer server.Close()
 
-	client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{fxaBaseURL: server.URL})
+	client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{fxaBaseURL: server.URL})
 
 	response, err := client.RefreshOAuthToken(context.Background(), "refresh-token")
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestFirefoxVPNFxa_returnsErrorsForHTTPFailureAndEmptyTokens_whenUpstreamRej
 		}))
 		defer server.Close()
 
-		client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{fxaBaseURL: server.URL})
+		client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{fxaBaseURL: server.URL})
 		_, err := client.Login(context.Background(), "user@example.com", "password")
 		require.ErrorContains(t, err, "login failed")
 	})
@@ -141,7 +141,7 @@ func TestFirefoxVPNFxa_returnsErrorsForHTTPFailureAndEmptyTokens_whenUpstreamRej
 		}))
 		defer server.Close()
 
-		client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{fxaBaseURL: server.URL})
+		client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{fxaBaseURL: server.URL})
 		client.now = func() time.Time { return time.Unix(1_700_000_000, 0) }
 		client.nonce = strings.NewReader("ABCDEF")
 
@@ -156,7 +156,7 @@ func TestFirefoxVPNFxa_returnsErrorsForHTTPFailureAndEmptyTokens_whenUpstreamRej
 		}))
 		defer server.Close()
 
-		client := newControlPlaneClient(server.Client(), controlPlaneEndpoints{fxaBaseURL: server.URL})
+		client := newControlPlaneClient(server.Client(), ControlPlaneEndpoints{fxaBaseURL: server.URL})
 		_, err := client.RefreshOAuthToken(context.Background(), "refresh-token")
 		require.ErrorContains(t, err, "refresh failed")
 	})

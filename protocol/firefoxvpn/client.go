@@ -22,14 +22,24 @@ const (
 	defaultGuardianBaseURL = "https://vpn.mozilla.org"
 )
 
-type controlPlaneEndpoints struct {
+// ControlPlaneEndpoints holds the base URLs for Firefox Accounts and Guardian.
+type ControlPlaneEndpoints struct {
 	fxaBaseURL      string
 	guardianBaseURL string
 }
 
+// NewControlPlaneEndpoints creates a ControlPlaneEndpoints from the given base URLs.
+func NewControlPlaneEndpoints(fxaBaseURL, guardianBaseURL string) ControlPlaneEndpoints {
+	return ControlPlaneEndpoints{fxaBaseURL: fxaBaseURL, guardianBaseURL: guardianBaseURL}.normalize()
+}
+
+// TestNewControlPlaneClientOverride is a test-only hook. When non-nil,
+// NewControlPlaneClient delegates to it instead of using production endpoints.
+var TestNewControlPlaneClientOverride func(ctx context.Context, apiDetour string) (*ControlPlaneClient, error)
+
 type ControlPlaneClient struct {
 	httpClient *http.Client
-	endpoints  controlPlaneEndpoints
+	endpoints  ControlPlaneEndpoints
 	now        func() time.Time
 	nonce      io.Reader
 }
@@ -68,6 +78,9 @@ func NewControlPlaneHTTPClient(ctx context.Context, apiDetour string) (*http.Cli
 }
 
 func NewControlPlaneClient(ctx context.Context, apiDetour string) (*ControlPlaneClient, error) {
+	if TestNewControlPlaneClientOverride != nil {
+		return TestNewControlPlaneClientOverride(ctx, apiDetour)
+	}
 	httpClient, err := NewControlPlaneHTTPClient(ctx, apiDetour)
 	if err != nil {
 		return nil, err
@@ -75,7 +88,17 @@ func NewControlPlaneClient(ctx context.Context, apiDetour string) (*ControlPlane
 	return newControlPlaneClient(httpClient, defaultControlPlaneEndpoints()), nil
 }
 
-func newControlPlaneClient(httpClient *http.Client, endpoints controlPlaneEndpoints) *ControlPlaneClient {
+// NewControlPlaneClientWithEndpoints creates a ControlPlaneClient with explicit endpoints,
+// bypassing production defaults. Used by the test override hook.
+func NewControlPlaneClientWithEndpoints(ctx context.Context, apiDetour string, endpoints ControlPlaneEndpoints) (*ControlPlaneClient, error) {
+	httpClient, err := NewControlPlaneHTTPClient(ctx, apiDetour)
+	if err != nil {
+		return nil, err
+	}
+	return newControlPlaneClient(httpClient, endpoints), nil
+}
+
+func newControlPlaneClient(httpClient *http.Client, endpoints ControlPlaneEndpoints) *ControlPlaneClient {
 	return &ControlPlaneClient{
 		httpClient: httpClient,
 		endpoints:  endpoints.normalize(),
@@ -84,14 +107,14 @@ func newControlPlaneClient(httpClient *http.Client, endpoints controlPlaneEndpoi
 	}
 }
 
-func defaultControlPlaneEndpoints() controlPlaneEndpoints {
-	return controlPlaneEndpoints{
+func defaultControlPlaneEndpoints() ControlPlaneEndpoints {
+	return ControlPlaneEndpoints{
 		fxaBaseURL:      defaultFxABaseURL,
 		guardianBaseURL: defaultGuardianBaseURL,
 	}
 }
 
-func (e controlPlaneEndpoints) normalize() controlPlaneEndpoints {
+func (e ControlPlaneEndpoints) normalize() ControlPlaneEndpoints {
 	e.fxaBaseURL = strings.TrimRight(e.fxaBaseURL, "/")
 	e.guardianBaseURL = strings.TrimRight(e.guardianBaseURL, "/")
 	return e

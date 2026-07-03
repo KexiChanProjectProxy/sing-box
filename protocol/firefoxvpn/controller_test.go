@@ -165,7 +165,7 @@ func (s *controllerTestState) newController(t *testing.T) *AuthController {
 		Email:         "user@example.com",
 		Password:      s.password,
 	}, func(context.Context, string) (*ControlPlaneClient, error) {
-		return newControlPlaneClient(s.server.Client(), controlPlaneEndpoints{fxaBaseURL: s.server.URL, guardianBaseURL: s.server.URL}), nil
+		return newControlPlaneClient(s.server.Client(), ControlPlaneEndpoints{fxaBaseURL: s.server.URL, guardianBaseURL: s.server.URL}), nil
 	})
 	require.NoError(t, err)
 	controller.accessTokenRefreshMargin = time.Minute

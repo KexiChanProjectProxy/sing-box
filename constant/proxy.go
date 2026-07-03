@@ -35,12 +35,13 @@ const (
 	TypeHysteriaRealm      = "hysteria-realm"
 	TypeACME               = "acme"
 	TypeCloudflareOriginCA = "cloudflare-origin-ca"
-	TypeNoisyShuttle      = "noisy-shuttle"
+	TypeNoisyShuttle       = "noisy-shuttle"
+	TypeFirefoxVPN         = "firefox-vpn"
 )
 
 const (
-	TypeSelector   = "selector"
-	TypeURLTest    = "urltest"
+	TypeSelector    = "selector"
+	TypeURLTest     = "urltest"
 	TypeLoadBalance = "loadbalance"
 )
 

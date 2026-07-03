@@ -1,0 +1,52 @@
+F2 Final Verification Wave — firefox-vpn-outbound
+Date: 2026-07-03
+Reviewer: OpenCode / gpt-5.4
+
+Scope
+- Re-run required tests and vet
+- Inspect protocol/firefoxvpn/fxa.go
+- Inspect protocol/firefoxvpn/guardian.go
+- Inspect protocol/firefoxvpn/controller_runtime.go
+- Grep protocol/firefoxvpn for panic/os.Exit/unsafe and sensitive logging anti-patterns
+
+Command Results
+1. go test ./protocol/firefoxvpn -count=1
+   PASS
+2. go test ./option -count=1
+   PASS
+3. (cd test && go test ./firefoxvpn -count=1)
+   PASS
+4. go vet ./protocol/firefoxvpn ./option
+   CLEAN
+
+Code Inspection Findings
+- protocol/firefoxvpn/fxa.go
+  - Non-2xx login/oauth/refresh errors are sanitized to status-only forms:
+    - "login failed (HTTP %d)"
+    - "oauth token failed (HTTP %d)"
+    - "refresh failed (HTTP %d)"
+  - Raw upstream response body text is not interpolated into those error strings.
+- protocol/firefoxvpn/guardian.go
+  - Non-2xx guardian errors are sanitized to status-only forms:
+    - "guardian proxy-pass failed (HTTP %d)"
+    - "guardian entitlement failed (HTTP %d)"
+  - Raw upstream response body text is not interpolated into those error strings.
+- protocol/firefoxvpn/controller_runtime.go
+  - Retry/refresh warning logs do not use log.Err(err).
+  - Logs use category-only fields instead:
+    - log.String("error", "refresh_failed")
+    - log.String("error", "retry_failed")
+  - This avoids emitting potentially sensitive upstream error payloads through controller logs.
+- protocol/firefoxvpn grep checks
+  - No panic( found.
+  - No os.Exit( found.
+  - No unsafe usage found.
+  - No log.Err(err) found under protocol/firefoxvpn.
+
+Advisory
+- protocol/firefoxvpn/session.go still formats proxy CONNECT errors with e.Body in one path ("proxy CONNECT failed: %s: %s"). This was outside the requested F2 fix scope and did not affect the specific Firefox Accounts / Guardian / controller logging regression being re-verified here.
+
+Conclusion
+- The previously rejected F2 issue appears fixed as requested: Firefox Accounts and Guardian non-2xx errors no longer include raw body text, and controller retry/refresh logs no longer attach raw upstream errors.
+
+VERDICT: APPROVE

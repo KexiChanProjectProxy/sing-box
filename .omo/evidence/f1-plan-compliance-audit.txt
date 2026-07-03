@@ -1,0 +1,52 @@
+Timestamp: 2026-07-03
+Task: F1 Plan compliance audit for firefox-vpn-outbound (rerun)
+Base commit: 043654f8aec4d39724777c78b566d0a07fac0e76
+Method:
+- Read .omo/plans/firefox-vpn-outbound.md
+- Verified task evidence files .omo/evidence/task-{1..9}-firefox-vpn-outbound.txt
+- Ran: git diff --name-only 043654f8aec4d39724777c78b566d0a07fac0e76..HEAD
+- Audited changed production files for scope guardrails and TCP-only behavior
+
+Changed-file mapping:
+- .omo/evidence/task-6-firefox-vpn-outbound.txt => allowed .omo state / verification artifact
+- .omo/plans/firefox-vpn-outbound.md => allowed .omo state / plan state
+- constant/proxy.go => Todo 1
+- option/firefox_vpn.go => Todo 1
+- option/firefox_vpn_test.go => Todo 1 legitimate test file, not an allowlist violation
+- include/registry.go => Todo 2
+- test/firefoxvpn_test.go => Todo 2 legitimate test file (also covers Todo 6 guardrails), not an allowlist violation
+- protocol/firefoxvpn/client.go, fxa.go, guardian.go, hawk.go, fxa_test.go, guardian_test.go => Todo 3
+- protocol/firefoxvpn/controller.go, controller_runtime.go, controller_test.go => Todo 4
+- protocol/firefoxvpn/conn.go, session.go, session_runtime.go, session_test.go, session_test_support_test.go, go.mod => Todo 5
+- protocol/firefoxvpn/outbound.go, outbound_test.go => Todo 6
+- test/firefoxvpn/harness.go, happy_test.go, tls_helpers.go => Todo 7
+- test/firefoxvpn/detour_regressions_helpers_test.go, detour_regressions_test.go, harness_detour_proxy.go => Todo 8
+- docs/configuration/outbound/firefox-vpn.md, firefox-vpn.zh.md, index.md, index.zh.md, test/firefoxvpn/docs_test.go, test/firefoxvpn/testdata/firefox-vpn-example.json => Todo 9
+
+Allowlist verdict:
+- PASS: All changed files map to Todos 1-9 or allowed .omo state.
+- PASS: option/firefox_vpn_test.go and test/firefoxvpn_test.go are legitimate test files and are not allowlist violations.
+
+Evidence file check:
+- PASS: .omo/evidence/task-1-firefox-vpn-outbound.txt
+- PASS: .omo/evidence/task-2-firefox-vpn-outbound.txt (Status: PASS)
+- PASS: .omo/evidence/task-3-firefox-vpn-outbound.txt (Result: PASS)
+- PASS: .omo/evidence/task-4-firefox-vpn-outbound.txt
+- PASS: .omo/evidence/task-5-firefox-vpn-outbound.txt
+- PASS: .omo/evidence/task-6-firefox-vpn-outbound.txt (exists; Result: PASS; Summary: Outbound lifecycle wiring verified)
+- PASS: .omo/evidence/task-7-firefox-vpn-outbound.txt
+- PASS: .omo/evidence/task-8-firefox-vpn-outbound.txt
+- PASS: .omo/evidence/task-9-firefox-vpn-outbound.txt
+
+Guardrail audit:
+- PASS: No MASQUE implementation found in changed production code.
+- PASS: No serverlist-driven selection found in changed production code.
+- PASS: No token/cache/persist/keychain production feature added. A diff-hunk scan of changed production files found no forbidden production changes; the only grep hits were a test name containing "Persist" and unrelated go.mod dependency names, not Firefox VPN production logic.
+- PASS: UDP rejection present in production code: protocol/firefoxvpn/outbound.go rejects non-TCP DialContext calls with ErrUnknownNetwork and ListenPacket returns os.ErrInvalid.
+- PASS: No generic adapter-wide refactor detected; no adapter/ or common detour framework files were changed for this feature.
+
+Conclusion:
+- Previous rejection reason #1 fixed: .omo/evidence/task-6-firefox-vpn-outbound.txt now exists and records PASS.
+- Previous rejection reason #2 fixed: the changed-file allowlist now correctly accepts legitimate test files, including option/firefox_vpn_test.go and test/firefoxvpn_test.go.
+
+VERDICT: APPROVE

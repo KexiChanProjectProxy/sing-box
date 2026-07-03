@@ -1,0 +1,23 @@
+F3 rerun for firefox-vpn-outbound final verification wave
+Date: 2026-07-03
+Working directory: /home/kexi/sing-box/test
+Command: go test ./firefoxvpn -run 'TestFirefoxVPNHappyPath|TestFirefoxVPNListenPacketRejected' -v
+
+Observed output:
+=== RUN   TestFirefoxVPNHappyPath
+=== PAUSE TestFirefoxVPNHappyPath
+=== RUN   TestFirefoxVPNListenPacketRejected
+=== PAUSE TestFirefoxVPNListenPacketRejected
+=== CONT  TestFirefoxVPNHappyPath
+=== CONT  TestFirefoxVPNListenPacketRejected
+--- PASS: TestFirefoxVPNListenPacketRejected (0.00s)
+--- PASS: TestFirefoxVPNHappyPath (0.01s)
+PASS
+ok  	test/firefoxvpn	0.029s
+
+Findings:
+- Single package invocation used: ./firefoxvpn from /home/kexi/sing-box/test
+- Selected tests observed in output: TestFirefoxVPNHappyPath, TestFirefoxVPNListenPacketRejected
+- Both selected tests passed
+
+VERDICT: APPROVE

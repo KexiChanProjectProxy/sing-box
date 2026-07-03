@@ -1,0 +1,43 @@
+F4 Scope Fidelity Re-run — firefox-vpn-outbound
+Date: 2026-07-03
+
+Files reviewed:
+- option/firefox_vpn.go
+- protocol/firefoxvpn/outbound.go
+- protocol/firefoxvpn/outbound_test.go
+- protocol/firefoxvpn/controller.go
+
+Findings:
+1. option/firefox_vpn.go public surface
+   - FirefoxVPNOutboundOptions embeds/exposes exactly:
+     - ServerOptions
+     - DialerOptions
+     - OutboundTLSOptionsContainer
+     - APIDetour
+     - Email
+     - Password
+   - Confirmed no extra approved-surface fields were added.
+   - JSON helper type includes Network only for unmarshal-time rejection, not public runtime surface.
+
+2. Forbidden public fields
+   - No forbidden public outbound option fields observed in FirefoxVPNOutboundOptions.
+
+3. protocol/firefoxvpn/outbound.go runtime guardrails
+   - Adapter is TCP-only via outbound.NewAdapter(..., []string{N.NetworkTCP}, ...).
+   - DialContext rejects non-TCP networks with ErrUnknownNetwork extension.
+   - ListenPacket returns os.ErrInvalid.
+
+4. protocol/firefoxvpn/outbound_test.go guardrail tests
+   - TestFirefoxVPNDialContextRejectsNonTCP present.
+   - TestFirefoxVPNListenPacketRejected present.
+   - Targeted test command passed:
+     go test ./protocol/firefoxvpn -run 'TestFirefoxVPNListenPacketRejected|TestFirefoxVPNDialContextRejectsNonTCP' -v
+
+5. protocol/firefoxvpn/controller.go secret/state handling
+   - Controller state is held in-memory on AuthController fields (tokens, proxy pass, password).
+   - No file-backed or persistent storage logic present in controller.go.
+   - Close() clears password, access token, access token expiry, refresh token, and proxyPass, and stops background work.
+
+Conclusion:
+- F4 scope fidelity requirements satisfied.
+- Verdict recommendation: APPROVE.

@@ -5,21 +5,33 @@ import (
 	"testing"
 
 	box "github.com/sagernet/sing-box"
+	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/firefoxvpn"
+	"github.com/sagernet/sing/service"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFirefoxVPNRegistersAndStartsWithDualDependencies(t *testing.T) {
 	t.Parallel()
 
-	startInstance(t, firefoxVPNOptions(
+	options := firefoxVPNOptions(
 		firefoxVPNDirectOutbound("api-upstream"),
 		firefoxVPNDirectOutbound("data-upstream"),
 		firefoxVPNOutbound("firefox-vpn", "data-upstream", "api-upstream"),
-	))
+	)
+	instance, err := box.New(box.Options{
+		Context: globalCtx,
+		Options: options,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = instance.Close() })
+
+	ob, ok := instance.Outbound().Outbound("firefox-vpn")
+	require.True(t, ok)
+	require.Equal(t, []string{"data-upstream", "api-upstream"}, ob.Dependencies())
 }
 
 func TestFirefoxVPNMissingApiDetourFails(t *testing.T) {
@@ -61,17 +73,37 @@ func TestFirefoxVPNCircularDependencyFails(t *testing.T) {
 func TestFirefoxVPNEqualDetoursDedupDependencies(t *testing.T) {
 	t.Parallel()
 
-	rawOutbound, err := firefoxvpn.NewOutbound(context.Background(), nil, log.NewNOPFactory().Logger(), "firefox-vpn", option.FirefoxVPNOutboundOptions{
+	ctx := service.ContextWith[adapter.OutboundManager](context.Background(), &stubOutboundManager{})
+	rawOutbound, err := firefoxvpn.NewOutbound(ctx, nil, log.NewNOPFactory().Logger(), "firefox-vpn", option.FirefoxVPNOutboundOptions{
 		DialerOptions: option.DialerOptions{Detour: "shared-upstream"},
-		APIDetour:     "shared-upstream",
+		ServerOptions: option.ServerOptions{
+			Server:     "vpn.example.test",
+			ServerPort: 443,
+		},
+		APIDetour: "shared-upstream",
+		Email:     "user@example.com",
+		Password:  "correct horse battery staple",
+		OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{
+			TLS: &option.OutboundTLSOptions{Enabled: true, Insecure: true},
+		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"shared-upstream"}, rawOutbound.Dependencies())
 
-	startInstance(t, firefoxVPNOptions(
+	options := firefoxVPNOptions(
 		firefoxVPNDirectOutbound("shared-upstream"),
 		firefoxVPNOutbound("firefox-vpn", "shared-upstream", "shared-upstream"),
-	))
+	)
+	instance, err := box.New(box.Options{
+		Context: globalCtx,
+		Options: options,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = instance.Close() })
+
+	ob, ok := instance.Outbound().Outbound("firefox-vpn")
+	require.True(t, ok)
+	require.Equal(t, []string{"shared-upstream"}, ob.Dependencies())
 }
 
 func firefoxVPNOptions(outbounds ...option.Outbound) option.Options {
@@ -99,6 +131,9 @@ func firefoxVPNOutbound(tag string, detour string, apiDetour string) option.Outb
 			APIDetour: apiDetour,
 			Email:     "user@example.com",
 			Password:  "correct horse battery staple",
+			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{
+				TLS: &option.OutboundTLSOptions{Enabled: true, Insecure: true},
+			},
 		},
 	}
 }
@@ -120,4 +155,18 @@ func startInstanceExpectError(t *testing.T, options option.Options) error {
 	})
 
 	return instance.Start()
+}
+
+// stubOutboundManager is a minimal adapter.OutboundManager for tests that
+// need a context with an OutboundManager but do not actually start outbounds.
+type stubOutboundManager struct{}
+
+func (m *stubOutboundManager) Start(_ adapter.StartStage) error           { return nil }
+func (m *stubOutboundManager) Close() error                               { return nil }
+func (m *stubOutboundManager) Outbounds() []adapter.Outbound              { return nil }
+func (m *stubOutboundManager) Outbound(_ string) (adapter.Outbound, bool) { return nil, false }
+func (m *stubOutboundManager) Default() adapter.Outbound                  { return nil }
+func (m *stubOutboundManager) Remove(_ string) error                      { return nil }
+func (m *stubOutboundManager) Create(_ context.Context, _ adapter.Router, _ log.StructuredLogger, _ string, _ string, _ any) error {
+	return nil
 }

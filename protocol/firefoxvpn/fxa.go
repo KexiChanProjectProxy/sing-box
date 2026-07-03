@@ -80,7 +80,7 @@ func (c *ControlPlaneClient) Login(ctx context.Context, email string, password s
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("login failed (HTTP %d): %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("login failed (HTTP %d)", response.StatusCode)
 	}
 
 	var loginResponse FxALoginResponse
@@ -131,7 +131,7 @@ func (c *ControlPlaneClient) ExchangeOAuthToken(ctx context.Context, sessionToke
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("oauth token failed (HTTP %d): %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("oauth token failed (HTTP %d)", response.StatusCode)
 	}
 
 	var tokenResponse FxATokenResponse
@@ -173,7 +173,7 @@ func (c *ControlPlaneClient) RefreshOAuthToken(ctx context.Context, refreshToken
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("refresh failed (HTTP %d): %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("refresh failed (HTTP %d)", response.StatusCode)
 	}
 
 	var tokenResponse FxATokenResponse

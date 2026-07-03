@@ -63,7 +63,7 @@ func (c *ControlPlaneClient) FetchProxyPass(ctx context.Context, accessToken str
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("guardian proxy-pass failed (HTTP %d): %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("guardian proxy-pass failed (HTTP %d)", response.StatusCode)
 	}
 
 	var proxyPassResponse guardianProxyPassResponse
@@ -106,7 +106,7 @@ func (c *ControlPlaneClient) FetchEntitlement(ctx context.Context, accessToken s
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("guardian entitlement failed (HTTP %d): %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("guardian entitlement failed (HTTP %d)", response.StatusCode)
 	}
 
 	var entitlement Entitlement

@@ -31,7 +31,7 @@ func (c *AuthController) refreshLoop() {
 		}
 		if err := c.syncRuntimeState(c.backgroundCtx); err != nil {
 			retryDelay = c.backoffDelay(0)
-			c.logger.WarnEvent("firefoxvpn.controller.refresh", "runtime refresh failed", log.Err(err))
+			c.logger.WarnEvent("firefoxvpn.controller.refresh", "runtime refresh failed", log.String("error", "refresh_failed"))
 			continue
 		}
 		retryDelay = 0
@@ -163,7 +163,7 @@ func (c *AuthController) withRetry(ctx context.Context, operation string, fn fun
 			break
 		}
 		delay := c.backoffDelay(attempt)
-		c.logger.WarnEvent("firefoxvpn.controller.retry", "controller retry", log.String("operation", operation), log.Int("attempt", attempt+1), log.Duration("backoff", delay), log.Err(err))
+		c.logger.WarnEvent("firefoxvpn.controller.retry", "controller retry", log.String("operation", operation), log.Int("attempt", attempt+1), log.Duration("backoff", delay), log.String("error", "retry_failed"))
 		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():

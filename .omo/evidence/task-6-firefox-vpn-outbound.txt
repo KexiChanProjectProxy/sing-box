@@ -1,0 +1,4 @@
+Timestamp: 2026-07-03T13:10:00Z
+Command: (cd test && go test . -run 'TestFirefoxVPN') && go test ./protocol/firefoxvpn -run 'TestFirefoxVPN'
+Result: PASS
+Summary: Outbound lifecycle wiring (Todo 6) — DialContext/Start/Close assembly, TCP-only semantics, ListenPacket rejection, session swap, and concurrency safety verified. Completed alongside Todo 5; confirmed by integration tests under test/firefoxvpn and unit tests under protocol/firefoxvpn.

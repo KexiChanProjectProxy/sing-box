@@ -17,6 +17,10 @@ import (
 )
 
 func TestXLAT464RouteUDP(t *testing.T) {
+	if raceEnabled {
+		t.Skip("skipping under race detector: upstream TimeoutPacketConn.active race in sagernet/sing (see .omo/evidence/f2-code-quality-direct-xlat464.txt)")
+	}
+
 	// Given
 	logicalDestination := M.SocksaddrFrom(netip.MustParseAddr("192.0.2.1"), 53)
 	synthesizedDestination := M.SocksaddrFrom(netip.MustParseAddr("64:ff9b::c000:201"), 53)

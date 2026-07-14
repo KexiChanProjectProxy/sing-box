@@ -38,6 +38,7 @@ type Outbound struct {
 	ctx            context.Context
 	logger         log.StructuredLogger
 	dialer         dialer.ParallelInterfaceDialer
+	xlat464        *xlat464AddressMapper
 	domainStrategy C.DomainStrategy
 	fallbackDelay  time.Duration
 	isEmpty        bool
@@ -54,24 +55,21 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		RemoteIsDomain: true,
 		DirectOutbound: true,
 	}
-	var xlat464Err error
+	var xlat464 *xlat464AddressMapper
 	if options.Xlat464 != nil {
+		mapper, err := newXLAT464AddressMapper(*options.Xlat464)
+		if err != nil {
+			return nil, err
+		}
+		xlat464 = &mapper
 		dialerOptions.DialerWrapper = func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
-			xlat464Dialer, err := newXLAT464Dialer(base, *options.Xlat464)
-			if err != nil {
-				xlat464Err = err
-				return base
-			}
-			return xlat464Dialer
+			return &xlat464Dialer{dialer: base, mapper: *xlat464}
 		}
 		dialerOptions.ForceDomainStrategyIPv4Only = true
 	}
 	outboundDialer, err := dialer.NewWithOptions(dialerOptions)
 	if err != nil {
 		return nil, err
-	}
-	if xlat464Err != nil {
-		return nil, xlat464Err
 	}
 	outbound := &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeDirect, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, options.DialerOptions),
@@ -81,6 +79,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		domainStrategy: C.DomainStrategy(options.DomainStrategy),
 		fallbackDelay:  time.Duration(options.FallbackDelay),
 		dialer:         outboundDialer.(dialer.ParallelInterfaceDialer),
+		xlat464:        xlat464,
 		isEmpty:        reflect.DeepEqual(options.DialerOptions, option.DialerOptions{UDPFragmentDefault: true}),
 	}
 	//nolint:staticcheck
@@ -138,6 +137,11 @@ func (h *Outbound) DialParallel(ctx context.Context, network string, destination
 	switch network {
 	case N.NetworkTCP:
 		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+		var err error
+		destinationAddresses, err = h.normalizeTCPDestinationAddresses(destinationAddresses)
+		if err != nil {
+			return nil, err
+		}
 
 	case N.NetworkUDP:
 		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
@@ -154,6 +158,11 @@ func (h *Outbound) DialParallelNetwork(ctx context.Context, network string, dest
 	switch network {
 	case N.NetworkTCP:
 		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+		var err error
+		destinationAddresses, err = h.normalizeTCPDestinationAddresses(destinationAddresses)
+		if err != nil {
+			return nil, err
+		}
 
 	case N.NetworkUDP:
 		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
@@ -177,4 +186,15 @@ func (h *Outbound) ListenSerialNetworkPacket(ctx context.Context, destination M.
 
 func (h *Outbound) IsEmpty() bool {
 	return h.isEmpty
+}
+
+func (h *Outbound) normalizeTCPDestinationAddresses(destinationAddresses []netip.Addr) ([]netip.Addr, error) {
+	if h.xlat464 == nil || len(destinationAddresses) == 0 {
+		return destinationAddresses, nil
+	}
+	mappedAddresses := h.xlat464.synthesizeIPv4Addresses(destinationAddresses)
+	if len(mappedAddresses) == 0 {
+		return nil, E.New("xlat464: no IPv4 destination addresses")
+	}
+	return mappedAddresses, nil
 }

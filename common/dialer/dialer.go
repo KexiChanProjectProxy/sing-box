@@ -17,15 +17,17 @@ import (
 )
 
 type Options struct {
-	Context                 context.Context
-	Options                 option.DialerOptions
-	RemoteIsDomain          bool
-	DirectResolver          bool
-	ResolverOnDetour        bool
-	NewDialer               bool
-	DisableEmptyDirectCheck bool
-	DirectOutbound          bool
-	DefaultOutbound         bool
+	Context                     context.Context
+	Options                     option.DialerOptions
+	RemoteIsDomain              bool
+	DirectResolver              bool
+	ResolverOnDetour            bool
+	NewDialer                   bool
+	DisableEmptyDirectCheck     bool
+	DirectOutbound              bool
+	DefaultOutbound             bool
+	DialerWrapper               func(ParallelInterfaceDialer) ParallelInterfaceDialer
+	ForceDomainStrategyIPv4Only bool
 }
 
 // TODO: merge with NewWithOptions
@@ -39,10 +41,7 @@ func New(ctx context.Context, options option.DialerOptions, remoteIsDomain bool)
 
 func NewWithOptions(options Options) (N.Dialer, error) {
 	dialOptions := options.Options
-	var (
-		dialer N.Dialer
-		err    error
-	)
+	var dialer N.Dialer
 	hasDetour := dialOptions.Detour != "" || options.DefaultOutbound
 	if dialOptions.Detour != "" {
 		outboundManager := service.FromContext[adapter.OutboundManager](options.Context)
@@ -57,9 +56,14 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 		}
 		dialer = NewDefaultOutboundDetour(outboundManager)
 	} else {
-		dialer, err = NewDefault(options.Context, dialOptions)
+		defaultDialer, err := NewDefault(options.Context, dialOptions)
 		if err != nil {
 			return nil, err
+		}
+		if options.DialerWrapper != nil {
+			dialer = options.DialerWrapper(defaultDialer)
+		} else {
+			dialer = defaultDialer
 		}
 	}
 	if options.RemoteIsDomain && (!hasDetour || options.ResolverOnDetour || dialOptions.DomainResolver != nil && dialOptions.DomainResolver.Server != "") {
@@ -132,6 +136,9 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 				dnsQueryOptions.Strategy = C.DomainStrategy(dialOptions.DomainStrategy)
 				deprecated.Report(options.Context, deprecated.OptionLegacyDomainStrategyOptions)
 			}
+		}
+		if options.ForceDomainStrategyIPv4Only {
+			dnsQueryOptions.Strategy = C.DomainStrategyIPv4Only
 		}
 		dialer = NewResolveDialer(
 			options.Context,

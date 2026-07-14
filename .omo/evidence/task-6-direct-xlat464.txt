@@ -1,0 +1,36 @@
+Task 6: Document xlat464 outbound option
+========================================
+Date: 2026-07-14
+
+## 1. First formatter run
+
+$ go run cmd/internal/format_docs/main.go
+EXIT: 0
+
+## 2. Diff after first formatter run (my edits only, formatter did not modify further)
+
+$ git diff --stat -- docs/configuration/outbound/direct.md docs/configuration/outbound/direct.zh.md
+ docs/configuration/outbound/direct.md    | 30 ++++++++++++++++++++++++++++++
+ docs/configuration/outbound/direct.zh.md | 32 +++++++++++++++++++++++++++++++-
+ 2 files changed, 61 insertions(+), 1 deletion(-)
+
+## 3. Second formatter run (convergence check)
+
+$ go run cmd/internal/format_docs/main.go
+EXIT: 0
+
+## 4. Diff after second formatter run (unchanged = converged)
+
+$ git diff --stat -- docs/configuration/outbound/direct.md docs/configuration/outbound/direct.zh.md
+ docs/configuration/outbound/direct.md    | 30 ++++++++++++++++++++++++++++++
+ docs/configuration/outbound/direct.zh.md | 32 +++++++++++++++++++++++++++++++-
+ 2 files changed, 61 insertions(+), 1 deletion(-)
+
+No additional changes — formatter converges.
+
+## 5. git diff --check (whitespace validation)
+
+$ git diff --check -- docs/configuration/outbound/direct.md docs/configuration/outbound/direct.zh.md
+EXIT: 0
+
+Clean — no trailing whitespace or whitespace errors.

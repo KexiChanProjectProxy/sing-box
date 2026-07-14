@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+!!! quote "Changes in sing-box 1.14.0"
+
+    :material-plus: [xlat464](#xlat464)
+
 !!! quote "Changes in sing-box 1.11.0"
 
     :material-delete-clock: [override_address](#override_address)  
@@ -15,6 +19,10 @@ icon: material/alert-decagram
 {
   "type": "direct",
   "tag": "direct-out",
+
+  "xlat464": {
+    "prefix": "64:ff9b::/96"
+  },
   
   "override_address": "1.0.0.1",
   "override_port": 53,
@@ -42,6 +50,28 @@ Override the connection destination address.
 Override the connection destination port.
 
 Protocol value can be `1` or `2`.
+
+#### xlat464
+
+XLAT464 (NAT64) address translation for the direct outbound. When configured, IPv4 literal destinations and IPv4 addresses obtained from domain resolution (A records) are embedded into the specified `/96` IPv6 prefix, allowing IPv4-only destinations to be reached over an IPv6-only network path.
+
+```json
+{
+  "xlat464": {
+    "prefix": "64:ff9b::/96"
+  }
+}
+```
+
+!!! info "Contract"
+
+    - The `prefix` must be an IPv6 prefix with a `/96` length. Any other prefix length is rejected.
+    - IPv4 literal destinations and A-record answers are embedded into the prefix (e.g. `192.0.2.1` becomes `64:ff9b::c000:201`).
+    - Domain resolution for direct-owned destinations is forced to A-only (IPv4). AAAA answers supplied by a preceding route `resolve` action are dropped.
+    - TCP and UDP protocols are supported.
+    - Native IPv6 literal destinations (non-mapped) pass through unchanged.
+    - ICMP, DNS64, automatic prefix discovery, and non-`/96` prefix lengths are not supported.
+    - This option is exclusive to the direct outbound and does not apply to other outbound types.
 
 ### Dial Fields
 

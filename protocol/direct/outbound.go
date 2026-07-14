@@ -176,10 +176,19 @@ func (h *Outbound) ListenSerialNetworkPacket(ctx context.Context, destination M.
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
 	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection"))
+	if h.xlat464 != nil && len(destinationAddresses) > 0 {
+		destinationAddresses = h.xlat464.synthesizeIPv4Addresses(destinationAddresses)
+		if len(destinationAddresses) == 0 {
+			return nil, netip.Addr{}, E.New("xlat464: no IPv4 destination addresses")
+		}
+	}
 
 	conn, newDestination, err := dialer.ListenSerialNetworkPacket(ctx, h.dialer, destination, destinationAddresses, networkStrategy, networkType, fallbackNetworkType, fallbackDelay)
 	if err != nil {
 		return nil, netip.Addr{}, err
+	}
+	if h.xlat464 != nil {
+		newDestination = h.xlat464.reverse(newDestination)
 	}
 	return conn, newDestination, nil
 }

@@ -236,6 +236,7 @@ func (d *xlat464TestDialer) ListenSerialInterfacePacket(_ context.Context, desti
 type xlat464TestPacketConn struct {
 	readFromAddr, writeToAddr                     net.Addr
 	readPacketDestination, writePacketDestination M.Socksaddr
+	writePacketDestinations                       chan M.Socksaddr
 	localAddr                                     net.Addr
 	deadline, readDeadline, writeDeadline         time.Time
 	closed                                        bool
@@ -254,6 +255,9 @@ func (c *xlat464TestPacketConn) ReadPacket(buffer *B.Buffer) (M.Socksaddr, error
 }
 func (c *xlat464TestPacketConn) WritePacket(_ *B.Buffer, destination M.Socksaddr) error {
 	c.writePacketDestination = destination
+	if c.writePacketDestinations != nil {
+		c.writePacketDestinations <- destination
+	}
 	return nil
 }
 func (c *xlat464TestPacketConn) Close() error        { c.closed = true; return nil }

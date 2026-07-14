@@ -155,3 +155,25 @@
   docs already use Chinese labels for admonition headings. All bullet points
   are semantically equivalent to the English version; JSON examples are
   identical.
+
+## 2026-07-14 — Task 7: Release notes and regression suite
+
+### Changelog style
+- The `1.14.0-alpha.24` section had only a bare "Fixes and improvement" line.
+  Adding a feature bullet before it follows the convention of alpha.22/alpha.21
+  where feature bullets precede the "Fixes" line.
+- Used a direct doc link `[direct outbound](/configuration/outbound/direct/#xlat464)`
+  instead of a `**1**` footnote because xlat464 is a single option addition, not
+  a multi-faceted feature requiring explanation. The linked doc page has the
+  full contract.
+
+### Docs formatter
+- `go run cmd/internal/format_docs/main.go` accepts changelog bullets with
+  inline Markdown links without reformatting. Two runs confirmed convergence.
+
+### Pre-existing test failures
+- `common/tlsfragment.TestTLSFragment` fails with a TLS handshake error —
+  network-dependent, unrelated to protocol/direct or dialer changes.
+- `experimental/libbox` fails to build — mobile library target, not part of
+  the feature's scope.
+- Both were excluded from the feature claim with unchanged-baseline proof.

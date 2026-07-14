@@ -48,14 +48,30 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	if options.Detour != "" {
 		return nil, E.New("`detour` is not supported in direct context")
 	}
-	outboundDialer, err := dialer.NewWithOptions(dialer.Options{
+	dialerOptions := dialer.Options{
 		Context:        ctx,
 		Options:        options.DialerOptions,
 		RemoteIsDomain: true,
 		DirectOutbound: true,
-	})
+	}
+	var xlat464Err error
+	if options.Xlat464 != nil {
+		dialerOptions.DialerWrapper = func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
+			xlat464Dialer, err := newXLAT464Dialer(base, *options.Xlat464)
+			if err != nil {
+				xlat464Err = err
+				return base
+			}
+			return xlat464Dialer
+		}
+		dialerOptions.ForceDomainStrategyIPv4Only = true
+	}
+	outboundDialer, err := dialer.NewWithOptions(dialerOptions)
 	if err != nil {
 		return nil, err
+	}
+	if xlat464Err != nil {
+		return nil, xlat464Err
 	}
 	outbound := &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeDirect, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, options.DialerOptions),

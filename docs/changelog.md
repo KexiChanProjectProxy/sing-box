@@ -4,6 +4,7 @@ icon: material/alert-decagram
 
 #### 1.14.0-alpha.24
 
+* Add `xlat464` option on [direct outbound](/configuration/outbound/direct/#xlat464) for NAT64/DNS64 address synthesis
 * Fixes and improvement
 
 #### 1.13.12

@@ -4,6 +4,7 @@ icon: material/alert-decagram
 
 #### 1.14.0-alpha.24
 
+* 为 [direct 出站](/configuration/outbound/direct/#xlat464) 添加 `xlat464` 选项，用于 NAT64/DNS64 地址合成
 * 修复和改进
 
 #### 1.13.12

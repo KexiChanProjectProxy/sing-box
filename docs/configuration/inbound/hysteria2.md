@@ -131,7 +131,7 @@ HTTP3 server behavior (Object configuration) when authentication fails.
 | Type     | Description                 | Fields                              |
 |----------|-----------------------------|-------------------------------------|
 | `file`   | As a file server            | `directory`                         |
-| `proxy`  | As a reverse proxy          | `url`, `rewrite_host`               |
+| `proxy`  | As a reverse proxy          | `url`, `rewrite_host`, `x_forwarded` |
 | `string` | Reply with a fixed response | `status_code`, `headers`, `content` |
 
 Conflict with `masquerade`.
@@ -149,6 +149,14 @@ Reverse proxy target URL.
 #### masquerade.rewrite_host
 
 Rewrite the `Host` header to the target URL.
+
+#### masquerade.x_forwarded
+
+Add `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` headers to the upstream request.
+
+Only available in the object proxy form (`masquerade.type` = `proxy`), not the string URL form (`masquerade`).
+
+Defaults to `false`.
 
 #### masquerade.status_code
 

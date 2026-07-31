@@ -128,7 +128,7 @@ HTTP3 服务器认证失败时的行为 （对象配置）。
 | Type     | 描述      | 字段                                  |
 |----------|---------|-------------------------------------|
 | `file`   | 作为文件服务器 | `directory`                         |
-| `proxy`  | 作为反向代理  | `url`, `rewrite_host`               |
+| `proxy`  | 作为反向代理  | `url`, `rewrite_host`, `x_forwarded` |
 | `string` | 返回固定响应  | `status_code`, `headers`, `content` |
 
 如果 masquerade 未配置，则返回 404 页。
@@ -146,6 +146,14 @@ HTTP3 服务器认证失败时的行为 （对象配置）。
 #### masquerade.rewrite_host
 
 重写请求头中的 Host 字段到目标 URL。
+
+#### masquerade.x_forwarded
+
+向上游请求添加 `X-Forwarded-For`、`X-Forwarded-Host` 和 `X-Forwarded-Proto` 请求头。
+
+仅在对象代理形式（`masquerade.type` = `proxy`）中可用，字符串 URL 形式（`masquerade`）不支持。
+
+默认值为 `false`。
 
 #### masquerade.status_code
 

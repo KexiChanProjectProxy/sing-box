@@ -1,16 +1,27 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/sagernet/quic-go"
+	"github.com/sagernet/quic-go/http3"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-quic/hysteria2"
 	"github.com/sagernet/sing/common"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/json/badoption"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHysteria2Self(t *testing.T) {
@@ -180,6 +191,108 @@ func TestHysteria2Inbound(t *testing.T) {
 		},
 	})
 	testSuit(t, clientPort, testPort)
+}
+
+func TestHysteria2MasqueradeFallback(t *testing.T) {
+	type upstreamObservation struct {
+		path    string
+		host    string
+		headers http.Header
+	}
+	observations := make(chan upstreamObservation, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observations <- upstreamObservation{
+			path:    r.URL.Path,
+			host:    r.Host,
+			headers: r.Header.Clone(),
+		}
+		_, _ = w.Write([]byte("masquerade fallback response"))
+	}))
+	t.Cleanup(upstream.Close)
+
+	caPem, certPem, keyPem := createSelfSignedCertificate(t, "example.org")
+	startInstance(t, option.Options{
+		Inbounds: []option.Inbound{{
+			Type: C.TypeHysteria2,
+			Options: &option.Hysteria2InboundOptions{
+				ListenOptions: option.ListenOptions{
+					Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+					ListenPort: serverPort,
+				},
+				UpMbps:   100,
+				DownMbps: 100,
+				Users: []option.Hysteria2User{{
+					Password: "valid-password-that-is-not-used",
+				}},
+				InboundTLSOptionsContainer: option.InboundTLSOptionsContainer{
+					TLS: &option.InboundTLSOptions{
+						Enabled:         true,
+						ServerName:      "example.org",
+						CertificatePath: certPem,
+						KeyPath:         keyPem,
+					},
+				},
+				Masquerade: &option.Hysteria2Masquerade{
+					Type: C.Hysterai2MasqueradeTypeProxy,
+					ProxyOptions: option.Hysteria2MasqueradeProxy{
+						URL:        upstream.URL,
+						XForwarded: true,
+					},
+				},
+			},
+		}},
+	})
+
+	caBytes, err := os.ReadFile(caPem)
+	require.NoError(t, err)
+	rootCAs := x509.NewCertPool()
+	require.True(t, rootCAs.AppendCertsFromPEM(caBytes))
+
+	clientPacketConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, clientPacketConn.Close())
+	})
+	clientAddress := clientPacketConn.LocalAddr().(*net.UDPAddr)
+	serverAddress := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(serverPort)}
+	h3Transport := &http3.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:    rootCAs,
+			ServerName: "example.org",
+		},
+		Dial: func(ctx context.Context, _ string, tlsConfig *tls.Config, quicConfig *quic.Config) (*quic.Conn, error) {
+			return quic.DialEarly(ctx, clientPacketConn, serverAddress, tlsConfig, quicConfig)
+		},
+	}
+	t.Cleanup(func() {
+		require.NoError(t, h3Transport.Close())
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.org/fallback/resource", nil)
+	require.NoError(t, err)
+	require.Empty(t, request.Header.Get("Hysteria-Auth"))
+	response, err := (&http.Client{Transport: h3Transport}).Do(request)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, response.Body.Close())
+	})
+	responseBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	require.Equal(t, "masquerade fallback response", string(responseBody))
+	select {
+	case observation := <-observations:
+		require.Equal(t, "/fallback/resource", observation.path)
+		require.Equal(t, "example.org", observation.host)
+		require.Equal(t, []string{clientAddress.IP.String()}, observation.headers.Values("X-Forwarded-For"))
+		require.Equal(t, []string{"example.org"}, observation.headers.Values("X-Forwarded-Host"))
+		require.Equal(t, []string{"https"}, observation.headers.Values("X-Forwarded-Proto"))
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
 }
 
 func TestHysteria2Outbound(t *testing.T) {

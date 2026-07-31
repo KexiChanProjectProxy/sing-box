@@ -152,11 +152,25 @@ Rewrite the `Host` header to the target URL.
 
 #### masquerade.x_forwarded
 
-Add `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` headers to the upstream request.
+Adds `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` headers to the proxied upstream request.
 
-Only available in the object proxy form (`masquerade.type` = `proxy`), not the string URL form (`masquerade`).
+| Header                | Value                                        |
+|-----------------------|----------------------------------------------|
+| `X-Forwarded-For`     | IP address of the connecting HTTP/3 client   |
+| `X-Forwarded-Host`    | Host the client originally requested          |
+| `X-Forwarded-Proto`   | Original scheme (`https`)                    |
+
+Only available in the object proxy form (`masquerade.type` = `proxy`); not available in the string URL form (`masquerade`).
 
 Defaults to `false`.
+
+!!! warning "Privacy"
+
+    This option discloses client connection metadata (client IP) to the upstream server. Enable only when the upstream is trusted.
+
+When `x_forwarded` is enabled, the upstream receives the values above. When disabled, any client-supplied forwarding headers are stripped.
+
+`X-Forwarded-Host` always carries the original host the client requested, regardless of whether `rewrite_host` rewrites the upstream `Host` header.
 
 #### masquerade.status_code
 

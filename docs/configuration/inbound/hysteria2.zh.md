@@ -149,11 +149,25 @@ HTTP3 服务器认证失败时的行为 （对象配置）。
 
 #### masquerade.x_forwarded
 
-向上游请求添加 `X-Forwarded-For`、`X-Forwarded-Host` 和 `X-Forwarded-Proto` 请求头。
+向上游代理请求添加 `X-Forwarded-For`、`X-Forwarded-Host` 和 `X-Forwarded-Proto` 请求头。
 
-仅在对象代理形式（`masquerade.type` = `proxy`）中可用，字符串 URL 形式（`masquerade`）不支持。
+| 请求头                  | 值                                         |
+|-----------------------|------------------------------------------|
+| `X-Forwarded-For`     | 连接的 HTTP/3 客户端 IP 地址                 |
+| `X-Forwarded-Host`    | 客户端最初请求的主机名                       |
+| `X-Forwarded-Proto`   | 原始协议（`https`）                         |
+
+仅在对象代理形式（`masquerade.type` = `proxy`）中可用；字符串 URL 形式（`masquerade`）不支持。
 
 默认值为 `false`。
+
+!!! warning "隐私"
+
+    此选项会将客户端连接元数据（客户端 IP）透露给上游服务器。仅在上游受信任时启用。
+
+启用 `x_forwarded` 时，上游将收到上述值。禁用时，客户端提供的转发请求头会被剥离。
+
+`X-Forwarded-Host` 始终携带客户端最初请求的原始主机名，无论 `rewrite_host` 是否重写了上游的 `Host` 请求头。
 
 #### masquerade.status_code
 

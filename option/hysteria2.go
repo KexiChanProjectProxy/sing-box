@@ -117,6 +117,7 @@ type Hysteria2MasqueradeFile struct {
 type Hysteria2MasqueradeProxy struct {
 	URL         string `json:"url"`
 	RewriteHost bool   `json:"rewrite_host,omitempty"`
+	XForwarded  bool   `json:"x_forwarded,omitempty"`
 }
 
 type Hysteria2MasqueradeString struct {

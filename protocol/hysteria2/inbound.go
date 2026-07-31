@@ -74,17 +74,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 			if err != nil {
 				return nil, E.Cause(err, "parse masquerade URL")
 			}
-			masqueradeHandler = &httputil.ReverseProxy{
-				Rewrite: func(r *httputil.ProxyRequest) {
-					r.SetURL(masqueradeURL)
-					if !options.Masquerade.ProxyOptions.RewriteHost {
-						r.Out.Host = r.In.Host
-					}
-				},
-				ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-					w.WriteHeader(http.StatusBadGateway)
-				},
-			}
+			masqueradeHandler = newMasqueradeProxy(masqueradeURL, options.Masquerade.ProxyOptions)
 		case C.Hysterai2MasqueradeTypeString:
 			masqueradeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if options.Masquerade.StringOptions.StatusCode != 0 {
@@ -112,11 +102,9 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		}),
 		tlsConfig: tlsConfig,
 	}
-	var udpTimeout time.Duration
+	udpTimeout := C.UDPTimeout
 	if options.UDPTimeout != 0 {
 		udpTimeout = time.Duration(options.UDPTimeout)
-	} else {
-		udpTimeout = C.UDPTimeout
 	}
 	var realmOptions *realm.Options
 	if options.Realm != nil {
@@ -189,11 +177,24 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	return inbound, nil
 }
 
+func newMasqueradeProxy(masqueradeURL *url.URL, options option.Hysteria2MasqueradeProxy) *httputil.ReverseProxy {
+	return &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(masqueradeURL)
+			if options.XForwarded {
+				r.SetXForwarded()
+			}
+			if !options.RewriteHost {
+				r.Out.Host = r.In.Host
+			}
+		},
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) { w.WriteHeader(http.StatusBadGateway) },
+	}
+}
+
 func (h *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
 	ctx = log.ContextWithNewID(ctx)
-	var metadata adapter.InboundContext
-	metadata.Inbound = h.Tag()
-	metadata.InboundType = h.Type()
+	metadata := adapter.InboundContext{Inbound: h.Tag(), InboundType: h.Type()}
 	//nolint:staticcheck
 	metadata.InboundDetour = h.listener.ListenOptions().Detour
 	//nolint:staticcheck

@@ -19,11 +19,11 @@ import (
 
 	"github.com/sagernet/sing-box/common/schannel"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	"github.com/sagernet/sing/common/json/badoption"
-	"github.com/sagernet/sing/common/logger"
 	N "github.com/sagernet/sing/common/network"
 )
 
@@ -345,7 +345,7 @@ func TestWindowsClientHandshakeWrappedConn(t *testing.T) {
 
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context: ctx,
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:     true,
 			Engine:      C.TLSEngineWindows,
@@ -625,7 +625,7 @@ func TestWindowsClientHandshakeContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context: ctx,
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:     true,
 			Engine:      C.TLSEngineWindows,
@@ -691,7 +691,7 @@ func TestWindowsClientHandshakeTimeout(t *testing.T) {
 
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context: ctx,
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:          true,
 			Engine:           C.TLSEngineWindows,
@@ -1951,7 +1951,7 @@ func TestWindowsClientNetConnReturnsUnderlying(t *testing.T) {
 func TestNewWindowsClientMissingServerName(t *testing.T) {
 	_, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled: true,
 			Engine:  C.TLSEngineWindows,
@@ -1965,7 +1965,7 @@ func TestNewWindowsClientMissingServerName(t *testing.T) {
 func TestNewWindowsClientInsecureAllowsMissingServerName(t *testing.T) {
 	_, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:  true,
 			Engine:   C.TLSEngineWindows,
@@ -1980,7 +1980,7 @@ func TestNewWindowsClientInsecureAllowsMissingServerName(t *testing.T) {
 func TestWindowsClientConfigSTDConfigReturnsError(t *testing.T) {
 	config, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:    true,
 			Engine:     C.TLSEngineWindows,
@@ -2002,7 +2002,7 @@ func TestWindowsClientConfigSTDConfigReturnsError(t *testing.T) {
 func TestWindowsClientConfigClientReturnsErrInvalid(t *testing.T) {
 	config, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:    true,
 			Engine:     C.TLSEngineWindows,
@@ -2021,7 +2021,7 @@ func TestWindowsClientConfigClientReturnsErrInvalid(t *testing.T) {
 func TestWindowsClientConfigClone(t *testing.T) {
 	config, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:    true,
 			Engine:     C.TLSEngineWindows,
@@ -2110,7 +2110,7 @@ func TestValidateWindowsTLSOptionsRejections(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := NewClientWithOptions(ClientOptions{
 				Context: context.Background(),
-				Logger:  logger.NOP(),
+				Logger:  log.NewNOPFactory().Logger(),
 				Options: tc.options,
 			})
 			if err == nil {
@@ -2262,7 +2262,7 @@ func newWindowsTestClientConn(t *testing.T, serverAddress string, options option
 
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context:       ctx,
-		Logger:        logger.NOP(),
+		Logger:        log.NewNOPFactory().Logger(),
 		ServerAddress: "",
 		Options:       options,
 	})
@@ -2291,7 +2291,7 @@ func newWindowsTestEngineConn(t *testing.T, serverAddress string, options option
 
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context:       ctx,
-		Logger:        logger.NOP(),
+		Logger:        log.NewNOPFactory().Logger(),
 		ServerAddress: "",
 		Options:       options,
 	})

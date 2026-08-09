@@ -2,13 +2,14 @@ package hysteria2
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -59,6 +60,8 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		return nil, err
 	}
 	var salamanderPassword string
+	var geckoPassword string
+	var geckoMinPacketSize, geckoMaxPacketSize int
 	if options.Obfs != nil {
 		if options.Obfs.Password == "" {
 			return nil, E.New("missing obfs password")
@@ -66,6 +69,10 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		switch options.Obfs.Type {
 		case hysteria2.ObfsTypeSalamander:
 			salamanderPassword = options.Obfs.Password
+		case hysteria2.ObfsTypeGecko:
+			geckoPassword = options.Obfs.Password
+			geckoMinPacketSize = options.Obfs.GeckoOptions.MinPacketSize
+			geckoMaxPacketSize = options.Obfs.GeckoOptions.MaxPacketSize
 		default:
 			return nil, E.New("unknown obfs type: ", options.Obfs.Type)
 		}
@@ -105,7 +112,14 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 				}
 				return dnsRouter.Lookup(ctx, host, dnsOptions)
 			},
-			Logger: logger,
+			Logger:    logger,
+			IPVersion: options.Realm.IPVersion,
+		}
+		if options.Realm.PortMapping != nil && options.Realm.PortMapping.Enabled {
+			realmOptions.PortMapping = &realm.PortMappingOptions{
+				Timeout:  time.Duration(options.Realm.PortMapping.Timeout),
+				Lifetime: time.Duration(options.Realm.PortMapping.Lifetime),
+			}
 		}
 	}
 	networkList := options.Network.Build()
@@ -121,6 +135,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		SendBPS:            uint64(options.UpMbps * hysteria.MbpsToBps),
 		ReceiveBPS:         uint64(options.DownMbps * hysteria.MbpsToBps),
 		SalamanderPassword: salamanderPassword,
+		GeckoPassword:      geckoPassword,
+		GeckoMinPacketSize: geckoMinPacketSize,
+		GeckoMaxPacketSize: geckoMaxPacketSize,
 		Password:           options.Password,
 		TLSConfig:          tlsConfig,
 		QUICOptions: qtls.QUICOptions{
@@ -134,6 +151,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		},
 		UDPDisabled:  !common.Contains(networkList, N.NetworkUDP),
 		BBRProfile:   options.BBRProfile,
+		ChromeParrot: !options.DisableChromeParrot,
 		RealmOptions: realmOptions,
 	})
 	if err != nil {

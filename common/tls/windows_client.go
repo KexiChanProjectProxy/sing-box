@@ -7,13 +7,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"github.com/sagernet/sing-box/log"
 	"io"
 	"net"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/common/schannel"
 	"github.com/sagernet/sing-box/option"

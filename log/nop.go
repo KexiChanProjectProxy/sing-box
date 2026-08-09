@@ -31,6 +31,9 @@ func (f *nopFactory) Level() Level {
 func (f *nopFactory) SetLevel(level Level) {
 }
 
+func (f *nopFactory) AttachPlatformWriter(writer PlatformWriter) {
+}
+
 func (f *nopFactory) Logger() StructuredLogger {
 	return f
 }

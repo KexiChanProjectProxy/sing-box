@@ -2,8 +2,9 @@ package v2ray
 
 import (
 	"context"
-	"github.com/sagernet/sing-box/log"
 	"os"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/tls"

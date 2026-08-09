@@ -13,24 +13,15 @@ import (
 
 type ClashServer interface {
 	LifecycleService
-	ConnectionTracker
 	Mode() string
 	ModeList() []string
-	SetModeUpdateHook(hook *observable.Subscriber[struct{}])
-	HistoryStorage() URLTestHistoryStorage
+	SetMode(mode string)
+	AddModeUpdateHook(hook *observable.Subscriber[struct{}])
 }
 
 type URLTestHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
-}
-
-type URLTestHistoryStorage interface {
-	SetHook(hook *observable.Subscriber[struct{}])
-	LoadURLTestHistory(tag string) *URLTestHistory
-	DeleteURLTestHistory(tag string)
-	StoreURLTestHistory(tag string, history *URLTestHistory)
-	Close() error
 }
 
 type V2RayServer interface {
@@ -40,6 +31,8 @@ type V2RayServer interface {
 
 type CacheFile interface {
 	LifecycleService
+
+	CacheID() string
 
 	StoreFakeIP() bool
 	FakeIPStorage

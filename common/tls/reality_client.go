@@ -18,7 +18,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/sagernet/sing-box/log"
 	"io"
 	mRand "math/rand"
 	"net"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"

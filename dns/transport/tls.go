@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"net"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -11,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/bufio/deadline"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
@@ -21,29 +21,19 @@ import (
 
 var _ adapter.DNSTransport = (*TLSTransport)(nil)
 
-const tlsDNSMaxInflight = 8
-
 func RegisterTLS(registry *dns.TransportRegistry) {
 	dns.RegisterTransport[option.RemoteTLSDNSServerOptions](registry, C.DNSTypeTLS, NewTLS)
 }
 
 type TLSTransport struct {
 	dns.TransportAdapter
-	logger log.StructuredLogger
-
+	logger      log.StructuredLogger
 	dialer      tls.Dialer
 	serverAddr  M.Socksaddr
-	tlsConfig   tls.Config
-	connections *ConnPool[*tlsDNSConn]
+	multiplexer *queryMultiplexer
 }
 
-type tlsDNSConn struct {
-	tls.Conn
-	queryId           uint16
-	needDeadlineClose bool
-}
-
-func NewTLS(ctx context.Context, logger log.StructuredLogger, tag string, options option.RemoteTLSDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTLS(ctx context.Context, logger log.ContextLogger, tag string, options option.RemoteTLSDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewRemoteDialer(ctx, options.RemoteDNSServerOptions)
 	if err != nil {
 		return nil, err
@@ -65,23 +55,30 @@ func NewTLS(ctx context.Context, logger log.StructuredLogger, tag string, option
 }
 
 func NewTLSRaw(logger log.StructuredLogger, adapter dns.TransportAdapter, dialer N.Dialer, serverAddr M.Socksaddr, tlsConfig tls.Config) *TLSTransport {
-	return &TLSTransport{
+	t := &TLSTransport{
 		TransportAdapter: adapter,
 		logger:           logger,
 		dialer:           tls.NewDialer(dialer, tlsConfig),
 		serverAddr:       serverAddr,
-		tlsConfig:        tlsConfig,
-		connections: NewConnPool(ConnPoolOptions[*tlsDNSConn]{
-			Mode:        ConnPoolOrdered,
-			MaxInflight: tlsDNSMaxInflight,
-			IsAlive: func(conn *tlsDNSConn) bool {
-				return conn != nil
-			},
-			Close: func(conn *tlsDNSConn, _ error) {
-				conn.Close()
-			},
-		}),
 	}
+	t.multiplexer = newQueryMultiplexer(queryMultiplexerOptions{
+		dial: func(ctx context.Context) (net.Conn, error) {
+			conn, err := t.dialer.DialTLSContext(ctx, t.serverAddr)
+			if err != nil {
+				return nil, E.Cause(err, "dial TLS connection")
+			}
+			return conn, nil
+		},
+		write: func(conn net.Conn, message *mDNS.Msg, queryId uint16) error {
+			return WriteMessage(conn, queryId, message)
+		},
+		readNext: func(conn net.Conn) (*mDNS.Msg, error) {
+			return ReadMessage(conn)
+		},
+		retryReadError: true,
+		probeReuse:     true,
+	})
+	return t
 }
 
 func (t *TLSTransport) Start(stage adapter.StartStage) error {
@@ -92,54 +89,17 @@ func (t *TLSTransport) Start(stage adapter.StartStage) error {
 }
 
 func (t *TLSTransport) Close() error {
-	return t.connections.Close()
+	return t.multiplexer.Close()
 }
 
 func (t *TLSTransport) Reset() {
-	t.connections.Reset()
+	t.multiplexer.Reset()
 }
 
 func (t *TLSTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
-	var lastErr error
-	for range 2 {
-		conn, created, err := t.connections.Acquire(ctx, func(ctx context.Context) (*tlsDNSConn, error) {
-			tlsConn, err := t.dialer.DialTLSContext(ctx, t.serverAddr)
-			if err != nil {
-				return nil, E.Cause(err, "dial TLS connection")
-			}
-			return &tlsDNSConn{
-				Conn:              tlsConn,
-				needDeadlineClose: deadline.NeedAdditionalReadDeadline(tlsConn.NetConn()),
-			}, nil
-		})
-		if err != nil {
-			return nil, err
-		}
-		response, err := t.exchange(ctx, message, conn)
-		if err == nil {
-			t.connections.Release(conn, true)
-			return response, nil
-		}
-		lastErr = err
-		t.logger.DebugEventContext(ctx, "dns.transport.connection.discarded", "discarded pooled connection", log.Err(err))
-		t.connections.Release(conn, false)
-		if created {
-			return nil, err
-		}
-	}
-	return nil, lastErr
+	return t.multiplexer.Exchange(ctx, message)
 }
 
-func (t *TLSTransport) exchange(ctx context.Context, message *mDNS.Msg, conn *tlsDNSConn) (*mDNS.Msg, error) {
-	defer setConnDeadline(ctx, conn, conn.needDeadlineClose)()
-	conn.queryId++
-	err := WriteMessage(conn, conn.queryId, message)
-	if err != nil {
-		return nil, E.Cause(err, "write request")
-	}
-	response, err := ReadMessage(conn)
-	if err != nil {
-		return nil, E.Cause(err, "read response")
-	}
-	return response, nil
+func (t *TLSTransport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+	t.multiplexer.ExchangeAsync(ctx, message, callback)
 }

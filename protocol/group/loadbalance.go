@@ -2,7 +2,6 @@ package group
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"math/rand"
 	"net"
 	"sort"
@@ -10,9 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	F "github.com/sagernet/sing/common/format"
+
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/interrupt"
+	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -50,7 +52,7 @@ type LoadBalance struct {
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
 	preferDomain                 bool
-	history                      adapter.URLTestHistoryStorage
+	history                      *urltest.HistoryStorage
 	group                        *URLTestGroup
 	snapshot                     atomic.Pointer[CandidateSnapshot]
 }

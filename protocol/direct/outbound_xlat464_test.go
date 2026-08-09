@@ -103,9 +103,11 @@ func xlat464OutboundTestOptions(strategy C.DomainStrategy) option.DirectOutbound
 	prefix := badoption.Prefix(netip.MustParsePrefix("64:ff9b::/96"))
 	return option.DirectOutboundOptions{
 		DialerOptions: option.DialerOptions{
-			DomainResolver: &option.DomainResolveOptions{
-				Server:   "resolver",
-				Strategy: option.DomainStrategy(strategy),
+			AbstractDialerOptions: option.AbstractDialerOptions{
+				DomainResolver: &option.DomainResolveOptions{
+					Server:   "resolver",
+					Strategy: option.DomainStrategy(strategy),
+				},
 			},
 		},
 		Xlat464: &option.Xlat464Options{Prefix: &prefix},
@@ -148,6 +150,10 @@ func (*xlat464OutboundTestDNSRouter) Start(adapter.StartStage) error { return ni
 func (*xlat464OutboundTestDNSRouter) Close() error                   { return nil }
 func (*xlat464OutboundTestDNSRouter) Exchange(context.Context, *dns.Msg, adapter.DNSQueryOptions) (*dns.Msg, error) {
 	return nil, errors.New("unused DNS exchange")
+}
+func (r *xlat464OutboundTestDNSRouter) ExchangeAsync(ctx context.Context, message *dns.Msg, options adapter.DNSQueryOptions, callback func(*dns.Msg, error)) {
+	response, err := r.Exchange(ctx, message, options)
+	callback(response, err)
 }
 func (r *xlat464OutboundTestDNSRouter) Lookup(_ context.Context, _ string, options adapter.DNSQueryOptions) ([]netip.Addr, error) {
 	r.options = options

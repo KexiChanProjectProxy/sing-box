@@ -7,12 +7,13 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
 	"io"
 	"net"
 	"os"
 	"syscall"
+
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/common/badtls"
 	E "github.com/sagernet/sing/common/exceptions"

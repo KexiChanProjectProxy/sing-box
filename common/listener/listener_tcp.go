@@ -1,12 +1,13 @@
 package listener
 
 import (
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"strings"
 	"syscall"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/redir"
@@ -66,7 +67,7 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 			})
 		})
 	}
-	tcpListener, err := ListenNetworkNamespace[net.Listener](l.listenOptions.NetNs, func() (net.Listener, error) {
+	tcpListener, err := ListenNetworkNamespace[net.Listener](l.ctx, l.listenOptions.NetNs, func() (net.Listener, error) {
 		if l.listenOptions.TCPFastOpen {
 			var tfoConfig tfo.ListenConfig
 			tfoConfig.ListenConfig = listenConfig

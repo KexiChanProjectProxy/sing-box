@@ -5,13 +5,14 @@ package ktls
 import (
 	"crypto/tls"
 	"errors"
-	F "github.com/sagernet/sing/common/format"
 	"io"
 	"os"
 	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/common/badversion"
 	"github.com/sagernet/sing/common/control"

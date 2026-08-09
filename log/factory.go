@@ -29,6 +29,10 @@ type StructuredLogger interface {
 	PanicEventContext(ctx context.Context, event string, message string, fields ...Field)
 }
 
+// ContextLogger is kept as an alias for upstream components that have not yet
+// adopted the structured event methods at their API boundary.
+type ContextLogger = StructuredLogger
+
 // Factory creates structured loggers. All loggers returned by the factory implement StructuredLogger.
 type Factory interface {
 	Start() error
@@ -43,6 +47,7 @@ type Factory interface {
 type ObservableFactory interface {
 	Factory
 	observable.Observable[Entry]
+	AttachPlatformWriter(writer PlatformWriter)
 }
 
 // Entry represents a log entry for observable subscription.

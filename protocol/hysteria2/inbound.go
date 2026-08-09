@@ -2,13 +2,15 @@ package hysteria2
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/netip"
 	"net/url"
+	"os"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -27,6 +29,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
+	"github.com/sagernet/sing/service/filemanager"
 )
 
 func RegisterInbound(registry *inbound.Registry) {
@@ -53,6 +56,8 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		return nil, err
 	}
 	var salamanderPassword string
+	var geckoPassword string
+	var geckoMinPacketSize, geckoMaxPacketSize int
 	if options.Obfs != nil {
 		if options.Obfs.Password == "" {
 			return nil, E.New("missing obfs password")
@@ -60,6 +65,10 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		switch options.Obfs.Type {
 		case hysteria2.ObfsTypeSalamander:
 			salamanderPassword = options.Obfs.Password
+		case hysteria2.ObfsTypeGecko:
+			geckoPassword = options.Obfs.Password
+			geckoMinPacketSize = options.Obfs.GeckoOptions.MinPacketSize
+			geckoMaxPacketSize = options.Obfs.GeckoOptions.MaxPacketSize
 		default:
 			return nil, E.New("unknown obfs type: ", options.Obfs.Type)
 		}
@@ -68,7 +77,12 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	if options.Masquerade != nil && options.Masquerade.Type != "" {
 		switch options.Masquerade.Type {
 		case C.Hysterai2MasqueradeTypeFile:
-			masqueradeHandler = http.FileServer(http.Dir(options.Masquerade.FileOptions.Directory))
+			masqueradeDirectory := filemanager.BasePath(ctx, os.ExpandEnv(options.Masquerade.FileOptions.Directory))
+			_, err = filemanager.ReadDir(ctx, masqueradeDirectory)
+			if err != nil && !os.IsNotExist(err) {
+				return nil, E.Cause(err, "read masquerade directory")
+			}
+			masqueradeHandler = http.FileServer(http.Dir(masqueradeDirectory))
 		case C.Hysterai2MasqueradeTypeProxy:
 			masqueradeURL, err := url.Parse(options.Masquerade.ProxyOptions.URL)
 			if err != nil {
@@ -108,6 +122,15 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	}
 	var realmOptions *realm.Options
 	if options.Realm != nil {
+		if options.Realm.IPVersion != 0 && options.ListenOptions.Listen != nil {
+			listenAddr := netip.Addr(*options.ListenOptions.Listen).Unmap()
+			if options.Realm.IPVersion == 6 && listenAddr.Is4() {
+				return nil, E.New("realm.ip_version 6 conflicts with listen address ", listenAddr)
+			}
+			if options.Realm.IPVersion == 4 && listenAddr.Is6() && !listenAddr.IsUnspecified() {
+				return nil, E.New("realm.ip_version 4 conflicts with listen address ", listenAddr)
+			}
+		}
 		queryOptions, err := adapter.DNSQueryOptionsFrom(ctx, options.Realm.STUNDomainResolver)
 		if err != nil {
 			return nil, err
@@ -133,7 +156,14 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 				}
 				return dnsRouter.Lookup(ctx, host, dnsOptions)
 			},
-			Logger: logger,
+			Logger:    logger,
+			IPVersion: options.Realm.IPVersion,
+		}
+		if options.Realm.PortMapping != nil && options.Realm.PortMapping.Enabled {
+			realmOptions.PortMapping = &realm.PortMappingOptions{
+				Timeout:  time.Duration(options.Realm.PortMapping.Timeout),
+				Lifetime: time.Duration(options.Realm.PortMapping.Lifetime),
+			}
 		}
 	}
 	hysteriaService, err := hysteria2.NewService[int](hysteria2.ServiceOptions{
@@ -143,6 +173,9 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		SendBPS:            uint64(options.UpMbps * hysteria.MbpsToBps),
 		ReceiveBPS:         uint64(options.DownMbps * hysteria.MbpsToBps),
 		SalamanderPassword: salamanderPassword,
+		GeckoPassword:      geckoPassword,
+		GeckoMinPacketSize: geckoMinPacketSize,
+		GeckoMaxPacketSize: geckoMaxPacketSize,
 		TLSConfig:          tlsConfig,
 		QUICOptions: qtls.QUICOptions{
 			IdleTimeout:             options.IdleTimeout.Build(),

@@ -13,7 +13,6 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/buf"
-	E "github.com/sagernet/sing/common/exceptions"
 
 	"golang.org/x/net/route"
 	"golang.org/x/sys/unix"

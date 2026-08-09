@@ -7,7 +7,11 @@ icon: material/new-box
     :material-plus: [include_mac_address](#include_mac_address)  
     :material-plus: [exclude_mac_address](#exclude_mac_address)  
     :material-plus: [dns_mode](#dns_mode)  
-    :material-plus: [dns_address](#dns_address)
+    :material-plus: [dns_address](#dns_address)  
+    :material-plus: [netns](#netns)  
+    :material-plus: [udp_mapping](/zh/configuration/shared/udp-nat/#udp_mapping)  
+    :material-plus: [udp_filtering](/zh/configuration/shared/udp-nat/#udp_filtering)  
+    :material-plus: [udp_nat_max](/zh/configuration/shared/udp-nat/#udp_nat_max)
 
 !!! quote "sing-box 1.13.3 中的更改"
 
@@ -112,7 +116,9 @@ icon: material/new-box
     "geoip-cn"
   ],
   "endpoint_independent_nat": false,
-  "udp_timeout": "5m",
+
+  ... // UDP NAT 字段
+
   "stack": "system",
   "include_interface": [
     "lan0"
@@ -198,6 +204,20 @@ icon: material/new-box
 #### interface_name
 
 虚拟设备名称，默认自动选择。
+
+#### netns
+
+!!! question "自 sing-box 1.14.0 起"
+
+!!! quote ""
+
+    仅支持 Linux。
+
+在指定的网络命名空间中创建 tun 接口，可以是名称、路径，或[网络命名空间](/zh/configuration/network-namespace/)的标签。
+
+设置后，`auto_route` 和 `auto_redirect` 在该命名空间内生效；若命名空间归当前用户所有，则无需 root 权限。
+
+与 `platform` 冲突。
 
 #### address
 
@@ -518,12 +538,6 @@ sing-box DNS 模块，等价于一条
 
 性能可能会略有下降，所以不建议在不需要的时候开启。
 
-#### udp_timeout
-
-UDP NAT 过期时间。
-
-默认使用 `5m`。
-
 #### stack
 
 !!! quote "sing-box 1.8.0 中的更改"
@@ -664,6 +678,10 @@ TCP/IP 栈。
     仅在 Apple 平台图形客户端中支持。
 
 代理的主机名列表。
+
+### UDP NAT 字段
+
+参阅 [UDP NAT 字段](/zh/configuration/shared/udp-nat/)。
 
 ### 监听字段
 

@@ -1,8 +1,9 @@
 package adapter
 
 import (
-	"github.com/sagernet/sing-box/log"
 	"net/netip"
+
+	"github.com/sagernet/sing-box/log"
 )
 
 type FakeIPStore interface {

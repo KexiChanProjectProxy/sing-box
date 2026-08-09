@@ -3,11 +3,12 @@ package v2raywebsocket
 import (
 	"context"
 	"encoding/base64"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/tls"

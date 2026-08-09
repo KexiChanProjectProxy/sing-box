@@ -127,7 +127,6 @@ type Service struct {
 }
 
 func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.CCMServiceOptions) (adapter.Service, error) {
-	structuredLogger := logger.(log.StructuredLogger)
 	serviceDialer, err := dialer.NewWithOptions(dialer.Options{
 		Context: ctx,
 		Options: option.DialerOptions{
@@ -161,15 +160,16 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 		usageTracker = &AggregatedUsage{
 			LastUpdated:  time.Now(),
 			Combinations: make([]CostCombination, 0),
+			ctx:          ctx,
 			filePath:     options.UsagesPath,
-			logger:       structuredLogger,
+			logger:       logger,
 		}
 	}
 
 	service := &Service{
 		Adapter:        boxService.NewAdapter(C.TypeCCM, tag),
 		ctx:            ctx,
-		logger:         structuredLogger,
+		logger:         logger,
 		credentialPath: options.CredentialPath,
 		users:          options.Users,
 		httpClient:     httpClient,
@@ -202,7 +202,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 
 	s.userManager.UpdateUsers(s.users)
 
-	credentials, err := platformReadCredentials(s.credentialPath)
+	credentials, err := platformReadCredentials(s.ctx, s.credentialPath)
 	if err != nil {
 		return E.Cause(err, "read credentials")
 	}
@@ -272,9 +272,9 @@ func (s *Service) getAccessToken() (string, error) {
 
 	s.credentials = newCredentials
 
-	err = platformWriteCredentials(newCredentials, s.credentialPath)
+	err = platformWriteCredentials(s.ctx, newCredentials, s.credentialPath)
 	if err != nil {
-		s.logger.WarnEvent("service.token.persist.error", "persist refreshed token", log.Err(err))
+		s.logger.Warn("persist refreshed token: ", err)
 	}
 
 	return newCredentials.AccessToken, nil

@@ -42,7 +42,7 @@ func TestPreferDomainDirectTCP(t *testing.T) {
 				Tag:  "prefer-domain-out",
 				Options: &option.DirectOutboundOptions{
 					DialerOptions: option.DialerOptions{
-						PreferDomain: true,
+						AbstractDialerOptions: option.AbstractDialerOptions{PreferDomain: true},
 					},
 				},
 			},
@@ -101,7 +101,7 @@ func TestPreferDomainDirectUDP(t *testing.T) {
 				Tag:  "prefer-domain-out",
 				Options: &option.DirectOutboundOptions{
 					DialerOptions: option.DialerOptions{
-						PreferDomain: true,
+						AbstractDialerOptions: option.AbstractDialerOptions{PreferDomain: true},
 					},
 				},
 			},
@@ -160,7 +160,7 @@ func TestPreferDomainDisabledTCP(t *testing.T) {
 				Tag:  "no-prefer-domain-out",
 				Options: &option.DirectOutboundOptions{
 					DialerOptions: option.DialerOptions{
-						PreferDomain: false,
+						AbstractDialerOptions: option.AbstractDialerOptions{PreferDomain: false},
 					},
 				},
 			},
@@ -339,7 +339,7 @@ func TestPreferDomainSOCKS(t *testing.T) {
 						ServerPort: testPort,
 					},
 					DialerOptions: option.DialerOptions{
-						PreferDomain: true,
+						AbstractDialerOptions: option.AbstractDialerOptions{PreferDomain: true},
 					},
 				},
 			},
@@ -399,7 +399,7 @@ func TestPreferDomainHTTP(t *testing.T) {
 						ServerPort: testPort,
 					},
 					DialerOptions: option.DialerOptions{
-						PreferDomain: true,
+						AbstractDialerOptions: option.AbstractDialerOptions{PreferDomain: true},
 					},
 				},
 			},
@@ -452,11 +452,11 @@ func TestPreferDomainSelectorInherit(t *testing.T) {
 		Outbounds: []option.Outbound{
 			{
 				Type: C.TypeDirect,
-				Tag: "direct-out",
+				Tag:  "direct-out",
 			},
 			{
 				Type: C.TypeSelector,
-				Tag: "selector-out",
+				Tag:  "selector-out",
 				Options: &option.SelectorOutboundOptions{
 					PreferDomain: true,
 					Outbounds:    []string{"direct-out"},
@@ -511,11 +511,11 @@ func TestPreferDomainURLTestInherit(t *testing.T) {
 		Outbounds: []option.Outbound{
 			{
 				Type: C.TypeDirect,
-				Tag: "direct-out",
+				Tag:  "direct-out",
 			},
 			{
 				Type: C.TypeURLTest,
-				Tag: "urltest-out",
+				Tag:  "urltest-out",
 				Options: &option.URLTestOutboundOptions{
 					PreferDomain: true,
 					Outbounds:    []string{"direct-out"},
@@ -571,17 +571,17 @@ func TestPreferDomainLoadBalanceInherit(t *testing.T) {
 		Outbounds: []option.Outbound{
 			{
 				Type: C.TypeDirect,
-				Tag: "direct-out",
+				Tag:  "direct-out",
 			},
 			{
 				Type: C.TypeLoadBalance,
-				Tag: "lb-out",
+				Tag:  "lb-out",
 				Options: &option.LoadBalanceOutboundOptions{
-					PreferDomain:   true,
+					PreferDomain:     true,
 					PrimaryOutbounds: []string{"direct-out"},
-					URL:             "http://127.0.0.1:1",
-					Interval:        badoption.Duration(300),
-					Timeout:         badoption.Duration(100),
+					URL:              "http://127.0.0.1:1",
+					Interval:         badoption.Duration(300),
+					Timeout:          badoption.Duration(100),
 				},
 			},
 		},
@@ -633,11 +633,11 @@ func TestPreferDomainNestedSelectorURLTest(t *testing.T) {
 		Outbounds: []option.Outbound{
 			{
 				Type: C.TypeDirect,
-				Tag: "direct-out",
+				Tag:  "direct-out",
 			},
 			{
 				Type: C.TypeURLTest,
-				Tag: "urltest-out",
+				Tag:  "urltest-out",
 				Options: &option.URLTestOutboundOptions{
 					Outbounds: []string{"direct-out"},
 					URL:       "http://127.0.0.1:1",
@@ -645,7 +645,7 @@ func TestPreferDomainNestedSelectorURLTest(t *testing.T) {
 			},
 			{
 				Type: C.TypeSelector,
-				Tag: "selector-out",
+				Tag:  "selector-out",
 				Options: &option.SelectorOutboundOptions{
 					PreferDomain: true,
 					Outbounds:    []string{"urltest-out"},
@@ -700,11 +700,11 @@ func TestPreferDomainNoInheritWhenParentFalse(t *testing.T) {
 		Outbounds: []option.Outbound{
 			{
 				Type: C.TypeDirect,
-				Tag: "direct-out",
+				Tag:  "direct-out",
 			},
 			{
 				Type: C.TypeSelector,
-				Tag: "selector-out",
+				Tag:  "selector-out",
 				Options: &option.SelectorOutboundOptions{
 					PreferDomain: false,
 					Outbounds:    []string{"direct-out"},

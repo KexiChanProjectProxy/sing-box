@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"time"
@@ -17,8 +18,11 @@ import (
 	"github.com/sagernet/sing-box/common/certificate"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/httpclient"
+	"github.com/sagernet/sing-box/common/netns"
 	"github.com/sagernet/sing-box/common/taskmonitor"
 	"github.com/sagernet/sing-box/common/tls"
+	"github.com/sagernet/sing-box/common/trafficcontrol"
+	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/experimental"
@@ -40,8 +44,10 @@ var _ adapter.SimpleLifecycle = (*Box)(nil)
 
 type Box struct {
 	createdAt           time.Time
+	debugOptions        option.DebugOptions
+	debugHTTPServer     *http.Server
 	logFactory          log.Factory
-	logger              log.StructuredLogger
+	logger              log.ContextLogger
 	network             *route.NetworkManager
 	endpoint            *endpoint.Manager
 	inbound             *inbound.Manager
@@ -59,8 +65,9 @@ type Box struct {
 
 type Options struct {
 	option.Options
-	Context           context.Context
-	PlatformLogWriter log.PlatformWriter
+	Context                    context.Context
+	PlatformLogWriter          log.PlatformWriter
+	NetworkNamespaceHolderArgs []string
 }
 
 func Context(
@@ -138,7 +145,8 @@ func New(options Options) (*Box, error) {
 
 	ctx = pause.WithDefaultManager(ctx)
 	experimentalOptions := common.PtrValueOrDefault(options.Experimental)
-	err := applyDebugOptions(common.PtrValueOrDefault(experimentalOptions.Debug))
+	debugOptions := common.PtrValueOrDefault(experimentalOptions.Debug)
+	err := checkDebugOptions(debugOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +162,12 @@ func New(options Options) (*Box, error) {
 	if experimentalOptions.V2RayAPI != nil && experimentalOptions.V2RayAPI.Listen != "" {
 		needV2RayAPI = true
 	}
+	needAPIService := common.Any(options.Services, func(it option.Service) bool {
+		return it.Type == C.TypeAPI
+	})
+	if service.PtrFromContext[urltest.HistoryStorage](ctx) == nil {
+		ctx = service.ContextWithPtr(ctx, urltest.NewHistoryStorage())
+	}
 	platformInterface := service.FromContext[adapter.PlatformInterface](ctx)
 	var defaultLogWriter io.Writer
 	if platformInterface != nil {
@@ -162,7 +176,7 @@ func New(options Options) (*Box, error) {
 	logFactory, err := log.New(log.Options{
 		Context:        ctx,
 		Options:        common.PtrValueOrDefault(options.Log),
-		Observable:     needClashAPI,
+		Observable:     needClashAPI || needAPIService,
 		DefaultWriter:  defaultLogWriter,
 		BaseTime:       createdAt,
 		PlatformWriter: options.PlatformLogWriter,
@@ -170,6 +184,7 @@ func New(options Options) (*Box, error) {
 	if err != nil {
 		return nil, E.Cause(err, "create log factory")
 	}
+	service.MustRegister[log.Factory](ctx, logFactory)
 
 	var internalServices []adapter.LifecycleService
 	routeOptions := common.PtrValueOrDefault(options.Route)
@@ -185,6 +200,12 @@ func New(options Options) (*Box, error) {
 		service.MustRegister[adapter.CertificateStore](ctx, certificateStore)
 		internalServices = append(internalServices, certificateStore)
 	}
+	netnsManager, err := netns.NewManager(logFactory.NewLogger("netns"), options.NetworkNamespaces, options.NetworkNamespaceHolderArgs)
+	if err != nil {
+		return nil, err
+	}
+	service.MustRegister[adapter.NetworkNamespaceManager](ctx, netnsManager)
+	internalServices = append(internalServices, netnsManager)
 	dnsOptions := common.PtrValueOrDefault(options.DNS)
 	endpointManager := endpoint.NewManager(logFactory.NewLogger("endpoint"), endpointRegistry)
 	inboundManager := inbound.NewManager(logFactory.NewLogger("inbound"), inboundRegistry, endpointManager)
@@ -220,6 +241,12 @@ func New(options Options) (*Box, error) {
 	err = router.Initialize(routeOptions.Rules, routeOptions.RuleSet)
 	if err != nil {
 		return nil, E.Cause(err, "initialize router")
+	}
+	if needClashAPI || needAPIService {
+		trafficManager := trafficcontrol.NewManager(outboundManager)
+		service.MustRegisterPtr(ctx, trafficManager)
+		router.AppendTracker(trafficManager)
+		internalServices = append(internalServices, trafficManager)
 	}
 	ntpOptions := common.PtrValueOrDefault(options.NTP)
 	var timeService *tls.TimeServiceWrapper
@@ -398,7 +425,6 @@ func New(options Options) (*Box, error) {
 		if err != nil {
 			return nil, E.Cause(err, "create clash-server")
 		}
-		router.AppendTracker(clashServer)
 		service.MustRegister[adapter.ClashServer](ctx, clashServer)
 		internalServices = append(internalServices, clashServer)
 	}
@@ -414,6 +440,12 @@ func New(options Options) (*Box, error) {
 		}
 	}
 	if ntpOptions.Enabled {
+		if ntpOptions.WriteToSystem {
+			err = adapter.CheckSecurityFeature(ctx, "NTP `write_to_system`")
+			if err != nil {
+				return nil, err
+			}
+		}
 		ntpDialer, err := dialer.New(ctx, ntpOptions.DialerOptions, ntpOptions.ServerIsDomain())
 		if err != nil {
 			return nil, E.Cause(err, "create NTP service")
@@ -442,6 +474,7 @@ func New(options Options) (*Box, error) {
 		router:              router,
 		httpClientService:   httpClientService,
 		createdAt:           createdAt,
+		debugOptions:        debugOptions,
 		logFactory:          logFactory,
 		logger:              logFactory.Logger(),
 		internalService:     internalServices,
@@ -494,6 +527,11 @@ func (s *Box) preStart() error {
 	monitor.Finish()
 	if err != nil {
 		return E.Cause(err, "start logger")
+	}
+	applyDebugOptions(s.debugOptions)
+	s.debugHTTPServer, err = startDebugHTTPServer(s.debugOptions)
+	if err != nil {
+		return err
 	}
 	err = adapter.StartNamed(s.logger, adapter.StartStateInitialize, s.internalService) // cache-file clash-api v2ray-api
 	if err != nil {
@@ -566,6 +604,12 @@ func (s *Box) Close() error {
 		close(s.done)
 	}
 	var err error
+	if s.debugHTTPServer != nil {
+		err = E.Append(err, s.debugHTTPServer.Close(), func(err error) error {
+			return E.Cause(err, "close debug HTTP server")
+		})
+		s.debugHTTPServer = nil
+	}
 	for _, closeItem := range []struct {
 		name    string
 		service adapter.Lifecycle

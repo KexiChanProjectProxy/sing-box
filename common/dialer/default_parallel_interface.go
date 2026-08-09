@@ -19,6 +19,27 @@ func (d *DefaultDialer) dialParallelInterface(ctx context.Context, dialer net.Di
 		return nil, false, E.New("no available network interface")
 	}
 	defaultInterface := d.networkManager.InterfaceMonitor().DefaultInterface()
+	if len(primaryInterfaces)+len(fallbackInterfaces) == 1 {
+		var (
+			iif     adapter.NetworkInterface
+			primary bool
+		)
+		if len(primaryInterfaces) == 1 {
+			iif = primaryInterfaces[0]
+			primary = true
+		} else {
+			iif = fallbackInterfaces[0]
+		}
+		perNetDialer := dialer
+		if defaultInterface == nil || iif.Index != defaultInterface.Index {
+			perNetDialer.Control = control.Append(perNetDialer.Control, control.BindToInterface(nil, iif.Name, iif.Index))
+		}
+		conn, err := perNetDialer.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, false, E.Cause(err, "dial ", iif.Name, " (", iif.Index, ")")
+		}
+		return conn, primary, nil
+	}
 	if fallbackDelay == 0 {
 		fallbackDelay = N.DefaultFallbackDelay
 	}
@@ -93,6 +114,27 @@ func (d *DefaultDialer) dialParallelInterfaceFastFallback(ctx context.Context, d
 		return nil, false, E.New("no available network interface")
 	}
 	defaultInterface := d.networkManager.InterfaceMonitor().DefaultInterface()
+	if len(primaryInterfaces)+len(fallbackInterfaces) == 1 {
+		var (
+			iif     adapter.NetworkInterface
+			primary bool
+		)
+		if len(primaryInterfaces) == 1 {
+			iif = primaryInterfaces[0]
+			primary = true
+		} else {
+			iif = fallbackInterfaces[0]
+		}
+		perNetDialer := dialer
+		if defaultInterface == nil || iif.Index != defaultInterface.Index {
+			perNetDialer.Control = control.Append(perNetDialer.Control, control.BindToInterface(nil, iif.Name, iif.Index))
+		}
+		conn, err := perNetDialer.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, false, E.Cause(err, "dial ", iif.Name, " (", iif.Index, ")")
+		}
+		return conn, primary, nil
+	}
 	if fallbackDelay == 0 {
 		fallbackDelay = N.DefaultFallbackDelay
 	}
@@ -182,10 +224,10 @@ func (d *DefaultDialer) listenSerialInterfacePacket(ctx context.Context, listene
 
 func selectInterfaces(networkManager adapter.NetworkManager, strategy C.NetworkStrategy, interfaceType []C.InterfaceType, fallbackInterfaceType []C.InterfaceType) (primaryInterfaces []adapter.NetworkInterface, fallbackInterfaces []adapter.NetworkInterface) {
 	interfaces := networkManager.NetworkInterfaces()
-	myInterface := networkManager.InterfaceMonitor().MyInterface()
-	if myInterface != "" {
+	myInterfaces := networkManager.InterfaceMonitor().MyInterfaces()
+	if len(myInterfaces) > 0 {
 		interfaces = common.Filter(interfaces, func(it adapter.NetworkInterface) bool {
-			return it.Name != myInterface
+			return !common.Contains(myInterfaces, it.Name)
 		})
 	}
 	switch strategy {

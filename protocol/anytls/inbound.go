@@ -2,9 +2,10 @@ package anytls
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"strings"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"

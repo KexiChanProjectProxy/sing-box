@@ -5,9 +5,7 @@ package naive
 import (
 	"context"
 	"encoding/pem"
-	F "github.com/sagernet/sing/common/format"
 	"net"
-	"os"
 	"strings"
 
 	"github.com/sagernet/cronet-go"
@@ -21,10 +19,12 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/uot"
 	"github.com/sagernet/sing/service"
+	"github.com/sagernet/sing/service/filemanager"
 
 	mDNS "github.com/miekg/dns"
 )
@@ -109,7 +109,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	if len(options.TLS.Certificate) > 0 {
 		trustedRootCertificates = strings.Join(options.TLS.Certificate, "\n")
 	} else if options.TLS.CertificatePath != "" {
-		content, err := os.ReadFile(options.TLS.CertificatePath)
+		content, err := filemanager.ReadFile(ctx, options.TLS.CertificatePath)
 		if err != nil {
 			return nil, E.Cause(err, "read certificate")
 		}
@@ -147,7 +147,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		if len(options.TLS.ECH.Config) > 0 {
 			echConfig = []byte(strings.Join(options.TLS.ECH.Config, "\n"))
 		} else if options.TLS.ECH.ConfigPath != "" {
-			content, err := os.ReadFile(options.TLS.ECH.ConfigPath)
+			content, err := filemanager.ReadFile(ctx, options.TLS.ECH.ConfigPath)
 			if err != nil {
 				return nil, E.Cause(err, "read ECH config")
 			}

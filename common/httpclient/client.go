@@ -2,8 +2,9 @@ package httpclient
 
 import (
 	"context"
-	"github.com/sagernet/sing-box/log"
 	"time"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/tls"
@@ -35,11 +36,11 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 	var cheapRebuild bool
 	switch options.Engine {
 	case C.TLSEngineApple:
-		inner, transportErr := newAppleTransport(ctx, logger, rawDialer, options)
-		if transportErr != nil {
-			return nil, transportErr
+		err = validateAppleTransport(ctx, options)
+		if err != nil {
+			return nil, err
 		}
-		managedTransport := &ManagedTransport{
+		return &ManagedTransport{
 			dialer:  rawDialer,
 			headers: headers,
 			host:    host,
@@ -47,9 +48,7 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 			factory: func() (innerTransport, error) {
 				return newAppleTransport(ctx, logger, rawDialer, options)
 			},
-		}
-		managedTransport.epoch.Store(&transportEpoch{transport: inner})
-		return managedTransport, nil
+		}, nil
 	case "", C.TLSEngineGo:
 		cheapRebuild = true
 	default:

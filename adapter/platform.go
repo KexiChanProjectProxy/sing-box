@@ -1,11 +1,12 @@
 package adapter
 
 import (
-	"github.com/sagernet/sing-box/log"
 	"net/netip"
 
+	"github.com/sagernet/sing-box/log"
+
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-tun"
+	tun "github.com/sagernet/sing-tun"
 )
 
 type PlatformInterface interface {
@@ -16,6 +17,7 @@ type PlatformInterface interface {
 
 	UsePlatformInterface() bool
 	OpenInterface(options *tun.Options, platformOptions option.TunPlatformOptions) (tun.Tun, error)
+	ProcessPlatformOptions(options option.TunPlatformOptions) error
 
 	UsePlatformDefaultInterfaceMonitor() bool
 	CreateDefaultInterfaceMonitor(logger log.StructuredLogger) tun.DefaultInterfaceMonitor
@@ -29,7 +31,6 @@ type PlatformInterface interface {
 	ClearDNSCache()
 	RequestPermissionForWIFIState() error
 	ReadWIFIState() WIFIState
-	SystemCertificates() []string
 
 	UsePlatformConnectionOwnerFinder() bool
 	FindConnectionOwner(request *FindConnectionOwnerRequest) (*ConnectionOwner, error)
@@ -44,6 +45,44 @@ type PlatformInterface interface {
 	UsePlatformNeighborResolver() bool
 	StartNeighborMonitor(listener NeighborUpdateListener) error
 	CloseNeighborMonitor(listener NeighborUpdateListener) error
+
+	UsePlatformShell() bool
+	CheckPlatformShell() error
+	OpenShellSession(user *PlatformUser, command string, env []string, term string, rows int32, cols int32) (ShellSession, error)
+	LookupUser(username string) (*PlatformUser, error)
+	LookupSFTPServer() (string, error)
+	ReadSystemSSHHostKey() ([]byte, error)
+	TailscaleHostname() string
+
+	UsePlatformBridge() bool
+	CreateBridge(options BridgeOptions) (BridgeSession, error)
+}
+
+type BridgeOptions struct {
+	BridgeName string
+	MTU        uint32
+	Inet4Port  netip.Addr
+	Inet6Port  netip.Addr
+	Interface  string
+	RuleIndex  int
+	RouteTable int
+}
+
+type BridgeSession interface {
+	FileDescriptor() int
+	Name() string
+	Inet6Active() bool
+	SetEgress(interfaceName string) error
+	Close() error
+}
+
+type PlatformUser struct {
+	Username string
+	Uid      int
+	Gid      int
+	HomeDir  string
+	Shell    string
+	Groups   []int
 }
 
 type FindConnectionOwnerRequest struct {

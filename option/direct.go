@@ -31,11 +31,11 @@ type Xlat464Options struct {
 type _DirectOutboundOptions struct {
 	DialerOptions
 	// Deprecated: Use Route Action instead
-	OverrideAddress string `json:"override_address,omitempty"`
+	OverrideAddress string `json:"override_address,omitempty" schema:"omit"`
 	// Deprecated: Use Route Action instead
-	OverridePort uint16 `json:"override_port,omitempty"`
+	OverridePort uint16 `json:"override_port,omitempty" schema:"omit"`
 	// Deprecated: removed
-	ProxyProtocol uint8 `json:"proxy_protocol,omitempty"`
+	ProxyProtocol uint8 `json:"proxy_protocol,omitempty" schema:"omit"`
 	// Xlat464 enables the direct-only 464XLAT/NAT64 dial path. nil means
 	// the feature is absent and the outbound behaves like a normal
 	// direct outbound.

@@ -2,8 +2,9 @@ package trojan
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -25,6 +26,8 @@ import (
 func RegisterOutbound(registry *outbound.Registry) {
 	outbound.Register[option.TrojanOutboundOptions](registry, C.TypeTrojan, NewOutbound)
 }
+
+var _ adapter.OutboundWithMultiplex = (*Outbound)(nil)
 
 type Outbound struct {
 	outbound.Adapter
@@ -111,6 +114,10 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 
 		return h.multiplexDialer.ListenPacket(ctx, destination)
 	}
+}
+
+func (h *Outbound) MultiplexEnabled() bool {
+	return h.multiplexDialer != nil
 }
 
 func (h *Outbound) InterfaceUpdated() {

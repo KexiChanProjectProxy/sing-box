@@ -2,8 +2,9 @@ package httpclient
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"sync"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"

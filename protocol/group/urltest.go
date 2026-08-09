@@ -2,11 +2,12 @@ package group
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -16,7 +17,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/route"
-	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/batch"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -33,6 +33,7 @@ func RegisterURLTest(registry *outbound.Registry) {
 
 var (
 	_ adapter.OutboundGroup            = (*URLTest)(nil)
+	_ adapter.InterfaceUpdateListener  = (*URLTest)(nil)
 	_ adapter.OutboundWithPreferDomain = (*URLTest)(nil)
 )
 
@@ -126,6 +127,17 @@ func (s *URLTest) CheckOutbounds() {
 	s.group.CheckOutbounds(true)
 }
 
+func (s *URLTest) InterfaceUpdated() {
+	group := s.group
+	if group == nil {
+		return
+	}
+	if group.pause.IsDevicePaused() || group.pause.IsNetworkPaused() {
+		return
+	}
+	go group.CheckOutbounds(true)
+}
+
 func (s *URLTest) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	s.group.Touch()
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
@@ -194,21 +206,6 @@ func (s *URLTest) NewPacketConnection(ctx context.Context, conn N.PacketConn, me
 	s.connection.NewPacketConnection(ctx, s, conn, metadata, onClose)
 }
 
-func (s *URLTest) NewDirectRouteConnection(metadata adapter.InboundContext, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
-	s.group.Touch()
-	selected := s.group.selectedOutboundTCP
-	if selected == nil {
-		selected, _ = s.group.Select(N.NetworkTCP)
-	}
-	if selected == nil {
-		return nil, E.New("missing supported outbound")
-	}
-	if !common.Contains(selected.Network(), metadata.Network) {
-		return nil, E.New(metadata.Network, " is not supported by outbound: ", selected.Tag())
-	}
-	return selected.(adapter.DirectRouteOutbound).NewDirectRouteConnection(metadata, routeContext, timeout)
-}
-
 type URLTestGroup struct {
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
@@ -220,7 +217,7 @@ type URLTestGroup struct {
 	interval                     time.Duration
 	tolerance                    uint16
 	idleTimeout                  time.Duration
-	history                      adapter.URLTestHistoryStorage
+	history                      *urltest.HistoryStorage
 	checking                     atomic.Bool
 	selectedOutboundTCP          adapter.Outbound
 	selectedOutboundUDP          adapter.Outbound
@@ -247,13 +244,9 @@ func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManage
 	if interval > idleTimeout {
 		return nil, E.New("interval must be less or equal than idle_timeout")
 	}
-	var history adapter.URLTestHistoryStorage
-	if historyFromCtx := service.PtrFromContext[urltest.HistoryStorage](ctx); historyFromCtx != nil {
-		history = historyFromCtx
-	} else if clashServer := service.FromContext[adapter.ClashServer](ctx); clashServer != nil {
-		history = clashServer.HistoryStorage()
-	} else {
-		history = urltest.NewHistoryStorage()
+	history := service.PtrFromContext[urltest.HistoryStorage](ctx)
+	if history == nil {
+		return nil, E.New("missing URL test history storage")
 	}
 	return &URLTestGroup{
 		ctx:                          ctx,

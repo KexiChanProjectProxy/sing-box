@@ -15,42 +15,47 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	StartedService_StopService_FullMethodName              = "/daemon.StartedService/StopService"
-	StartedService_ReloadService_FullMethodName            = "/daemon.StartedService/ReloadService"
-	StartedService_SubscribeServiceStatus_FullMethodName   = "/daemon.StartedService/SubscribeServiceStatus"
-	StartedService_SubscribeLog_FullMethodName             = "/daemon.StartedService/SubscribeLog"
-	StartedService_GetDefaultLogLevel_FullMethodName       = "/daemon.StartedService/GetDefaultLogLevel"
-	StartedService_ClearLogs_FullMethodName                = "/daemon.StartedService/ClearLogs"
-	StartedService_SubscribeStatus_FullMethodName          = "/daemon.StartedService/SubscribeStatus"
-	StartedService_SubscribeGroups_FullMethodName          = "/daemon.StartedService/SubscribeGroups"
-	StartedService_GetClashModeStatus_FullMethodName       = "/daemon.StartedService/GetClashModeStatus"
-	StartedService_SubscribeClashMode_FullMethodName       = "/daemon.StartedService/SubscribeClashMode"
-	StartedService_SetClashMode_FullMethodName             = "/daemon.StartedService/SetClashMode"
-	StartedService_URLTest_FullMethodName                  = "/daemon.StartedService/URLTest"
-	StartedService_SelectOutbound_FullMethodName           = "/daemon.StartedService/SelectOutbound"
-	StartedService_SetGroupExpand_FullMethodName           = "/daemon.StartedService/SetGroupExpand"
-	StartedService_GetSystemProxyStatus_FullMethodName     = "/daemon.StartedService/GetSystemProxyStatus"
-	StartedService_SetSystemProxyEnabled_FullMethodName    = "/daemon.StartedService/SetSystemProxyEnabled"
-	StartedService_TriggerDebugCrash_FullMethodName        = "/daemon.StartedService/TriggerDebugCrash"
-	StartedService_TriggerOOMReport_FullMethodName         = "/daemon.StartedService/TriggerOOMReport"
-	StartedService_SubscribeConnections_FullMethodName     = "/daemon.StartedService/SubscribeConnections"
-	StartedService_CloseConnection_FullMethodName          = "/daemon.StartedService/CloseConnection"
-	StartedService_CloseAllConnections_FullMethodName      = "/daemon.StartedService/CloseAllConnections"
-	StartedService_GetDeprecatedWarnings_FullMethodName    = "/daemon.StartedService/GetDeprecatedWarnings"
-	StartedService_GetStartedAt_FullMethodName             = "/daemon.StartedService/GetStartedAt"
-	StartedService_SubscribeOutbounds_FullMethodName       = "/daemon.StartedService/SubscribeOutbounds"
-	StartedService_StartNetworkQualityTest_FullMethodName  = "/daemon.StartedService/StartNetworkQualityTest"
-	StartedService_StartSTUNTest_FullMethodName            = "/daemon.StartedService/StartSTUNTest"
-	StartedService_SubscribeTailscaleStatus_FullMethodName = "/daemon.StartedService/SubscribeTailscaleStatus"
-	StartedService_StartTailscalePing_FullMethodName       = "/daemon.StartedService/StartTailscalePing"
+	StartedService_GetVersion_FullMethodName                     = "/daemon.StartedService/GetVersion"
+	StartedService_SubscribeServiceStatus_FullMethodName         = "/daemon.StartedService/SubscribeServiceStatus"
+	StartedService_SubscribeLog_FullMethodName                   = "/daemon.StartedService/SubscribeLog"
+	StartedService_GetDefaultLogLevel_FullMethodName             = "/daemon.StartedService/GetDefaultLogLevel"
+	StartedService_ClearLogs_FullMethodName                      = "/daemon.StartedService/ClearLogs"
+	StartedService_SubscribeStatus_FullMethodName                = "/daemon.StartedService/SubscribeStatus"
+	StartedService_SubscribeGroups_FullMethodName                = "/daemon.StartedService/SubscribeGroups"
+	StartedService_GetClashModeStatus_FullMethodName             = "/daemon.StartedService/GetClashModeStatus"
+	StartedService_SubscribeClashMode_FullMethodName             = "/daemon.StartedService/SubscribeClashMode"
+	StartedService_SetClashMode_FullMethodName                   = "/daemon.StartedService/SetClashMode"
+	StartedService_URLTest_FullMethodName                        = "/daemon.StartedService/URLTest"
+	StartedService_SelectOutbound_FullMethodName                 = "/daemon.StartedService/SelectOutbound"
+	StartedService_SetGroupExpand_FullMethodName                 = "/daemon.StartedService/SetGroupExpand"
+	StartedService_SubscribeConnections_FullMethodName           = "/daemon.StartedService/SubscribeConnections"
+	StartedService_CloseConnection_FullMethodName                = "/daemon.StartedService/CloseConnection"
+	StartedService_CloseAllConnections_FullMethodName            = "/daemon.StartedService/CloseAllConnections"
+	StartedService_GetDeprecatedWarnings_FullMethodName          = "/daemon.StartedService/GetDeprecatedWarnings"
+	StartedService_GetStartedAt_FullMethodName                   = "/daemon.StartedService/GetStartedAt"
+	StartedService_SubscribeOutbounds_FullMethodName             = "/daemon.StartedService/SubscribeOutbounds"
+	StartedService_StartNetworkQualityTest_FullMethodName        = "/daemon.StartedService/StartNetworkQualityTest"
+	StartedService_StartSTUNTest_FullMethodName                  = "/daemon.StartedService/StartSTUNTest"
+	StartedService_SubscribeTailscaleStatus_FullMethodName       = "/daemon.StartedService/SubscribeTailscaleStatus"
+	StartedService_StartTailscalePing_FullMethodName             = "/daemon.StartedService/StartTailscalePing"
+	StartedService_SetTailscaleExitNode_FullMethodName           = "/daemon.StartedService/SetTailscaleExitNode"
+	StartedService_TailscaleLogout_FullMethodName                = "/daemon.StartedService/TailscaleLogout"
+	StartedService_StartTailscaleSSHSession_FullMethodName       = "/daemon.StartedService/StartTailscaleSSHSession"
+	StartedService_ProvideUSBDevices_FullMethodName              = "/daemon.StartedService/ProvideUSBDevices"
+	StartedService_SubscribeUSBIPServerStatus_FullMethodName     = "/daemon.StartedService/SubscribeUSBIPServerStatus"
+	StartedService_SubscribeOpenConnectStatus_FullMethodName     = "/daemon.StartedService/SubscribeOpenConnectStatus"
+	StartedService_SubmitOpenConnectAuthResponse_FullMethodName  = "/daemon.StartedService/SubmitOpenConnectAuthResponse"
+	StartedService_CancelOpenConnectAuthChallenge_FullMethodName = "/daemon.StartedService/CancelOpenConnectAuthChallenge"
+	StartedService_SubscribeOpenVPNStatus_FullMethodName         = "/daemon.StartedService/SubscribeOpenVPNStatus"
+	StartedService_SubmitOpenVPNChallengeResponse_FullMethodName = "/daemon.StartedService/SubmitOpenVPNChallengeResponse"
+	StartedService_CancelOpenVPNChallenge_FullMethodName         = "/daemon.StartedService/CancelOpenVPNChallenge"
 )
 
 // StartedServiceClient is the client API for StartedService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StartedServiceClient interface {
-	StopService(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	ReloadService(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	GetVersion(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Version, error)
 	SubscribeServiceStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ServiceStatus], error)
 	SubscribeLog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Log], error)
 	GetDefaultLogLevel(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*DefaultLogLevel, error)
@@ -63,10 +68,6 @@ type StartedServiceClient interface {
 	URLTest(ctx context.Context, in *URLTestRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SelectOutbound(ctx context.Context, in *SelectOutboundRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SetGroupExpand(ctx context.Context, in *SetGroupExpandRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	GetSystemProxyStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SystemProxyStatus, error)
-	SetSystemProxyEnabled(ctx context.Context, in *SetSystemProxyEnabledRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	TriggerDebugCrash(ctx context.Context, in *DebugCrashRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	TriggerOOMReport(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SubscribeConnections(ctx context.Context, in *SubscribeConnectionsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ConnectionEvents], error)
 	CloseConnection(ctx context.Context, in *CloseConnectionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CloseAllConnections(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -77,6 +78,17 @@ type StartedServiceClient interface {
 	StartSTUNTest(ctx context.Context, in *STUNTestRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[STUNTestProgress], error)
 	SubscribeTailscaleStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TailscaleStatusUpdate], error)
 	StartTailscalePing(ctx context.Context, in *TailscalePingRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TailscalePingResponse], error)
+	SetTailscaleExitNode(ctx context.Context, in *SetTailscaleExitNodeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	TailscaleLogout(ctx context.Context, in *TailscaleLogoutRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	StartTailscaleSSHSession(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TailscaleSSHClientMessage, TailscaleSSHServerMessage], error)
+	ProvideUSBDevices(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[USBProviderMessage, USBServerMessage], error)
+	SubscribeUSBIPServerStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[USBIPServerStatusUpdate], error)
+	SubscribeOpenConnectStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[OpenConnectStatusUpdate], error)
+	SubmitOpenConnectAuthResponse(ctx context.Context, in *OpenConnectAuthResponseSubmission, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CancelOpenConnectAuthChallenge(ctx context.Context, in *OpenConnectAuthChallengeCancel, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SubscribeOpenVPNStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[OpenVPNStatusUpdate], error)
+	SubmitOpenVPNChallengeResponse(ctx context.Context, in *OpenVPNChallengeSubmission, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CancelOpenVPNChallenge(ctx context.Context, in *OpenVPNChallengeCancel, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type startedServiceClient struct {
@@ -87,20 +99,10 @@ func NewStartedServiceClient(cc grpc.ClientConnInterface) StartedServiceClient {
 	return &startedServiceClient{cc}
 }
 
-func (c *startedServiceClient) StopService(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *startedServiceClient) GetVersion(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Version, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, StartedService_StopService_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *startedServiceClient) ReloadService(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, StartedService_ReloadService_FullMethodName, in, out, cOpts...)
+	out := new(Version)
+	err := c.cc.Invoke(ctx, StartedService_GetVersion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -272,46 +274,6 @@ func (c *startedServiceClient) SetGroupExpand(ctx context.Context, in *SetGroupE
 	return out, nil
 }
 
-func (c *startedServiceClient) GetSystemProxyStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SystemProxyStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SystemProxyStatus)
-	err := c.cc.Invoke(ctx, StartedService_GetSystemProxyStatus_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *startedServiceClient) SetSystemProxyEnabled(ctx context.Context, in *SetSystemProxyEnabledRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, StartedService_SetSystemProxyEnabled_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *startedServiceClient) TriggerDebugCrash(ctx context.Context, in *DebugCrashRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, StartedService_TriggerDebugCrash_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *startedServiceClient) TriggerOOMReport(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, StartedService_TriggerOOMReport_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *startedServiceClient) SubscribeConnections(ctx context.Context, in *SubscribeConnectionsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ConnectionEvents], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &StartedService_ServiceDesc.Streams[5], StartedService_SubscribeConnections_FullMethodName, cOpts...)
@@ -466,12 +428,154 @@ func (c *startedServiceClient) StartTailscalePing(ctx context.Context, in *Tails
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type StartedService_StartTailscalePingClient = grpc.ServerStreamingClient[TailscalePingResponse]
 
+func (c *startedServiceClient) SetTailscaleExitNode(ctx context.Context, in *SetTailscaleExitNodeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, StartedService_SetTailscaleExitNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *startedServiceClient) TailscaleLogout(ctx context.Context, in *TailscaleLogoutRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, StartedService_TailscaleLogout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *startedServiceClient) StartTailscaleSSHSession(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TailscaleSSHClientMessage, TailscaleSSHServerMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StartedService_ServiceDesc.Streams[11], StartedService_StartTailscaleSSHSession_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TailscaleSSHClientMessage, TailscaleSSHServerMessage]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_StartTailscaleSSHSessionClient = grpc.BidiStreamingClient[TailscaleSSHClientMessage, TailscaleSSHServerMessage]
+
+func (c *startedServiceClient) ProvideUSBDevices(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[USBProviderMessage, USBServerMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StartedService_ServiceDesc.Streams[12], StartedService_ProvideUSBDevices_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[USBProviderMessage, USBServerMessage]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_ProvideUSBDevicesClient = grpc.BidiStreamingClient[USBProviderMessage, USBServerMessage]
+
+func (c *startedServiceClient) SubscribeUSBIPServerStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[USBIPServerStatusUpdate], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StartedService_ServiceDesc.Streams[13], StartedService_SubscribeUSBIPServerStatus_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[emptypb.Empty, USBIPServerStatusUpdate]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_SubscribeUSBIPServerStatusClient = grpc.ServerStreamingClient[USBIPServerStatusUpdate]
+
+func (c *startedServiceClient) SubscribeOpenConnectStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[OpenConnectStatusUpdate], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StartedService_ServiceDesc.Streams[14], StartedService_SubscribeOpenConnectStatus_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[emptypb.Empty, OpenConnectStatusUpdate]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_SubscribeOpenConnectStatusClient = grpc.ServerStreamingClient[OpenConnectStatusUpdate]
+
+func (c *startedServiceClient) SubmitOpenConnectAuthResponse(ctx context.Context, in *OpenConnectAuthResponseSubmission, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, StartedService_SubmitOpenConnectAuthResponse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *startedServiceClient) CancelOpenConnectAuthChallenge(ctx context.Context, in *OpenConnectAuthChallengeCancel, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, StartedService_CancelOpenConnectAuthChallenge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *startedServiceClient) SubscribeOpenVPNStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[OpenVPNStatusUpdate], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StartedService_ServiceDesc.Streams[15], StartedService_SubscribeOpenVPNStatus_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[emptypb.Empty, OpenVPNStatusUpdate]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_SubscribeOpenVPNStatusClient = grpc.ServerStreamingClient[OpenVPNStatusUpdate]
+
+func (c *startedServiceClient) SubmitOpenVPNChallengeResponse(ctx context.Context, in *OpenVPNChallengeSubmission, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, StartedService_SubmitOpenVPNChallengeResponse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *startedServiceClient) CancelOpenVPNChallenge(ctx context.Context, in *OpenVPNChallengeCancel, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, StartedService_CancelOpenVPNChallenge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StartedServiceServer is the server API for StartedService service.
 // All implementations must embed UnimplementedStartedServiceServer
 // for forward compatibility.
 type StartedServiceServer interface {
-	StopService(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	ReloadService(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	GetVersion(context.Context, *emptypb.Empty) (*Version, error)
 	SubscribeServiceStatus(*emptypb.Empty, grpc.ServerStreamingServer[ServiceStatus]) error
 	SubscribeLog(*emptypb.Empty, grpc.ServerStreamingServer[Log]) error
 	GetDefaultLogLevel(context.Context, *emptypb.Empty) (*DefaultLogLevel, error)
@@ -484,10 +588,6 @@ type StartedServiceServer interface {
 	URLTest(context.Context, *URLTestRequest) (*emptypb.Empty, error)
 	SelectOutbound(context.Context, *SelectOutboundRequest) (*emptypb.Empty, error)
 	SetGroupExpand(context.Context, *SetGroupExpandRequest) (*emptypb.Empty, error)
-	GetSystemProxyStatus(context.Context, *emptypb.Empty) (*SystemProxyStatus, error)
-	SetSystemProxyEnabled(context.Context, *SetSystemProxyEnabledRequest) (*emptypb.Empty, error)
-	TriggerDebugCrash(context.Context, *DebugCrashRequest) (*emptypb.Empty, error)
-	TriggerOOMReport(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	SubscribeConnections(*SubscribeConnectionsRequest, grpc.ServerStreamingServer[ConnectionEvents]) error
 	CloseConnection(context.Context, *CloseConnectionRequest) (*emptypb.Empty, error)
 	CloseAllConnections(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
@@ -498,6 +598,17 @@ type StartedServiceServer interface {
 	StartSTUNTest(*STUNTestRequest, grpc.ServerStreamingServer[STUNTestProgress]) error
 	SubscribeTailscaleStatus(*emptypb.Empty, grpc.ServerStreamingServer[TailscaleStatusUpdate]) error
 	StartTailscalePing(*TailscalePingRequest, grpc.ServerStreamingServer[TailscalePingResponse]) error
+	SetTailscaleExitNode(context.Context, *SetTailscaleExitNodeRequest) (*emptypb.Empty, error)
+	TailscaleLogout(context.Context, *TailscaleLogoutRequest) (*emptypb.Empty, error)
+	StartTailscaleSSHSession(grpc.BidiStreamingServer[TailscaleSSHClientMessage, TailscaleSSHServerMessage]) error
+	ProvideUSBDevices(grpc.BidiStreamingServer[USBProviderMessage, USBServerMessage]) error
+	SubscribeUSBIPServerStatus(*emptypb.Empty, grpc.ServerStreamingServer[USBIPServerStatusUpdate]) error
+	SubscribeOpenConnectStatus(*emptypb.Empty, grpc.ServerStreamingServer[OpenConnectStatusUpdate]) error
+	SubmitOpenConnectAuthResponse(context.Context, *OpenConnectAuthResponseSubmission) (*emptypb.Empty, error)
+	CancelOpenConnectAuthChallenge(context.Context, *OpenConnectAuthChallengeCancel) (*emptypb.Empty, error)
+	SubscribeOpenVPNStatus(*emptypb.Empty, grpc.ServerStreamingServer[OpenVPNStatusUpdate]) error
+	SubmitOpenVPNChallengeResponse(context.Context, *OpenVPNChallengeSubmission) (*emptypb.Empty, error)
+	CancelOpenVPNChallenge(context.Context, *OpenVPNChallengeCancel) (*emptypb.Empty, error)
 	mustEmbedUnimplementedStartedServiceServer()
 }
 
@@ -508,12 +619,8 @@ type StartedServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedStartedServiceServer struct{}
 
-func (UnimplementedStartedServiceServer) StopService(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopService not implemented")
-}
-
-func (UnimplementedStartedServiceServer) ReloadService(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReloadService not implemented")
+func (UnimplementedStartedServiceServer) GetVersion(context.Context, *emptypb.Empty) (*Version, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetVersion not implemented")
 }
 
 func (UnimplementedStartedServiceServer) SubscribeServiceStatus(*emptypb.Empty, grpc.ServerStreamingServer[ServiceStatus]) error {
@@ -564,22 +671,6 @@ func (UnimplementedStartedServiceServer) SetGroupExpand(context.Context, *SetGro
 	return nil, status.Error(codes.Unimplemented, "method SetGroupExpand not implemented")
 }
 
-func (UnimplementedStartedServiceServer) GetSystemProxyStatus(context.Context, *emptypb.Empty) (*SystemProxyStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetSystemProxyStatus not implemented")
-}
-
-func (UnimplementedStartedServiceServer) SetSystemProxyEnabled(context.Context, *SetSystemProxyEnabledRequest) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetSystemProxyEnabled not implemented")
-}
-
-func (UnimplementedStartedServiceServer) TriggerDebugCrash(context.Context, *DebugCrashRequest) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method TriggerDebugCrash not implemented")
-}
-
-func (UnimplementedStartedServiceServer) TriggerOOMReport(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method TriggerOOMReport not implemented")
-}
-
 func (UnimplementedStartedServiceServer) SubscribeConnections(*SubscribeConnectionsRequest, grpc.ServerStreamingServer[ConnectionEvents]) error {
 	return status.Error(codes.Unimplemented, "method SubscribeConnections not implemented")
 }
@@ -619,6 +710,50 @@ func (UnimplementedStartedServiceServer) SubscribeTailscaleStatus(*emptypb.Empty
 func (UnimplementedStartedServiceServer) StartTailscalePing(*TailscalePingRequest, grpc.ServerStreamingServer[TailscalePingResponse]) error {
 	return status.Error(codes.Unimplemented, "method StartTailscalePing not implemented")
 }
+
+func (UnimplementedStartedServiceServer) SetTailscaleExitNode(context.Context, *SetTailscaleExitNodeRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetTailscaleExitNode not implemented")
+}
+
+func (UnimplementedStartedServiceServer) TailscaleLogout(context.Context, *TailscaleLogoutRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method TailscaleLogout not implemented")
+}
+
+func (UnimplementedStartedServiceServer) StartTailscaleSSHSession(grpc.BidiStreamingServer[TailscaleSSHClientMessage, TailscaleSSHServerMessage]) error {
+	return status.Error(codes.Unimplemented, "method StartTailscaleSSHSession not implemented")
+}
+
+func (UnimplementedStartedServiceServer) ProvideUSBDevices(grpc.BidiStreamingServer[USBProviderMessage, USBServerMessage]) error {
+	return status.Error(codes.Unimplemented, "method ProvideUSBDevices not implemented")
+}
+
+func (UnimplementedStartedServiceServer) SubscribeUSBIPServerStatus(*emptypb.Empty, grpc.ServerStreamingServer[USBIPServerStatusUpdate]) error {
+	return status.Error(codes.Unimplemented, "method SubscribeUSBIPServerStatus not implemented")
+}
+
+func (UnimplementedStartedServiceServer) SubscribeOpenConnectStatus(*emptypb.Empty, grpc.ServerStreamingServer[OpenConnectStatusUpdate]) error {
+	return status.Error(codes.Unimplemented, "method SubscribeOpenConnectStatus not implemented")
+}
+
+func (UnimplementedStartedServiceServer) SubmitOpenConnectAuthResponse(context.Context, *OpenConnectAuthResponseSubmission) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitOpenConnectAuthResponse not implemented")
+}
+
+func (UnimplementedStartedServiceServer) CancelOpenConnectAuthChallenge(context.Context, *OpenConnectAuthChallengeCancel) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelOpenConnectAuthChallenge not implemented")
+}
+
+func (UnimplementedStartedServiceServer) SubscribeOpenVPNStatus(*emptypb.Empty, grpc.ServerStreamingServer[OpenVPNStatusUpdate]) error {
+	return status.Error(codes.Unimplemented, "method SubscribeOpenVPNStatus not implemented")
+}
+
+func (UnimplementedStartedServiceServer) SubmitOpenVPNChallengeResponse(context.Context, *OpenVPNChallengeSubmission) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitOpenVPNChallengeResponse not implemented")
+}
+
+func (UnimplementedStartedServiceServer) CancelOpenVPNChallenge(context.Context, *OpenVPNChallengeCancel) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelOpenVPNChallenge not implemented")
+}
 func (UnimplementedStartedServiceServer) mustEmbedUnimplementedStartedServiceServer() {}
 func (UnimplementedStartedServiceServer) testEmbeddedByValue()                        {}
 
@@ -640,38 +775,20 @@ func RegisterStartedServiceServer(s grpc.ServiceRegistrar, srv StartedServiceSer
 	s.RegisterService(&StartedService_ServiceDesc, srv)
 }
 
-func _StartedService_StopService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _StartedService_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(StartedServiceServer).StopService(ctx, in)
+		return srv.(StartedServiceServer).GetVersion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: StartedService_StopService_FullMethodName,
+		FullMethod: StartedService_GetVersion_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StartedServiceServer).StopService(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StartedService_ReloadService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StartedServiceServer).ReloadService(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: StartedService_ReloadService_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StartedServiceServer).ReloadService(ctx, req.(*emptypb.Empty))
+		return srv.(StartedServiceServer).GetVersion(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -857,78 +974,6 @@ func _StartedService_SetGroupExpand_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _StartedService_GetSystemProxyStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StartedServiceServer).GetSystemProxyStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: StartedService_GetSystemProxyStatus_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StartedServiceServer).GetSystemProxyStatus(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StartedService_SetSystemProxyEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetSystemProxyEnabledRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StartedServiceServer).SetSystemProxyEnabled(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: StartedService_SetSystemProxyEnabled_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StartedServiceServer).SetSystemProxyEnabled(ctx, req.(*SetSystemProxyEnabledRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StartedService_TriggerDebugCrash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DebugCrashRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StartedServiceServer).TriggerDebugCrash(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: StartedService_TriggerDebugCrash_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StartedServiceServer).TriggerDebugCrash(ctx, req.(*DebugCrashRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StartedService_TriggerOOMReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StartedServiceServer).TriggerOOMReport(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: StartedService_TriggerOOMReport_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StartedServiceServer).TriggerOOMReport(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _StartedService_SubscribeConnections_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(SubscribeConnectionsRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1067,6 +1112,161 @@ func _StartedService_StartTailscalePing_Handler(srv interface{}, stream grpc.Ser
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type StartedService_StartTailscalePingServer = grpc.ServerStreamingServer[TailscalePingResponse]
 
+func _StartedService_SetTailscaleExitNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTailscaleExitNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StartedServiceServer).SetTailscaleExitNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StartedService_SetTailscaleExitNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StartedServiceServer).SetTailscaleExitNode(ctx, req.(*SetTailscaleExitNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StartedService_TailscaleLogout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TailscaleLogoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StartedServiceServer).TailscaleLogout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StartedService_TailscaleLogout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StartedServiceServer).TailscaleLogout(ctx, req.(*TailscaleLogoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StartedService_StartTailscaleSSHSession_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(StartedServiceServer).StartTailscaleSSHSession(&grpc.GenericServerStream[TailscaleSSHClientMessage, TailscaleSSHServerMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_StartTailscaleSSHSessionServer = grpc.BidiStreamingServer[TailscaleSSHClientMessage, TailscaleSSHServerMessage]
+
+func _StartedService_ProvideUSBDevices_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(StartedServiceServer).ProvideUSBDevices(&grpc.GenericServerStream[USBProviderMessage, USBServerMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_ProvideUSBDevicesServer = grpc.BidiStreamingServer[USBProviderMessage, USBServerMessage]
+
+func _StartedService_SubscribeUSBIPServerStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(emptypb.Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StartedServiceServer).SubscribeUSBIPServerStatus(m, &grpc.GenericServerStream[emptypb.Empty, USBIPServerStatusUpdate]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_SubscribeUSBIPServerStatusServer = grpc.ServerStreamingServer[USBIPServerStatusUpdate]
+
+func _StartedService_SubscribeOpenConnectStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(emptypb.Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StartedServiceServer).SubscribeOpenConnectStatus(m, &grpc.GenericServerStream[emptypb.Empty, OpenConnectStatusUpdate]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_SubscribeOpenConnectStatusServer = grpc.ServerStreamingServer[OpenConnectStatusUpdate]
+
+func _StartedService_SubmitOpenConnectAuthResponse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenConnectAuthResponseSubmission)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StartedServiceServer).SubmitOpenConnectAuthResponse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StartedService_SubmitOpenConnectAuthResponse_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StartedServiceServer).SubmitOpenConnectAuthResponse(ctx, req.(*OpenConnectAuthResponseSubmission))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StartedService_CancelOpenConnectAuthChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenConnectAuthChallengeCancel)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StartedServiceServer).CancelOpenConnectAuthChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StartedService_CancelOpenConnectAuthChallenge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StartedServiceServer).CancelOpenConnectAuthChallenge(ctx, req.(*OpenConnectAuthChallengeCancel))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StartedService_SubscribeOpenVPNStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(emptypb.Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StartedServiceServer).SubscribeOpenVPNStatus(m, &grpc.GenericServerStream[emptypb.Empty, OpenVPNStatusUpdate]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StartedService_SubscribeOpenVPNStatusServer = grpc.ServerStreamingServer[OpenVPNStatusUpdate]
+
+func _StartedService_SubmitOpenVPNChallengeResponse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenVPNChallengeSubmission)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StartedServiceServer).SubmitOpenVPNChallengeResponse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StartedService_SubmitOpenVPNChallengeResponse_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StartedServiceServer).SubmitOpenVPNChallengeResponse(ctx, req.(*OpenVPNChallengeSubmission))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StartedService_CancelOpenVPNChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenVPNChallengeCancel)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StartedServiceServer).CancelOpenVPNChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StartedService_CancelOpenVPNChallenge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StartedServiceServer).CancelOpenVPNChallenge(ctx, req.(*OpenVPNChallengeCancel))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StartedService_ServiceDesc is the grpc.ServiceDesc for StartedService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1075,12 +1275,8 @@ var StartedService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*StartedServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "StopService",
-			Handler:    _StartedService_StopService_Handler,
-		},
-		{
-			MethodName: "ReloadService",
-			Handler:    _StartedService_ReloadService_Handler,
+			MethodName: "GetVersion",
+			Handler:    _StartedService_GetVersion_Handler,
 		},
 		{
 			MethodName: "GetDefaultLogLevel",
@@ -1111,22 +1307,6 @@ var StartedService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StartedService_SetGroupExpand_Handler,
 		},
 		{
-			MethodName: "GetSystemProxyStatus",
-			Handler:    _StartedService_GetSystemProxyStatus_Handler,
-		},
-		{
-			MethodName: "SetSystemProxyEnabled",
-			Handler:    _StartedService_SetSystemProxyEnabled_Handler,
-		},
-		{
-			MethodName: "TriggerDebugCrash",
-			Handler:    _StartedService_TriggerDebugCrash_Handler,
-		},
-		{
-			MethodName: "TriggerOOMReport",
-			Handler:    _StartedService_TriggerOOMReport_Handler,
-		},
-		{
 			MethodName: "CloseConnection",
 			Handler:    _StartedService_CloseConnection_Handler,
 		},
@@ -1141,6 +1321,30 @@ var StartedService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStartedAt",
 			Handler:    _StartedService_GetStartedAt_Handler,
+		},
+		{
+			MethodName: "SetTailscaleExitNode",
+			Handler:    _StartedService_SetTailscaleExitNode_Handler,
+		},
+		{
+			MethodName: "TailscaleLogout",
+			Handler:    _StartedService_TailscaleLogout_Handler,
+		},
+		{
+			MethodName: "SubmitOpenConnectAuthResponse",
+			Handler:    _StartedService_SubmitOpenConnectAuthResponse_Handler,
+		},
+		{
+			MethodName: "CancelOpenConnectAuthChallenge",
+			Handler:    _StartedService_CancelOpenConnectAuthChallenge_Handler,
+		},
+		{
+			MethodName: "SubmitOpenVPNChallengeResponse",
+			Handler:    _StartedService_SubmitOpenVPNChallengeResponse_Handler,
+		},
+		{
+			MethodName: "CancelOpenVPNChallenge",
+			Handler:    _StartedService_CancelOpenVPNChallenge_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -1197,6 +1401,33 @@ var StartedService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StartTailscalePing",
 			Handler:       _StartedService_StartTailscalePing_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StartTailscaleSSHSession",
+			Handler:       _StartedService_StartTailscaleSSHSession_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ProvideUSBDevices",
+			Handler:       _StartedService_ProvideUSBDevices_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "SubscribeUSBIPServerStatus",
+			Handler:       _StartedService_SubscribeUSBIPServerStatus_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeOpenConnectStatus",
+			Handler:       _StartedService_SubscribeOpenConnectStatus_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeOpenVPNStatus",
+			Handler:       _StartedService_SubscribeOpenVPNStatus_Handler,
 			ServerStreams: true,
 		},
 	},

@@ -2,8 +2,9 @@ package shadowsocks
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -13,7 +14,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/transport/sip003"
-	"github.com/sagernet/sing-shadowsocks2"
+	shadowsocks "github.com/sagernet/sing-shadowsocks2"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -25,6 +26,8 @@ import (
 func RegisterOutbound(registry *outbound.Registry) {
 	outbound.Register[option.ShadowsocksOutboundOptions](registry, C.TypeShadowsocks, NewOutbound)
 }
+
+var _ adapter.OutboundWithMultiplex = (*Outbound)(nil)
 
 type Outbound struct {
 	outbound.Adapter
@@ -131,6 +134,10 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 
 		return h.multiplexDialer.ListenPacket(ctx, destination)
 	}
+}
+
+func (h *Outbound) MultiplexEnabled() bool {
+	return h.multiplexDialer != nil
 }
 
 func (h *Outbound) InterfaceUpdated() {

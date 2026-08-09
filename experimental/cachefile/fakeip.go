@@ -1,10 +1,11 @@
 package cachefile
 
 import (
-	"github.com/sagernet/sing-box/log"
 	"net/netip"
 	"os"
 	"time"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/bbolt"
 	"github.com/sagernet/sing-box/adapter"

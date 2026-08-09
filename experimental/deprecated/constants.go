@@ -36,10 +36,14 @@ func (n Note) Impending() bool {
 }
 
 func (n Note) Message() string {
+	return n.MessageForLocale(locale.Current())
+}
+
+func (n Note) MessageForLocale(selectedLocale *locale.Locale) string {
 	if n.MigrationLink != "" {
-		return fmt.Sprintf(locale.Current().DeprecatedMessage, n.Description, n.DeprecatedVersion, n.ScheduledVersion)
+		return fmt.Sprintf(selectedLocale.DeprecatedMessage, n.Description, n.DeprecatedVersion, n.ScheduledVersion)
 	} else {
-		return fmt.Sprintf(locale.Current().DeprecatedMessageNoLink, n.Description, n.DeprecatedVersion, n.ScheduledVersion)
+		return fmt.Sprintf(selectedLocale.DeprecatedMessageNoLink, n.Description, n.DeprecatedVersion, n.ScheduledVersion)
 	}
 }
 
@@ -101,14 +105,6 @@ var OptionLegacyRuleSetDownloadDetour = Note{
 	EnvName:           "LEGACY_RULE_SET_DOWNLOAD_DETOUR",
 }
 
-var OptionLegacyTailscaleEndpointDialer = Note{
-	Name:              "legacy-tailscale-endpoint-dialer",
-	Description:       "legacy dialer options in Tailscale endpoint",
-	DeprecatedVersion: "1.14.0",
-	ScheduledVersion:  "1.16.0",
-	EnvName:           "LEGACY_TAILSCALE_ENDPOINT_DIALER",
-}
-
 var OptionRuleSetIPCIDRAcceptEmpty = Note{
 	Name:              "dns-rule-rule-set-ip-cidr-accept-empty",
 	Description:       "Legacy `rule_set_ip_cidr_accept_empty` DNS rule item",
@@ -168,7 +164,6 @@ var Options = []Note{
 	OptionLegacyDomainStrategyOptions,
 	OptionInlineACME,
 	OptionLegacyRuleSetDownloadDetour,
-	OptionLegacyTailscaleEndpointDialer,
 	OptionRuleSetIPCIDRAcceptEmpty,
 	OptionLegacyDNSAddressFilter,
 	OptionLegacyDNSRuleStrategy,

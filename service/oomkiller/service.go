@@ -32,6 +32,8 @@ type Service struct {
 	adaptiveTimer  *adaptiveTimer
 	lastReportTime atomic.Int64
 	//nolint:unused // touched only on darwin && cgo via writeOOMDraft/discardOOMDraft.
+	lastDraftTime atomic.Int64
+	//nolint:unused // touched only on darwin && cgo via writeOOMDraft/discardOOMDraft.
 	draftCancelled atomic.Bool
 }
 
@@ -48,21 +50,6 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 		network:     service.FromContext[adapter.NetworkManager](ctx),
 		timerConfig: config,
 	}, nil
-}
-
-func (s *Service) createTimer() {
-	s.adaptiveTimer = newAdaptiveTimer(s.logger, s.network, s.timerConfig, s.writeOOMReport)
-}
-
-func (s *Service) startTimer() {
-	s.createTimer()
-	s.adaptiveTimer.start()
-}
-
-func (s *Service) stopTimer() {
-	if s.adaptiveTimer != nil {
-		s.adaptiveTimer.stop()
-	}
 }
 
 func (s *Service) writeOOMReport(memoryUsage uint64) {

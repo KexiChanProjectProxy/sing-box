@@ -3,8 +3,9 @@ package trojan
 import (
 	"context"
 	"encoding/binary"
-	"github.com/sagernet/sing-box/log"
 	"net"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/buf"

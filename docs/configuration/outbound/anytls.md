@@ -17,12 +17,13 @@ icon: material/new-box
   "idle_session_check_interval": "30s",
   "idle_session_timeout": "30s",
   "min_idle_session": 5,
-  "ensure_idle_session": 10,
-  "heartbeat": "30s",
-  "min_idle_session_for_age": 2,
-  "max_connection_lifetime": "300s",
-  "connection_lifetime_jitter": "10s",
-  "ensure_idle_session_create_rate": 5,
+	"ensure_idle_session": 10,
+	"heartbeat": "30s",
+	"min_idle_session_for_age": 2,
+	"max_connection_lifetime": "300s",
+	"connection_lifetime_jitter": "10s",
+	"ensure_idle_session_create_rate": 5,
+	"client_metadata": "",
   "tls": {},
 
   ... // Dial Fields
@@ -84,6 +85,12 @@ Random jitter added to max_connection_lifetime to avoid thundering herd.
 #### ensure_idle_session_create_rate
 
 Maximum rate at which new idle sessions are created per interval.
+
+#### client_metadata
+
+!!! question "Since sing-box 1.13.16"
+
+Check [AnyTLS client metadata](/manual/misc/anytls-client-metadata/).
 
 #### tls
 

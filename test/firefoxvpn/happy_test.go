@@ -104,7 +104,7 @@ func directOutbound(tag string) option.Outbound {
 		Type: C.TypeDirect,
 		Tag:  tag,
 		Options: &option.DirectOutboundOptions{
-			DialerOptions: option.DialerOptions{ConnectTimeout: badoption.Duration(5 * time.Second)},
+			DialerOptions: option.DialerOptions{AbstractDialerOptions: option.AbstractDialerOptions{ConnectTimeout: badoption.Duration(5 * time.Second)}},
 		},
 	}
 }

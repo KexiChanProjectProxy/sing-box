@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	F "github.com/sagernet/sing/common/format"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,8 +17,10 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/ntp"
 	"github.com/sagernet/sing/service"
+	"github.com/sagernet/sing/service/filemanager"
 )
 
 var errInsecureUnused = E.New("tls: insecure unused")
@@ -91,6 +91,7 @@ func getACMENextProtos(provider adapter.CertificateProvider) []string {
 }
 
 type STDServerConfig struct {
+	ctx                   context.Context
 	access                sync.RWMutex
 	config                *tls.Config
 	handshakeTimeout      time.Duration
@@ -263,13 +264,13 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 	if path == c.certificatePath || path == c.keyPath {
 		switch path {
 		case c.certificatePath:
-			certificate, err := os.ReadFile(c.certificatePath)
+			certificate, err := filemanager.ReadFile(c.ctx, c.certificatePath)
 			if err != nil {
 				return E.Cause(err, "reload certificate from ", c.certificatePath)
 			}
 			c.certificate = certificate
 		case c.keyPath:
-			key, err := os.ReadFile(c.keyPath)
+			key, err := filemanager.ReadFile(c.ctx, c.keyPath)
 			if err != nil {
 				return E.Cause(err, "reload key from ", c.keyPath)
 			}
@@ -284,21 +285,18 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.Certificates = []tls.Certificate{keyPair}
 		c.config = config
 		c.access.Unlock()
-		c.logger.InfoEvent("common.tls.message", F.ToString("reloaded TLS certificate"))
-
+		c.logger.Info("reloaded TLS certificate")
 	} else if common.Contains(c.clientCertificatePath, path) {
 		clientCertificateCA := x509.NewCertPool()
 		var reloaded bool
 		for _, certPath := range c.clientCertificatePath {
-			content, err := os.ReadFile(certPath)
+			content, err := filemanager.ReadFile(c.ctx, certPath)
 			if err != nil {
-				c.logger.ErrorEvent("common.tls.message", F.ToString(E.Cause(err, "reload certificate from ", c.clientCertificatePath)))
-
+				c.logger.Error(E.Cause(err, "reload certificate from ", certPath))
 				continue
 			}
 			if !clientCertificateCA.AppendCertsFromPEM(content) {
-				c.logger.ErrorEvent("common.tls.message", F.ToString(E.New("invalid client certificate file: ", certPath)))
-
+				c.logger.Error(E.New("invalid client certificate file: ", certPath))
 				continue
 			}
 			reloaded = true
@@ -311,10 +309,9 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.ClientCAs = clientCertificateCA
 		c.config = config
 		c.access.Unlock()
-		c.logger.InfoEvent("common.tls.message", F.ToString("reloaded client certificates"))
-
+		c.logger.Info("reloaded client certificates")
 	} else if path == c.echKeyPath {
-		echKey, err := os.ReadFile(c.echKeyPath)
+		echKey, err := filemanager.ReadFile(c.ctx, c.echKeyPath)
 		if err != nil {
 			return E.Cause(err, "reload ECH keys from ", c.echKeyPath)
 		}
@@ -413,7 +410,7 @@ func NewSTDServer(ctx context.Context, logger log.StructuredLogger, options opti
 		if len(options.Certificate) > 0 {
 			certificate = []byte(strings.Join(options.Certificate, "\n"))
 		} else if options.CertificatePath != "" {
-			content, err := os.ReadFile(options.CertificatePath)
+			content, err := filemanager.ReadFile(ctx, options.CertificatePath)
 			if err != nil {
 				return nil, E.Cause(err, "read certificate")
 			}
@@ -422,7 +419,7 @@ func NewSTDServer(ctx context.Context, logger log.StructuredLogger, options opti
 		if len(options.Key) > 0 {
 			key = []byte(strings.Join(options.Key, "\n"))
 		} else if options.KeyPath != "" {
-			content, err := os.ReadFile(options.KeyPath)
+			content, err := filemanager.ReadFile(ctx, options.KeyPath)
 			if err != nil {
 				return nil, E.Cause(err, "read key")
 			}
@@ -465,7 +462,7 @@ func NewSTDServer(ctx context.Context, logger log.StructuredLogger, options opti
 		} else if len(options.ClientCertificatePath) > 0 {
 			clientCertificateCA := x509.NewCertPool()
 			for _, path := range options.ClientCertificatePath {
-				content, err := os.ReadFile(path)
+				content, err := filemanager.ReadFile(ctx, path)
 				if err != nil {
 					return nil, E.Cause(err, "read client certificate from ", path)
 				}
@@ -502,6 +499,7 @@ func NewSTDServer(ctx context.Context, logger log.StructuredLogger, options opti
 		handshakeTimeout = C.TCPTimeout
 	}
 	serverConfig := &STDServerConfig{
+		ctx:                   ctx,
 		config:                tlsConfig,
 		handshakeTimeout:      handshakeTimeout,
 		logger:                logger,

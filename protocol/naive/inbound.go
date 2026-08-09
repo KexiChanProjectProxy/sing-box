@@ -3,10 +3,11 @@ package naive
 import (
 	"context"
 	"errors"
-	F "github.com/sagernet/sing/common/format"
 	"io"
 	"net"
 	"net/http"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -26,7 +27,7 @@ import (
 	sHttp "github.com/sagernet/sing/protocol/http"
 
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck
 )
 
 var (
@@ -102,25 +103,25 @@ func (n *Inbound) Start(stage adapter.StartStage) error {
 			return err
 		}
 		n.httpServer = &http.Server{
+			//nolint:staticcheck
 			Handler: h2c.NewHandler(n, &http2.Server{}),
 			BaseContext: func(listener net.Listener) context.Context {
 				return n.ctx
 			},
 		}
-		go func() {
-			listener := net.Listener(tcpListener)
-			if n.tlsConfig != nil {
-				if len(n.tlsConfig.NextProtos()) == 0 {
-					n.tlsConfig.SetNextProtos([]string{http2.NextProtoTLS, "http/1.1"})
-				} else if !common.Contains(n.tlsConfig.NextProtos(), http2.NextProtoTLS) {
-					n.tlsConfig.SetNextProtos(append([]string{http2.NextProtoTLS}, n.tlsConfig.NextProtos()...))
-				}
-				listener = aTLS.NewListener(tcpListener, n.tlsConfig)
+		listener := net.Listener(tcpListener)
+		if n.tlsConfig != nil {
+			if len(n.tlsConfig.NextProtos()) == 0 {
+				n.tlsConfig.SetNextProtos([]string{http2.NextProtoTLS, "http/1.1"})
+			} else if !common.Contains(n.tlsConfig.NextProtos(), http2.NextProtoTLS) {
+				n.tlsConfig.SetNextProtos(append([]string{http2.NextProtoTLS}, n.tlsConfig.NextProtos()...))
 			}
+			listener = aTLS.NewListener(tcpListener, n.tlsConfig)
+		}
+		go func() {
 			sErr := n.httpServer.Serve(listener)
 			if sErr != nil && !errors.Is(sErr, http.ErrServerClosed) {
-				n.logger.ErrorEvent("protocol.message", F.ToString("http server serve error: ", sErr))
-
+				n.logger.Error("http server serve error: ", sErr)
 			}
 		}()
 	}
@@ -227,7 +228,7 @@ func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net
 	} else {
 		done := make(chan struct{})
 		wrapper := v2rayhttp.NewHTTP2Wrapper(conn)
-		n.router.RouteConnectionEx(ctx, conn, metadata, N.OnceClose(func(it error) {
+		n.router.RouteConnectionEx(ctx, wrapper, metadata, N.OnceClose(func(it error) {
 			close(done)
 		}))
 		<-done

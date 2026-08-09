@@ -43,7 +43,7 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 		files = append(files, defaultFile)
 	} else {
 		for _, path := range options.Path {
-			files = append(files, NewFile(filemanager.BasePath(ctx, os.ExpandEnv(path))))
+			files = append(files, NewFile(ctx, filemanager.BasePath(ctx, os.ExpandEnv(path))))
 		}
 	}
 	if options.Predefined != nil {
@@ -103,4 +103,8 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 		},
 		Question: []mDNS.Question{question},
 	}, nil
+}
+
+func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+	callback(t.Exchange(ctx, message))
 }

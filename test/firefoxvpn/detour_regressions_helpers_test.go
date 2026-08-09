@@ -89,7 +89,7 @@ func socksDetourOutbound(tag string, port uint16) option.Outbound {
 		Type: C.TypeSOCKS,
 		Tag:  tag,
 		Options: &option.SOCKSOutboundOptions{
-			DialerOptions: option.DialerOptions{ConnectTimeout: badoption.Duration(5 * time.Second)},
+			DialerOptions: option.DialerOptions{AbstractDialerOptions: option.AbstractDialerOptions{ConnectTimeout: badoption.Duration(5 * time.Second)}},
 			ServerOptions: option.ServerOptions{Server: "127.0.0.1", ServerPort: port},
 		},
 	}

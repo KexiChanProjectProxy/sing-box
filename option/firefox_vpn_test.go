@@ -12,6 +12,10 @@ import (
 
 type firefoxVPNTestOutboundRegistry struct{}
 
+func (firefoxVPNTestOutboundRegistry) OptionTypes() []string {
+	return []string{C.TypeTor, C.TypeFirefoxVPN}
+}
+
 func (firefoxVPNTestOutboundRegistry) CreateOptions(outboundType string) (any, bool) {
 	switch outboundType {
 	case C.TypeTor:

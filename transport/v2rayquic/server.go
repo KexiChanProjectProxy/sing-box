@@ -4,10 +4,11 @@ package v2rayquic
 
 import (
 	"context"
-	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
+
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/quic-go"
 	"github.com/sagernet/quic-go/http3"
@@ -15,7 +16,7 @@ import (
 	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-quic"
+	qtls "github.com/sagernet/sing-quic"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"

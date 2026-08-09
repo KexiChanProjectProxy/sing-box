@@ -1,9 +1,10 @@
 package fakeip
 
 import (
-	"github.com/sagernet/sing-box/log"
 	"net/netip"
 	"sync"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/adapter"
 )

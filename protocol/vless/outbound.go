@@ -2,8 +2,9 @@ package vless
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -26,6 +27,8 @@ import (
 func RegisterOutbound(registry *outbound.Registry) {
 	outbound.Register[option.VLESSOutboundOptions](registry, C.TypeVLESS, NewOutbound)
 }
+
+var _ adapter.OutboundWithMultiplex = (*Outbound)(nil)
 
 type Outbound struct {
 	outbound.Adapter
@@ -83,7 +86,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		case "xudp":
 			outbound.xudp = true
 		default:
-			return nil, E.New("unknown packet encoding: ", options.PacketEncoding)
+			return nil, E.New("unknown packet encoding: ", *options.PacketEncoding)
 		}
 	}
 	outbound.client, err = vless.NewClient(options.UUID, options.Flow, logger)
@@ -131,6 +134,10 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 
 		return h.multiplexDialer.ListenPacket(ctx, destination)
 	}
+}
+
+func (h *Outbound) MultiplexEnabled() bool {
+	return h.multiplexDialer != nil
 }
 
 func (h *Outbound) InterfaceUpdated() {

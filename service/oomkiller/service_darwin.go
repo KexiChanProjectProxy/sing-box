@@ -34,6 +34,7 @@ import "C"
 
 import (
 	"sync"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
@@ -41,6 +42,8 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
 )
+
+const oomDraftMinInterval = time.Hour
 
 var (
 	globalAccess   sync.Mutex
@@ -52,7 +55,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 		return nil
 	}
 	if s.timerConfig.policyMode == policyModeNetworkExtension {
-		s.createTimer()
+		s.adaptiveTimer = newAdaptiveTimer(s.logger, s.network, s.timerConfig, nil)
 		globalAccess.Lock()
 		isFirst := len(globalServices) == 0
 		globalServices = append(globalServices, s)
@@ -65,12 +68,15 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	if !s.timerConfig.policyMode.hasTimerMode() {
 		return E.New("memory pressure monitoring is not available on this platform without memory_limit")
 	}
-	s.startTimer()
+	s.adaptiveTimer = newAdaptiveTimer(s.logger, s.network, s.timerConfig, s.writeOOMReport)
+	s.adaptiveTimer.start()
 	return nil
 }
 
 func (s *Service) Close() error {
-	s.stopTimer()
+	if s.adaptiveTimer != nil {
+		s.adaptiveTimer.stop()
+	}
 	if s.timerConfig.policyMode == policyModeNetworkExtension {
 		globalAccess.Lock()
 		for i, svc := range globalServices {
@@ -110,6 +116,12 @@ func (s *Service) writeOOMDraft(memoryUsage uint64) {
 	if s.draftCancelled.Load() {
 		return
 	}
+	now := time.Now().UnixNano()
+	lastDraft := s.lastDraftTime.Load()
+	if time.Duration(now-lastDraft) < oomDraftMinInterval {
+		return
+	}
+	s.lastDraftTime.Store(now)
 	reporter := service.FromContext[OOMReporter](s.ctx)
 	if reporter == nil {
 		return
@@ -120,9 +132,9 @@ func (s *Service) writeOOMDraft(memoryUsage uint64) {
 		return
 	}
 	if err != nil {
-		s.logger.WarnEvent("oom.draft.write.error", "failed to write OOM draft", log.Err(err))
+		s.logger.Error("failed to write OOM draft: ", err)
 	} else {
-		s.logger.WarnEvent("oom.draft.saved", "OOM draft saved")
+		s.logger.Warn("OOM draft saved")
 	}
 }
 
@@ -134,8 +146,6 @@ func (s *Service) discardOOMDraft() {
 	}
 	err := reporter.DiscardDraft()
 	if err != nil {
-		s.logger.WarnEvent("oom.draft.discard.error", "failed to discard OOM draft", log.Err(err))
-	} else {
-		s.logger.InfoEvent("oom.draft.discarded", "OOM draft discarded")
+		s.logger.Error("failed to discard OOM draft: ", err)
 	}
 }

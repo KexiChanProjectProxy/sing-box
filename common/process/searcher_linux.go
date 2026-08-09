@@ -5,10 +5,11 @@ package process
 import (
 	"context"
 	"errors"
-	F "github.com/sagernet/sing/common/format"
 	"net/netip"
 	"syscall"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
@@ -34,6 +35,10 @@ func NewSearcher(config Config) (Searcher, error) {
 		}
 	}
 	return searcher, nil
+}
+
+func (s *linuxSearcher) ResetCache() {
+	s.processPathCache.cache.Purge()
 }
 
 func (s *linuxSearcher) Close() error {

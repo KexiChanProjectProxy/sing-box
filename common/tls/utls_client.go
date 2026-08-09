@@ -6,21 +6,21 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/sagernet/sing-box/log"
 	"math/rand"
 	"net"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/tlsfragment"
+	tf "github.com/sagernet/sing-box/common/tlsfragment"
 	"github.com/sagernet/sing-box/common/tlsspoof"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/ntp"
+	"github.com/sagernet/sing/service/filemanager"
 
 	utls "github.com/metacubex/utls"
 	"golang.org/x/net/http2"
@@ -251,7 +251,7 @@ func newUTLSClient(ctx context.Context, logger log.StructuredLogger, serverAddre
 	if len(options.Certificate) > 0 {
 		certificate = []byte(strings.Join(options.Certificate, "\n"))
 	} else if options.CertificatePath != "" {
-		content, err := os.ReadFile(options.CertificatePath)
+		content, err := filemanager.ReadFile(ctx, options.CertificatePath)
 		if err != nil {
 			return nil, E.Cause(err, "read certificate")
 		}
@@ -260,7 +260,7 @@ func newUTLSClient(ctx context.Context, logger log.StructuredLogger, serverAddre
 	if len(certificate) > 0 {
 		certPool := x509.NewCertPool()
 		if !certPool.AppendCertsFromPEM(certificate) {
-			return nil, E.New("failed to parse certificate:\n\n", certificate)
+			return nil, E.New("failed to parse certificate:\n\n", string(certificate))
 		}
 		tlsConfig.RootCAs = certPool
 	}
@@ -268,7 +268,7 @@ func newUTLSClient(ctx context.Context, logger log.StructuredLogger, serverAddre
 	if len(options.ClientCertificate) > 0 {
 		clientCertificate = []byte(strings.Join(options.ClientCertificate, "\n"))
 	} else if options.ClientCertificatePath != "" {
-		content, err := os.ReadFile(options.ClientCertificatePath)
+		content, err := filemanager.ReadFile(ctx, options.ClientCertificatePath)
 		if err != nil {
 			return nil, E.Cause(err, "read client certificate")
 		}
@@ -278,7 +278,7 @@ func newUTLSClient(ctx context.Context, logger log.StructuredLogger, serverAddre
 	if len(options.ClientKey) > 0 {
 		clientKey = []byte(strings.Join(options.ClientKey, "\n"))
 	} else if options.ClientKeyPath != "" {
-		content, err := os.ReadFile(options.ClientKeyPath)
+		content, err := filemanager.ReadFile(ctx, options.ClientKeyPath)
 		if err != nil {
 			return nil, E.Cause(err, "read client key")
 		}

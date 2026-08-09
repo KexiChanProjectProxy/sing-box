@@ -2,12 +2,13 @@ package v2rayhttp
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/tls"
@@ -24,7 +25,7 @@ import (
 	sHttp "github.com/sagernet/sing/protocol/http"
 
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck
 )
 
 var _ adapter.V2RayServerTransport = (*Server)(nil)
@@ -71,6 +72,7 @@ func NewServer(ctx context.Context, logger log.StructuredLogger, options option.
 			return log.ContextWithNewID(ctx)
 		},
 	}
+	//nolint:staticcheck
 	server.h2cHandler = h2c.NewHandler(server, server.h2Server)
 	return server, nil
 }

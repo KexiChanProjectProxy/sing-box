@@ -96,6 +96,15 @@ type appleTransport struct {
 	closed  bool
 }
 
+func validateAppleTransport(ctx context.Context, options option.HTTPClientOptions) error {
+	sessionConfig, err := newAppleSessionConfig(ctx, options)
+	if err != nil {
+		return err
+	}
+	sessionConfig.close()
+	return nil
+}
+
 func newAppleTransport(ctx context.Context, logger log.StructuredLogger, rawDialer N.Dialer, options option.HTTPClientOptions) (innerTransport, error) {
 	sessionConfig, err := newAppleSessionConfig(ctx, options)
 	if err != nil {
@@ -108,6 +117,10 @@ func newAppleTransport(ctx context.Context, logger log.StructuredLogger, rawDial
 		}
 	}()
 	bridge, err := newAppleProxyBridge(ctx, logger, "apple http proxy", rawDialer)
+	if err != nil {
+		return nil, err
+	}
+	err = bridge.Start()
 	if err != nil {
 		return nil, err
 	}

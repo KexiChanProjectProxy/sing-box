@@ -2,13 +2,14 @@ package mux
 
 import (
 	"context"
-	"github.com/sagernet/sing-box/log"
 	"net"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-mux"
+	mux "github.com/sagernet/sing-mux"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"

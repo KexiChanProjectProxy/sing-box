@@ -2,9 +2,10 @@ package adapter
 
 import (
 	"context"
-	"github.com/sagernet/sing-box/log"
 	"net/http"
 	"sync"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/option"
 )

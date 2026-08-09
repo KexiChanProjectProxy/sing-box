@@ -28,4 +28,5 @@ type AnyTLSOutboundOptions struct {
 	Heartbeat                   badoption.Duration `json:"heartbeat,omitempty"`
 	MaxConnectionLifetime       badoption.Duration `json:"max_connection_lifetime,omitempty"`
 	ConnectionLifetimeJitter    badoption.Duration `json:"connection_lifetime_jitter,omitempty"`
+	ClientMetadata              string             `json:"client_metadata,omitempty"`
 }

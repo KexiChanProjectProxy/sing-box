@@ -27,10 +27,12 @@ func TestXLAT464Domain(t *testing.T) {
 	wrappedDialer, err := NewWithOptions(Options{
 		Context: ctx,
 		Options: option.DialerOptions{
-			TCPFastOpen: true,
-			DomainResolver: &option.DomainResolveOptions{
-				Server:   "resolver",
-				Strategy: option.DomainStrategy(C.DomainStrategyIPv6Only),
+			AbstractDialerOptions: option.AbstractDialerOptions{
+				TCPFastOpen: true,
+				DomainResolver: &option.DomainResolveOptions{
+					Server:   "resolver",
+					Strategy: option.DomainStrategy(C.DomainStrategyIPv6Only),
+				},
 			},
 		},
 		RemoteIsDomain:              true,
@@ -113,6 +115,10 @@ func (*xlat464TestDNSRouter) Start(adapter.StartStage) error { return nil }
 func (*xlat464TestDNSRouter) Close() error                   { return nil }
 func (*xlat464TestDNSRouter) Exchange(context.Context, *dns.Msg, adapter.DNSQueryOptions) (*dns.Msg, error) {
 	return nil, errors.New("unused DNS exchange")
+}
+func (r *xlat464TestDNSRouter) ExchangeAsync(ctx context.Context, message *dns.Msg, options adapter.DNSQueryOptions, callback func(*dns.Msg, error)) {
+	response, err := r.Exchange(ctx, message, options)
+	callback(response, err)
 }
 func (r *xlat464TestDNSRouter) Lookup(_ context.Context, _ string, options adapter.DNSQueryOptions) ([]netip.Addr, error) {
 	r.options = options

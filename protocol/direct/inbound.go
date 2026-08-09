@@ -2,10 +2,11 @@ package direct
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -17,7 +18,7 @@ import (
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
-	"github.com/sagernet/sing/common/udpnat2"
+	udpnat "github.com/sagernet/sing/common/udpnat2"
 )
 
 func RegisterInbound(registry *inbound.Registry) {
@@ -76,6 +77,10 @@ func (i *Inbound) Start(stage adapter.StartStage) error {
 		return nil
 	}
 	return i.listener.Start()
+}
+
+func (i *Inbound) InterfaceUpdated() {
+	i.udpNat.Purge()
 }
 
 func (i *Inbound) Close() error {

@@ -26,6 +26,6 @@ func newRealityClient(ctx context.Context, logger log.StructuredLogger, serverAd
 	return nil, E.New(`uTLS, which is required by reality is not included in this build, rebuild with -tags with_utls`)
 }
 
-func NewRealityServer(ctx context.Context, logger log.Logger, options option.InboundTLSOptions) (ServerConfig, error) {
+func NewRealityServer(ctx context.Context, logger log.StructuredLogger, options option.InboundTLSOptions) (ServerConfig, error) {
 	return nil, E.New(`uTLS, which is required by reality is not included in this build, rebuild with -tags with_utls`)
 }

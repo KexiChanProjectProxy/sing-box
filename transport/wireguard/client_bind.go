@@ -2,12 +2,13 @@ package wireguard
 
 import (
 	"context"
-	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"

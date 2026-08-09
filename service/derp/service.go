@@ -47,7 +47,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/render"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck
 )
 
 func Register(registry *boxService.Registry) {
@@ -135,7 +135,7 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 func (d *Service) Start(stage adapter.StartStage) error {
 	switch stage {
 	case adapter.StartStateStart:
-		config, err := readDERPConfig(filemanager.BasePath(d.ctx, d.configPath))
+		config, err := readDERPConfig(d.ctx, filemanager.BasePath(d.ctx, d.configPath))
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (d *Service) Start(stage adapter.StartStage) error {
 			server.SetMeshKey(d.meshKey)
 		} else if d.meshKeyPath != "" {
 			var meshKeyContent []byte
-			meshKeyContent, err = os.ReadFile(d.meshKeyPath)
+			meshKeyContent, err = filemanager.ReadFile(d.ctx, d.meshKeyPath)
 			if err != nil {
 				return err
 			}
@@ -215,6 +215,7 @@ func (d *Service) Start(stage adapter.StartStage) error {
 		}
 		tcpListener = aTLS.NewListener(tcpListener, d.tlsConfig)
 		httpServer := &http.Server{
+			//nolint:staticcheck
 			Handler: h2c.NewHandler(derpMux, &http2.Server{}),
 		}
 		go httpServer.Serve(tcpListener)
@@ -445,11 +446,11 @@ type derpConfig struct {
 	PrivateKey key.NodePrivate
 }
 
-func readDERPConfig(path string) (*derpConfig, error) {
-	content, err := os.ReadFile(path)
+func readDERPConfig(ctx context.Context, path string) (*derpConfig, error) {
+	content, err := filemanager.ReadFile(ctx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return writeNewDERPConfig(path)
+			return writeNewDERPConfig(ctx, path)
 		}
 		return nil, err
 	}
@@ -461,9 +462,9 @@ func readDERPConfig(path string) (*derpConfig, error) {
 	return &config, nil
 }
 
-func writeNewDERPConfig(path string) (*derpConfig, error) {
+func writeNewDERPConfig(ctx context.Context, path string) (*derpConfig, error) {
 	newKey := key.NewNode()
-	err := os.MkdirAll(filepath.Dir(path), 0o777)
+	err := filemanager.MkdirAll(ctx, filepath.Dir(path), 0o777)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +475,7 @@ func writeNewDERPConfig(path string) (*derpConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = os.WriteFile(path, content, 0o644)
+	err = filemanager.WriteFile(ctx, path, content, 0o644)
 	if err != nil {
 		return nil, err
 	}

@@ -3,10 +3,11 @@ package hysteria2
 import (
 	"context"
 	"errors"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/http"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	boxService "github.com/sagernet/sing-box/adapter/service"
@@ -25,7 +26,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck
 )
 
 func RegisterRealmService(registry *boxService.Registry) {
@@ -100,6 +101,7 @@ func NewRealmService(ctx context.Context, logger log.StructuredLogger, tag strin
 			Listen:  options.ListenOptions,
 		}),
 		httpServer: &http.Server{
+			//nolint:staticcheck
 			Handler: h2c.NewHandler(chiRouter, &http2.Server{
 				IdleTimeout:                  time.Duration(options.IdleTimeout),
 				ReadIdleTimeout:              time.Duration(options.KeepAlivePeriod),

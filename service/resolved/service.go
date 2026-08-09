@@ -173,7 +173,7 @@ func (i *Service) exchangePacket0(ctx context.Context, buffer *buf.Buffer, oob [
 	if err != nil {
 		return err
 	}
-	responseBuffer, err := dns.TruncateDNSMessage(&message, response, 0)
+	responseBuffer, err := dns.TruncateDNSMessage(&message, response, 0, 0)
 	if err != nil {
 		return err
 	}
@@ -204,10 +204,12 @@ func (i *Service) onNetworkUpdate() {
 }
 
 func (conf *TransportLink) nameList(ndots int, name string) []string {
-	search := common.Map(common.Filter(conf.domain, func(it LinkDomain) bool {
+	search := common.Filter(common.Map(common.Filter(conf.domain, func(it LinkDomain) bool {
 		return !it.RoutingOnly
 	}), func(it LinkDomain) string {
-		return it.Domain
+		return mDNS.Fqdn(it.Domain)
+	}), func(it string) bool {
+		return it != "."
 	})
 
 	l := len(name)

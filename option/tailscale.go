@@ -3,7 +3,9 @@ package option
 import (
 	"net/netip"
 	"net/url"
+	"reflect"
 
+	"github.com/sagernet/sing-box/schema"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
 	"github.com/sagernet/sing/common/json/badoption"
@@ -11,12 +13,10 @@ import (
 )
 
 type TailscaleEndpointOptions struct {
-	// Deprecated: use control_http_client instead
 	DialerOptions
 	StateDirectory             string                     `json:"state_directory,omitempty"`
 	AuthKey                    string                     `json:"auth_key,omitempty"`
 	ControlURL                 string                     `json:"control_url,omitempty"`
-	ControlHTTPClient          *HTTPClientOptions         `json:"control_http_client,omitempty"`
 	Ephemeral                  bool                       `json:"ephemeral,omitempty"`
 	Hostname                   string                     `json:"hostname,omitempty"`
 	AcceptRoutes               bool                       `json:"accept_routes,omitempty"`
@@ -31,6 +31,40 @@ type TailscaleEndpointOptions struct {
 	SystemInterfaceName        string                     `json:"system_interface_name,omitempty"`
 	SystemInterfaceMTU         uint32                     `json:"system_interface_mtu,omitempty"`
 	UDPTimeout                 UDPTimeoutCompat           `json:"udp_timeout,omitempty"`
+	SSHServer                  *TailscaleSSHServerOptions `json:"ssh_server,omitempty"`
+}
+
+type _TailscaleSSHServerOptions struct {
+	Enabled           bool `json:"enabled,omitempty"`
+	DisablePTY        bool `json:"disable_pty,omitempty"`
+	DisableSFTP       bool `json:"disable_sftp,omitempty"`
+	DisableForwarding bool `json:"disable_forwarding,omitempty"`
+}
+
+type TailscaleSSHServerOptions _TailscaleSSHServerOptions
+
+func (o TailscaleSSHServerOptions) MarshalJSON() ([]byte, error) {
+	if !o.DisablePTY && !o.DisableSFTP && !o.DisableForwarding {
+		return json.Marshal(o.Enabled)
+	}
+	return json.Marshal(_TailscaleSSHServerOptions(o))
+}
+
+func (o *TailscaleSSHServerOptions) UnmarshalJSON(bytes []byte) error {
+	err := json.Unmarshal(bytes, &o.Enabled)
+	if err == nil {
+		return nil
+	}
+	return json.UnmarshalDisallowUnknownFields(bytes, (*_TailscaleSSHServerOptions)(o))
+}
+
+func (o TailscaleSSHServerOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+	objectForm := schema.StrictObject()
+	err := builder.FlattenStruct(objectForm, reflect.TypeFor[TailscaleSSHServerOptions]())
+	if err != nil {
+		return nil, err
+	}
+	return schema.AnyOf(schema.BooleanNode(), objectForm), nil
 }
 
 type TailscaleDNSServerOptions struct {
@@ -104,6 +138,15 @@ func (d *DERPVerifyClientURLOptions) UnmarshalJSON(bytes []byte) error {
 	return nil
 }
 
+func (d DERPVerifyClientURLOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+	objectForm, err := describeHTTPClientObject(builder)
+	if err != nil {
+		return nil, err
+	}
+	objectForm.Properties.Put("url", schema.StringNode())
+	return schema.AnyOf(schema.StringNode(), objectForm), nil
+}
+
 type DERPMeshOptions struct {
 	ServerOptions
 	Host string `json:"host,omitempty"`
@@ -112,7 +155,7 @@ type DERPMeshOptions struct {
 }
 
 type _DERPSTUNListenOptions struct {
-	Enabled bool
+	Enabled bool `json:"enabled,omitempty"`
 	ListenOptions
 }
 
@@ -141,4 +184,13 @@ func (d *DERPSTUNListenOptions) UnmarshalJSON(bytes []byte) error {
 		return nil
 	}
 	return json.Unmarshal(bytes, (*_DERPSTUNListenOptions)(d))
+}
+
+func (d DERPSTUNListenOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+	objectForm := schema.StrictObject()
+	err := builder.FlattenStruct(objectForm, reflect.TypeFor[DERPSTUNListenOptions]())
+	if err != nil {
+		return nil, err
+	}
+	return schema.AnyOf(schema.UnsignedNode(16), objectForm), nil
 }

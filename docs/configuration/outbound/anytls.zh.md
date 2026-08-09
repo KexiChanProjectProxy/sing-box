@@ -17,12 +17,13 @@ icon: material/new-box
   "idle_session_check_interval": "30s",
   "idle_session_timeout": "30s",
   "min_idle_session": 5,
-  "ensure_idle_session": 10,
-  "heartbeat": "30s",
-  "min_idle_session_for_age": 2,
-  "max_connection_lifetime": "300s",
-  "connection_lifetime_jitter": "10s",
-  "ensure_idle_session_create_rate": 5,
+	"ensure_idle_session": 10,
+	"heartbeat": "30s",
+	"min_idle_session_for_age": 2,
+	"max_connection_lifetime": "300s",
+	"connection_lifetime_jitter": "10s",
+	"ensure_idle_session_create_rate": 5,
+	"client_metadata": "",
   "tls": {},
 
   ... // 拨号字段
@@ -84,6 +85,12 @@ AnyTLS 密码。
 #### ensure_idle_session_create_rate
 
 每个时间间隔内创建新空闲会话的最大速率。
+
+#### client_metadata
+
+!!! question "自 sing-box 1.13.16 起"
+
+参阅 [AnyTLS 客户端元数据](/zh/manual/misc/anytls-client-metadata/)。
 
 #### tls
 

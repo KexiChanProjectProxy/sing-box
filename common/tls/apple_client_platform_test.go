@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/json/badoption"
-	"github.com/sagernet/sing/common/logger"
 	N "github.com/sagernet/sing/common/network"
 )
 
@@ -87,7 +87,7 @@ func TestAppleClientHandshakeAppliesALPNAndVersion(t *testing.T) {
 func TestAppleClientHandshakeRejectsOpaqueConn(t *testing.T) {
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:    true,
 			Engine:     "apple",
@@ -245,7 +245,7 @@ func TestAppleClientConfigCloneWithInlineCertificate(t *testing.T) {
 	serverCertificate, serverCertificatePEM := newAppleTestCertificate(t, "localhost")
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context: context.Background(),
-		Logger:  logger.NOP(),
+		Logger:  log.NewNOPFactory().Logger(),
 		Options: option.OutboundTLSOptions{
 			Enabled:     true,
 			Engine:      "apple",
@@ -736,7 +736,7 @@ func newAppleTestClientConn(t testing.TB, serverAddress string, options option.O
 
 	clientConfig, err := NewClientWithOptions(ClientOptions{
 		Context:       context.Background(),
-		Logger:        logger.NOP(),
+		Logger:        log.NewNOPFactory().Logger(),
 		ServerAddress: "",
 		Options:       options,
 	})

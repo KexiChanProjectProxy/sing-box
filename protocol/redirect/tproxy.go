@@ -2,10 +2,11 @@ package redirect
 
 import (
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"net/netip"
 	"time"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -14,12 +15,13 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/control"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
-	"github.com/sagernet/sing/common/udpnat2"
+	"github.com/sagernet/sing/service"
 )
 
 func RegisterTProxy(registry *inbound.Registry) {
@@ -30,12 +32,12 @@ type TProxy struct {
 	inbound.Adapter
 	ctx      context.Context
 	router   adapter.Router
-	logger   log.StructuredLogger
+	logger   log.ContextLogger
 	listener *listener.Listener
-	udpNat   *udpnat.Service
+	udpNat   *tun.UDPNat
 }
 
-func NewTProxy(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.TProxyInboundOptions) (adapter.Inbound, error) {
+func NewTProxy(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TProxyInboundOptions) (adapter.Inbound, error) {
 	tproxy := &TProxy{
 		Adapter: inbound.NewAdapter(C.TypeTProxy, tag),
 		ctx:     ctx,
@@ -48,7 +50,16 @@ func NewTProxy(ctx context.Context, router adapter.Router, logger log.Structured
 	} else {
 		udpTimeout = C.UDPTimeout
 	}
-	tproxy.udpNat = udpnat.New(tproxy, tproxy.preparePacketConnection, udpTimeout, false)
+	networkManager := service.FromContext[adapter.NetworkManager](ctx)
+	tproxy.udpNat = tun.NewUDPNat(tun.UDPNatOptions{
+		Handler:         tproxy,
+		Prepare:         tproxy.preparePacketConnection,
+		Timeout:         udpTimeout,
+		Mapping:         tun.NATMapping(options.UDPMapping),
+		Filtering:       tun.NATFiltering(options.UDPFiltering),
+		MaxSize:         options.UDPNATMax,
+		InterfaceFinder: networkManager.InterfaceFinder(),
+	})
 	tproxy.listener = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
@@ -65,10 +76,23 @@ func (t *TProxy) Start(stage adapter.StartStage) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
-	return t.listener.Start()
+	err := t.udpNat.Start()
+	if err != nil {
+		return err
+	}
+	err = t.listener.Start()
+	if err != nil {
+		_ = t.udpNat.Close()
+	}
+	return err
+}
+
+func (t *TProxy) InterfaceUpdated() {
+	t.udpNat.Purge()
 }
 
 func (t *TProxy) Close() error {
+	_ = t.udpNat.Close()
 	return t.listener.Close()
 }
 

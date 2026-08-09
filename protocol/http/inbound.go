@@ -3,8 +3,9 @@ package http
 import (
 	std_bufio "bufio"
 	"context"
-	F "github.com/sagernet/sing/common/format"
 	"net"
+
+	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"

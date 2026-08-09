@@ -14,9 +14,10 @@ var (
 
 type platformDefaultInterfaceMonitor struct {
 	*platformInterfaceWrapper
-	logger      log.StructuredLogger
-	callbacks   list.List[tun.DefaultInterfaceUpdateCallback]
-	myInterface string
+	logger                      log.StructuredLogger
+	callbacks                   list.List[tun.DefaultInterfaceUpdateCallback]
+	myInterfaces                []string
+	defaultInterfaceInitialized bool
 }
 
 func (m *platformDefaultInterfaceMonitor) Start() error {
@@ -76,6 +77,7 @@ func (m *platformDefaultInterfaceMonitor) updateDefaultInterface(interfaceName s
 	m.defaultInterfaceAccess.Lock()
 	if interfaceIndex32 == -1 {
 		m.defaultInterface = nil
+		m.defaultInterfaceInitialized = true
 		callbacks := m.callbacks.Array()
 		m.defaultInterfaceAccess.Unlock()
 		for _, callback := range callbacks {
@@ -91,10 +93,11 @@ func (m *platformDefaultInterfaceMonitor) updateDefaultInterface(interfaceName s
 		return
 	}
 	m.defaultInterface = newInterface
-	if oldInterface != nil && oldInterface.Name == m.defaultInterface.Name && oldInterface.Index == m.defaultInterface.Index {
+	if m.defaultInterfaceInitialized && oldInterface != nil && oldInterface.Name == m.defaultInterface.Name && oldInterface.Index == m.defaultInterface.Index {
 		m.defaultInterfaceAccess.Unlock()
 		return
 	}
+	m.defaultInterfaceInitialized = true
 	callbacks := m.callbacks.Array()
 	m.defaultInterfaceAccess.Unlock()
 	for _, callback := range callbacks {
@@ -105,11 +108,11 @@ func (m *platformDefaultInterfaceMonitor) updateDefaultInterface(interfaceName s
 func (m *platformDefaultInterfaceMonitor) RegisterMyInterface(interfaceName string) {
 	m.defaultInterfaceAccess.Lock()
 	defer m.defaultInterfaceAccess.Unlock()
-	m.myInterface = interfaceName
+	m.myInterfaces = append(m.myInterfaces, interfaceName)
 }
 
-func (m *platformDefaultInterfaceMonitor) MyInterface() string {
+func (m *platformDefaultInterfaceMonitor) MyInterfaces() []string {
 	m.defaultInterfaceAccess.Lock()
 	defer m.defaultInterfaceAccess.Unlock()
-	return m.myInterface
+	return m.myInterfaces
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/sagernet/sing/common"
@@ -21,7 +22,7 @@ type defaultFactory struct {
 	writer            io.Writer
 	file              *os.File
 	filePath          string
-	platformWriter    PlatformWriter
+	platformWriters   atomic.Pointer[[]PlatformWriter]
 	needObservable    bool
 	format            string
 	level             Level
@@ -48,11 +49,13 @@ func NewDefaultFactory(
 		},
 		writer:         writer,
 		filePath:       filePath,
-		platformWriter: platformWriter,
 		needObservable: needObservable,
 		format:         format,
 		level:          LevelTrace,
 		subscriber:     observable.NewSubscriber[Entry](128),
+	}
+	if platformWriter != nil {
+		factory.platformWriters.Store(&[]PlatformWriter{platformWriter})
 	}
 	/*if platformWriter != nil {
 		factory.platformFormatter.DisableColors = platformWriter.DisableColors()
@@ -90,6 +93,19 @@ func (f *defaultFactory) SetLevel(level Level) {
 	f.level = level
 }
 
+func (f *defaultFactory) AttachPlatformWriter(writer PlatformWriter) {
+	writers := append(f.loadPlatformWriters(), writer)
+	f.platformWriters.Store(&writers)
+}
+
+func (f *defaultFactory) loadPlatformWriters() []PlatformWriter {
+	writers := f.platformWriters.Load()
+	if writers == nil {
+		return nil
+	}
+	return *writers
+}
+
 func (f *defaultFactory) Logger() StructuredLogger {
 	return f.NewLogger("")
 }
@@ -115,7 +131,8 @@ type observableLogger struct {
 
 func (l *observableLogger) Log(ctx context.Context, level Level, args []any) {
 	level = OverrideLevelFromContext(level, ctx)
-	if level > l.level && l.platformWriter == nil {
+	platformWriters := l.loadPlatformWriters()
+	if level > l.level && len(platformWriters) == 0 && !l.needObservable {
 		return
 	}
 	nowTime := time.Now()
@@ -139,8 +156,11 @@ func (l *observableLogger) Log(ctx context.Context, level Level, args []any) {
 			os.Exit(1)
 		}
 	}
-	if l.platformWriter != nil {
-		l.platformWriter.WriteMessage(level, l.platformFormatter.FormatRecord(rec))
+	if len(platformWriters) > 0 {
+		formatted := l.platformFormatter.FormatRecord(rec)
+		for _, platformWriter := range platformWriters {
+			platformWriter.WriteMessage(level, formatted)
+		}
 	}
 }
 
@@ -258,7 +278,8 @@ func (l *observableLogger) PanicEventContext(ctx context.Context, event string, 
 
 func (l *observableLogger) logEvent(ctx context.Context, level Level, event string, message string, fields []Field) {
 	level = OverrideLevelFromContext(level, ctx)
-	if level > l.level && l.platformWriter == nil {
+	platformWriters := l.loadPlatformWriters()
+	if level > l.level && len(platformWriters) == 0 && !l.needObservable {
 		return
 	}
 	nowTime := time.Now()
@@ -281,8 +302,11 @@ func (l *observableLogger) logEvent(ctx context.Context, level Level, event stri
 			os.Exit(1)
 		}
 	}
-	if l.platformWriter != nil {
-		l.platformWriter.WriteMessage(level, l.platformFormatter.FormatRecord(rec))
+	if len(platformWriters) > 0 {
+		formatted := l.platformFormatter.FormatRecord(rec)
+		for _, platformWriter := range platformWriters {
+			platformWriter.WriteMessage(level, formatted)
+		}
 	}
 }
 

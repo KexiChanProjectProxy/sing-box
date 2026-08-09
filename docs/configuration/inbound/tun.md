@@ -7,7 +7,11 @@ icon: material/new-box
     :material-plus: [include_mac_address](#include_mac_address)  
     :material-plus: [exclude_mac_address](#exclude_mac_address)  
     :material-plus: [dns_mode](#dns_mode)  
-    :material-plus: [dns_address](#dns_address)
+    :material-plus: [dns_address](#dns_address)  
+    :material-plus: [netns](#netns)  
+    :material-plus: [udp_mapping](/configuration/shared/udp-nat/#udp_mapping)  
+    :material-plus: [udp_filtering](/configuration/shared/udp-nat/#udp_filtering)  
+    :material-plus: [udp_nat_max](/configuration/shared/udp-nat/#udp_nat_max)
 
 !!! quote "Changes in sing-box 1.13.3"
 
@@ -111,7 +115,9 @@ icon: material/new-box
     "geoip-cn"
   ],
   "endpoint_independent_nat": false,
-  "udp_timeout": "5m",
+
+  ... // UDP NAT Fields
+
   "stack": "system",
   "include_interface": [
     "lan0"
@@ -196,6 +202,22 @@ icon: material/new-box
 #### interface_name
 
 Virtual device name, automatically selected if empty.
+
+#### netns
+
+!!! question "Since sing-box 1.14.0"
+
+!!! quote ""
+
+    Only supported on Linux.
+
+Create the tun interface in the specified network namespace, name, path, or the tag of a
+[network namespace](/configuration/network-namespace/).
+
+When set, `auto_route` and `auto_redirect` operate inside the namespace, and no root privilege is
+required if the namespace is owned by the current user.
+
+Conflict with `platform`.
 
 #### address
 
@@ -536,12 +558,6 @@ Enable endpoint-independent NAT.
 
 Performance may degrade slightly, so it is not recommended to enable on when it is not needed.
 
-#### udp_timeout
-
-UDP NAT expiration time.
-
-`5m` will be used by default.
-
 #### stack
 
 !!! quote "Changes in sing-box 1.8.0"
@@ -682,6 +698,10 @@ Hostnames that bypass the HTTP proxy.
     Only supported in graphical clients on Apple platforms.
 
 Hostnames that use the HTTP proxy.
+
+### UDP NAT Fields
+
+See [UDP NAT Fields](/configuration/shared/udp-nat/) for details.
 
 ### Listen Fields
 

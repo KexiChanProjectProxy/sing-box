@@ -18,7 +18,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-tun"
+	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -108,7 +108,7 @@ func NewNetworkManager(ctx context.Context, logger log.StructuredLogger, options
 			return nil, E.New("`auto_detect_interface` is required by `default_network_strategy`")
 		}
 	}
-	usePlatformDefaultInterfaceMonitor := nm.platformInterface != nil
+	usePlatformDefaultInterfaceMonitor := nm.platformInterface != nil && nm.platformInterface.UsePlatformDefaultInterfaceMonitor()
 	enforceInterfaceMonitor := options.AutoDetectInterface
 	if !usePlatformDefaultInterfaceMonitor {
 		networkMonitor, err := tun.NewNetworkUpdateMonitor(logger)
@@ -503,7 +503,7 @@ func (r *NetworkManager) notifyInterfaceUpdate(defaultInterface *control.Interfa
 			vpnStatus = "disabled"
 		}
 		options = append(options, "vpn "+vpnStatus)
-	} else if r.platformInterface != nil {
+	} else if r.platformInterface != nil && r.platformInterface.UsePlatformNetworkInterfaces() {
 		networkInterface := common.Find(r.networkInterfaces.Load(), func(it adapter.NetworkInterface) bool {
 			return it.Interface.Index == defaultInterface.Index
 		})

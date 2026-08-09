@@ -2,8 +2,9 @@ package cachefile
 
 import (
 	"encoding/binary"
-	"github.com/sagernet/sing-box/log"
 	"time"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/bbolt"
 	"github.com/sagernet/sing/common/buf"

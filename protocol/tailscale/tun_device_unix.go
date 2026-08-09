@@ -5,12 +5,13 @@ package tailscale
 import (
 	"encoding/hex"
 	"errors"
-	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
 	"io"
 	"os"
 	"sync"
 	"sync/atomic"
+
+	"github.com/sagernet/sing-box/log"
+	F "github.com/sagernet/sing/common/format"
 
 	singTun "github.com/sagernet/sing-tun"
 	wgTun "github.com/sagernet/wireguard-go/tun"

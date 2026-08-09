@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/sagernet/sing-box/log"
 	"net"
 	"os"
 	"strings"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/common/badtls"
 	"github.com/sagernet/sing-box/common/tlsspoof"

@@ -38,3 +38,14 @@ type HTTPOutboundOptions struct {
 	Path    string               `json:"path,omitempty"`
 	Headers badoption.HTTPHeader `json:"headers,omitempty"`
 }
+
+// HTTPDynamicOutboundOptions configures an HTTP CONNECT proxy whose password
+// is derived from the authenticated inbound user and the client's source IP.
+type HTTPDynamicOutboundOptions struct {
+	DialerOptions
+	ServerOptions
+	Username string `json:"username"`
+	OutboundTLSOptionsContainer
+	Path    string               `json:"path,omitempty"`
+	Headers badoption.HTTPHeader `json:"headers,omitempty"`
+}

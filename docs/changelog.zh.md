@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.5
+
+* 添加 [`http-dynamic` 出站](/zh/configuration/outbound/http-dynamic/)，使用固定 HTTP Basic 用户名以及从已认证入站用户名和客户端源 IP 派生的每连接密码
+
 #### 1.14.0-alpha.24
 
 * 为 [direct 出站](/configuration/outbound/direct/#xlat464) 添加 `xlat464` 选项，用于 NAT64/DNS64 地址合成

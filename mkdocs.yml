@@ -187,6 +187,7 @@ nav:
           - Block: configuration/outbound/block.md
           - SOCKS: configuration/outbound/socks.md
           - HTTP: configuration/outbound/http.md
+          - HTTP Dynamic: configuration/outbound/http-dynamic.md
           - Shadowsocks: configuration/outbound/shadowsocks.md
           - VMess: configuration/outbound/vmess.md
           - Trojan: configuration/outbound/trojan.md

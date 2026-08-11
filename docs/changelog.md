@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.5
+
+* Add [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) with a fixed HTTP Basic username and a per-connection password derived from the authenticated inbound user and client source IP
+
 #### 1.14.0-beta.10
 
 * Add `xlat464` option on [direct outbound](/configuration/outbound/direct/#xlat464) for NAT64/DNS64 address synthesis

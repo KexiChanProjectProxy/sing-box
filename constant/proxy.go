@@ -10,6 +10,7 @@ const (
 	TypeDNS                = "dns"
 	TypeSOCKS              = "socks"
 	TypeHTTP               = "http"
+	TypeHTTPDynamic        = "http-dynamic"
 	TypeMixed              = "mixed"
 	TypeShadowsocks        = "shadowsocks"
 	TypeSnell              = "snell"
@@ -73,6 +74,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "SOCKS"
 	case TypeHTTP:
 		return "HTTP"
+	case TypeHTTPDynamic:
+		return "HTTP Dynamic"
 	case TypeMixed:
 		return "Mixed"
 	case TypeShadowsocks:

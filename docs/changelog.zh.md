@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.8
+
+* 使 [`http-dynamic` 出站](/zh/configuration/outbound/http-dynamic/) 的 HTTP CONNECT 行为与 `http` 出站完全一致，仅动态派生 Basic 认证密码
+
 #### 1.14.0.7
 
 * 修正 [`http-dynamic` 出站](/zh/configuration/outbound/http-dynamic/) CONNECT 请求，使请求目标和默认 `Host` 标头均使用目的地址

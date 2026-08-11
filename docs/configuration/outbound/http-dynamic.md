@@ -33,10 +33,8 @@ The server address.
 The server port.
 
 #### username
+Basic authorization username.
 
-==Required==
-
-The fixed HTTP Basic authorization username.
 
 #### Password derivation
 
@@ -54,7 +52,7 @@ Path of HTTP request.
 
 #### headers
 
-Extra headers of HTTP request. The CONNECT request `Host` header is the destination authority. Set `headers.Host` to override it.
+Extra headers of HTTP request.
 
 #### tls
 

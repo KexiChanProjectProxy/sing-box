@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.8
+
+* Restore [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) HTTP CONNECT behavior to match `http` outbound; only the Basic authorization password is dynamically derived
+
 #### 1.14.0.7
 
 * Correct [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) CONNECT requests so both the request target and default `Host` header use the destination authority

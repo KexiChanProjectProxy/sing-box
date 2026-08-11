@@ -44,7 +44,7 @@ type HTTPOutboundOptions struct {
 type HTTPDynamicOutboundOptions struct {
 	DialerOptions
 	ServerOptions
-	Username string `json:"username"`
+	Username string `json:"username,omitempty"`
 	OutboundTLSOptionsContainer
 	Path    string               `json:"path,omitempty"`
 	Headers badoption.HTTPHeader `json:"headers,omitempty"`

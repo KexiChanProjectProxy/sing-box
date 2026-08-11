@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	F "github.com/sagernet/sing/common/format"
 	"net"
-	std_http "net/http"
 	"os"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -72,18 +71,11 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 
 type DynamicOutbound struct {
 	outbound.Adapter
-	logger   log.StructuredLogger
-	dialer   N.Dialer
-	server   M.Socksaddr
-	username string
-	path     string
-	headers  std_http.Header
+	logger        log.StructuredLogger
+	clientOptions sHTTP.Options
 }
 
 func NewDynamicOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.HTTPDynamicOutboundOptions) (adapter.Outbound, error) {
-	if options.Username == "" {
-		return nil, E.New("http-dynamic outbound: username is required")
-	}
 	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
 	if err != nil {
 		return nil, err
@@ -93,13 +85,15 @@ func NewDynamicOutbound(ctx context.Context, router adapter.Router, logger log.S
 		return nil, err
 	}
 	return &DynamicOutbound{
-		Adapter:  outbound.NewAdapterWithDialerOptions(C.TypeHTTPDynamic, tag, []string{N.NetworkTCP}, options.DialerOptions),
-		logger:   logger,
-		dialer:   detour,
-		server:   options.ServerOptions.Build(),
-		username: options.Username,
-		path:     options.Path,
-		headers:  options.Headers.Build(),
+		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeHTTPDynamic, tag, []string{N.NetworkTCP}, options.DialerOptions),
+		logger:  logger,
+		clientOptions: sHTTP.Options{
+			Dialer:   detour,
+			Server:   options.ServerOptions.Build(),
+			Username: options.Username,
+			Path:     options.Path,
+			Headers:  options.Headers.Build(),
+		},
 	}, nil
 }
 
@@ -113,15 +107,10 @@ func (h *DynamicOutbound) DialContext(ctx context.Context, network string, desti
 	if err != nil {
 		return nil, err
 	}
-	client := sHTTP.NewClient(sHTTP.Options{
-		Dialer:   h.dialer,
-		Server:   h.server,
-		Username: h.username,
-		Password: password,
-		Path:     h.path,
-		Headers:  h.headers.Clone(),
-	})
-	return client.DialContext(ctx, network, destination)
+	clientOptions := h.clientOptions
+	clientOptions.Password = password
+	clientOptions.Headers = clientOptions.Headers.Clone()
+	return sHTTP.NewClient(clientOptions).DialContext(ctx, network, destination)
 }
 
 func (h *DynamicOutbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {

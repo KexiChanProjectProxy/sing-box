@@ -33,10 +33,8 @@
 服务器端口。
 
 #### username
+Basic 认证用户名。
 
-==必填==
-
-固定的 HTTP Basic 认证用户名。
 
 #### 密码派生
 
@@ -54,7 +52,7 @@ HTTP 请求路径。
 
 #### headers
 
-HTTP 请求的额外标头。CONNECT 请求的 `Host` 标头为目的地址；可通过 `headers.Host` 覆盖。
+HTTP 请求的额外标头。
 
 #### tls
 

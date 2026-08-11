@@ -54,7 +54,7 @@ Path of HTTP request.
 
 #### headers
 
-Extra headers of HTTP request.
+Extra headers of HTTP request. By default, the CONNECT request `Host` header is the configured proxy server address. Set `headers.Host` to override it.
 
 #### tls
 

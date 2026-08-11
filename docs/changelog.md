@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.6
+
+* Fix the default `Host` header of [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) CONNECT requests to use the configured proxy server address
+
 #### 1.14.0.5
 
 * Add [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) with a fixed HTTP Basic username and a per-connection password derived from the authenticated inbound user and client source IP

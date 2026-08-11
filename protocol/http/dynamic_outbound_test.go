@@ -5,6 +5,7 @@ import (
 	"context"
 	"net"
 	std_http "net/http"
+	"strings"
 	"testing"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -36,6 +37,7 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 	defer listener.Close()
 
 	type credential struct {
+		host     string
 		username string
 		password string
 		ok       bool
@@ -47,12 +49,28 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 			return
 		}
 		defer conn.Close()
-		request, err := std_http.ReadRequest(bufio.NewReader(conn))
+		reader := bufio.NewReader(conn)
+		_, err = reader.ReadString('\n')
 		if err != nil {
 			return
 		}
-		username, password, ok := sHTTP.ParseBasicAuth(request.Header.Get("Proxy-Authorization"))
-		credentials <- credential{username, password, ok}
+		headers := make(std_http.Header)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil || line == "\r\n" {
+				if err != nil {
+					return
+				}
+				break
+			}
+			key, value, ok := strings.Cut(strings.TrimSuffix(line, "\r\n"), ":")
+			if !ok {
+				return
+			}
+			headers.Add(key, strings.TrimSpace(value))
+		}
+		username, password, ok := sHTTP.ParseBasicAuth(headers.Get("Proxy-Authorization"))
+		credentials <- credential{headers.Get("Host"), username, password, ok}
 		_, _ = conn.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
 	}()
 
@@ -81,6 +99,9 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 	authCredential := <-credentials
 	if !authCredential.ok {
 		t.Fatal("missing HTTP Basic authorization")
+	}
+	if authCredential.host != server.String() {
+		t.Fatalf("unexpected CONNECT Host: %s", authCredential.host)
 	}
 	if authCredential.username != "fixed-user" {
 		t.Fatalf("unexpected username: %s", authCredential.username)

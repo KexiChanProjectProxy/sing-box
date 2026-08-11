@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.7
+
+* Correct [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) CONNECT requests so both the request target and default `Host` header use the destination authority
+
 #### 1.14.0.6
 
 * Fix the default `Host` header of [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) CONNECT requests to use the configured proxy server address

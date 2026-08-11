@@ -92,19 +92,14 @@ func NewDynamicOutbound(ctx context.Context, router adapter.Router, logger log.S
 	if err != nil {
 		return nil, err
 	}
-	server := options.ServerOptions.Build()
-	headers := options.Headers.Build()
-	if headers.Get("Host") == "" {
-		headers.Set("Host", server.String())
-	}
 	return &DynamicOutbound{
 		Adapter:  outbound.NewAdapterWithDialerOptions(C.TypeHTTPDynamic, tag, []string{N.NetworkTCP}, options.DialerOptions),
 		logger:   logger,
 		dialer:   detour,
-		server:   server,
+		server:   options.ServerOptions.Build(),
 		username: options.Username,
 		path:     options.Path,
-		headers:  headers,
+		headers:  options.Headers.Build(),
 	}, nil
 }
 

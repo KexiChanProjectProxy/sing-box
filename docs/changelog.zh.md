@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.7
+
+* 修正 [`http-dynamic` 出站](/zh/configuration/outbound/http-dynamic/) CONNECT 请求，使请求目标和默认 `Host` 标头均使用目的地址
+
 #### 1.14.0.6
 
 * 修复 [`http-dynamic` 出站](/zh/configuration/outbound/http-dynamic/) CONNECT 请求默认 `Host` 标头，改为使用配置的代理服务器地址

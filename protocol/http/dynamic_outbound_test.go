@@ -37,10 +37,11 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 	defer listener.Close()
 
 	type credential struct {
-		host     string
-		username string
-		password string
-		ok       bool
+		requestLine string
+		host        string
+		username    string
+		password    string
+		ok          bool
 	}
 	credentials := make(chan credential, 1)
 	go func() {
@@ -50,7 +51,7 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 		}
 		defer conn.Close()
 		reader := bufio.NewReader(conn)
-		_, err = reader.ReadString('\n')
+		requestLine, err := reader.ReadString('\n')
 		if err != nil {
 			return
 		}
@@ -70,7 +71,7 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 			headers.Add(key, strings.TrimSpace(value))
 		}
 		username, password, ok := sHTTP.ParseBasicAuth(headers.Get("Proxy-Authorization"))
-		credentials <- credential{headers.Get("Host"), username, password, ok}
+		credentials <- credential{requestLine, headers.Get("Host"), username, password, ok}
 		_, _ = conn.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
 	}()
 
@@ -100,7 +101,10 @@ func TestDynamicOutboundSendsDerivedCredential(t *testing.T) {
 	if !authCredential.ok {
 		t.Fatal("missing HTTP Basic authorization")
 	}
-	if authCredential.host != server.String() {
+	if authCredential.requestLine != "CONNECT example.com:443 HTTP/1.1\r\n" {
+		t.Fatalf("unexpected CONNECT request line: %q", authCredential.requestLine)
+	}
+	if authCredential.host != "example.com:443" {
 		t.Fatalf("unexpected CONNECT Host: %s", authCredential.host)
 	}
 	if authCredential.username != "fixed-user" {

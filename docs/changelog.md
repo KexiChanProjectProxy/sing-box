@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.9
+
+* Add `tolerance` to [`loadbalance` outbound](/configuration/outbound/loadbalance/#tolerance); default `10` ms
+
 #### 1.14.0.8
 
 * Restore [`http-dynamic` outbound](/configuration/outbound/http-dynamic/) HTTP CONNECT behavior to match `http` outbound; only the Basic authorization password is dynamically derived

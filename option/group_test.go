@@ -19,6 +19,7 @@ func TestLoadBalanceOutboundOptionsJSON(t *testing.T) {
 		"interval": "10s",
 		"timeout": "5s",
 		"idle_timeout": "300s",
+		"tolerance": 10,
 		"top_n": {
 			"primary": 10
 		},
@@ -41,6 +42,7 @@ func TestLoadBalanceOutboundOptionsJSON(t *testing.T) {
 	require.Equal(t, 10*time.Second, options.Interval.Build())
 	require.Equal(t, 5*time.Second, options.Timeout.Build())
 	require.Equal(t, 300*time.Second, options.IdleTimeout.Build())
+	require.Equal(t, uint16(10), options.Tolerance)
 	require.NotNil(t, options.TopN)
 	require.Equal(t, 10, options.TopN.Primary)
 	require.Equal(t, "consistent_hash", options.Strategy)
@@ -65,6 +67,7 @@ func TestLoadBalanceOutboundOptionsDefaults(t *testing.T) {
 	require.Empty(t, options.Strategy)
 	require.Nil(t, options.Hash)
 	require.Empty(t, options.EmptyPoolAction)
+	require.Equal(t, uint16(0), options.Tolerance)
 	require.False(t, options.InterruptExistConnections)
 	require.False(t, options.PreferDomain)
 }

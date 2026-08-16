@@ -45,6 +45,7 @@ type LoadBalance struct {
 	interval                     time.Duration
 	timeout                      time.Duration
 	idleTimeout                  time.Duration
+	tolerance                    uint16
 	topNPrimary                  int
 	strategy                     string
 	hash                         *option.LoadBalanceHashOptions
@@ -92,6 +93,11 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 	if lb.timeout == 0 {
 		lb.timeout = C.TCPTimeout
 	}
+	tolerance := options.Tolerance
+	if tolerance == 0 {
+		tolerance = defaultLoadBalanceTolerance
+	}
+	lb.tolerance = tolerance
 	if options.TopN != nil {
 		lb.topNPrimary = options.TopN.Primary
 	}
@@ -276,33 +282,33 @@ func (l *LoadBalance) computeHashKey(metadata adapter.InboundContext) string {
 
 func (l *LoadBalance) rebuildSnapshot() {
 	primaryCandidates := l.healthyCandidates(l.primaryTags, l.primaryOutbounds, true)
+	snap := l.snapshot.Load()
+	var previous []Candidate
+	if snap != nil {
+		previous = snap.Candidates
+	}
 	var candidates []Candidate
 	if len(primaryCandidates) > 0 {
-		if l.topNPrimary > 0 && len(primaryCandidates) > l.topNPrimary {
-			candidates = primaryCandidates[:l.topNPrimary]
-		} else {
-			candidates = primaryCandidates
-		}
+		candidates = selectTopNWithTolerance(primaryCandidates, l.topNPrimary, l.tolerance, previous)
 	} else {
 		candidates = l.healthyCandidates(l.backupTags, l.backupOutbounds, false)
 	}
-	previous := l.snapshot.Load()
-	if previous != nil && sameCandidateSet(previous.Candidates, candidates) {
+	if snap != nil && sameCandidateSet(snap.Candidates, candidates) {
 		l.snapshot.Store(&CandidateSnapshot{
 			Candidates: candidates,
-			Generation: previous.Generation,
+			Generation: snap.Generation,
 		})
 		return
 	}
 	generation := uint64(1)
-	if previous != nil {
-		generation = previous.Generation + 1
+	if snap != nil {
+		generation = snap.Generation + 1
 	}
 	l.snapshot.Store(&CandidateSnapshot{
 		Candidates: candidates,
 		Generation: generation,
 	})
-	if previous != nil {
+	if snap != nil {
 		l.interruptGroup.Interrupt(l.interruptExternalConnections)
 	}
 }
@@ -325,13 +331,78 @@ func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adap
 			IsPrimary: isPrimary,
 		})
 	}
+	sortCandidates(candidates)
+	return candidates
+}
+
+const defaultLoadBalanceTolerance uint16 = 10
+
+func sortCandidates(candidates []Candidate) {
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].Latency != candidates[j].Latency {
 			return candidates[i].Latency < candidates[j].Latency
 		}
 		return candidates[i].Tag < candidates[j].Tag
 	})
-	return candidates
+}
+
+func worstCandidateIndex(candidates []Candidate) int {
+	worst := 0
+	for i := 1; i < len(candidates); i++ {
+		if candidates[i].Latency > candidates[worst].Latency ||
+			(candidates[i].Latency == candidates[worst].Latency && candidates[i].Tag > candidates[worst].Tag) {
+			worst = i
+		}
+	}
+	return worst
+}
+
+func selectTopNWithTolerance(healthy []Candidate, n int, tolerance uint16, previous []Candidate) []Candidate {
+	if len(healthy) == 0 {
+		return nil
+	}
+	if n <= 0 || n >= len(healthy) {
+		return healthy
+	}
+	if len(previous) == 0 {
+		return healthy[:n]
+	}
+	previousSet := make(map[string]struct{}, len(previous))
+	for _, candidate := range previous {
+		previousSet[candidate.Tag] = struct{}{}
+	}
+	selected := make([]Candidate, 0, n)
+	selectedSet := make(map[string]struct{}, n)
+	for _, candidate := range healthy {
+		if _, ok := previousSet[candidate.Tag]; !ok {
+			continue
+		}
+		selected = append(selected, candidate)
+		selectedSet[candidate.Tag] = struct{}{}
+		if len(selected) == n {
+			break
+		}
+	}
+	for _, next := range healthy {
+		if _, ok := selectedSet[next.Tag]; ok {
+			continue
+		}
+		if len(selected) < n {
+			selected = append(selected, next)
+			selectedSet[next.Tag] = struct{}{}
+			continue
+		}
+		worst := worstCandidateIndex(selected)
+		if uint32(selected[worst].Latency) > uint32(next.Latency)+uint32(tolerance) {
+			delete(selectedSet, selected[worst].Tag)
+			selected[worst] = next
+			selectedSet[next.Tag] = struct{}{}
+			continue
+		}
+		break
+	}
+	sortCandidates(selected)
+	return selected
 }
 
 func (l *LoadBalance) emptyPoolError() error {

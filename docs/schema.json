@@ -12258,6 +12258,11 @@
             "idle_timeout": {
               "$ref": "#/$defs/Duration"
             },
+            "tolerance": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
             "top_n": {
               "$ref": "#/$defs/LoadBalanceTopNOptions"
             },

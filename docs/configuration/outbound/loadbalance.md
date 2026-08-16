@@ -16,6 +16,7 @@
   "interval": "3m",
   "timeout": "5s",
   "idle_timeout": "30m",
+  "tolerance": 10,
   "top_n": {
     "primary": 0
   },
@@ -81,6 +82,14 @@ Top N candidate selection options.
 ==Optional==
 
 Select top N healthy primary outbounds by latency. `0` means all healthy primary outbounds are used. Default: `0`.
+
+#### tolerance
+
+==Optional==
+
+Latency tolerance in milliseconds when choosing the top-N candidate set.
+A faster outbound replaces a current candidate only if it is better by more than this value.
+`10` will be used if empty.
 
 #### strategy
 

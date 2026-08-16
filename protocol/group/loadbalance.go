@@ -129,6 +129,7 @@ func (l *LoadBalance) Start() error {
 	group.updateCallback = l.rebuildSnapshot
 	l.group = group
 	l.history = group.history
+	l.seedInitialSnapshot()
 	return nil
 }
 
@@ -311,6 +312,36 @@ func (l *LoadBalance) rebuildSnapshot() {
 	if snap != nil {
 		l.interruptGroup.Interrupt(l.interruptExternalConnections)
 	}
+}
+
+func (l *LoadBalance) seedInitialSnapshot() {
+	candidates := make([]Candidate, 0, len(l.primaryTags))
+	for _, tag := range l.primaryTags {
+		if detour := l.primaryOutbounds[tag]; detour != nil {
+			candidates = append(candidates, Candidate{
+				Tag:       tag,
+				Outbound:  detour,
+				IsPrimary: true,
+			})
+		}
+	}
+	if len(candidates) == 0 {
+		for _, tag := range l.backupTags {
+			if detour := l.backupOutbounds[tag]; detour != nil {
+				candidates = append(candidates, Candidate{
+					Tag:      tag,
+					Outbound: detour,
+				})
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return
+	}
+	l.snapshot.Store(&CandidateSnapshot{
+		Candidates: candidates,
+		Generation: 1,
+	})
 }
 
 func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adapter.Outbound, isPrimary bool) []Candidate {

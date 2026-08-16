@@ -149,7 +149,7 @@ Prefer domain resolution through the selected outbound. Default: `false`.
 
 ### Startup Behavior
 
-The outbound starts immediately and triggers an initial health check in the background. Before any health results exist, the candidate pool is empty and `empty_pool_action` determines behavior.
+The outbound starts immediately and seeds the candidate pool with all primary outbounds. A background health check then replaces that seed with the healthy top-N set. `empty_pool_action` applies only after health results exist and no candidate remains healthy.
 
 ### Primary/Backup Semantics
 

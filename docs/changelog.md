@@ -5,6 +5,7 @@ icon: material/alert-decagram
 #### 1.14.0.9
 
 * Add `tolerance` to [`loadbalance` outbound](/configuration/outbound/loadbalance/#tolerance); default `10` ms
+* Fix [`loadbalance`](/configuration/outbound/loadbalance/#startup-behavior) empty pool on startup: seed primaries before the first health check
 
 #### 1.14.0.8
 

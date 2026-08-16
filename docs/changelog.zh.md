@@ -5,6 +5,7 @@ icon: material/alert-decagram
 #### 1.14.0.9
 
 * 为 [`loadbalance` 出站](/zh/configuration/outbound/loadbalance/#tolerance) 添加 `tolerance`，默认 `10` 毫秒
+* 修复 [`loadbalance`](/zh/configuration/outbound/loadbalance/#启动行为) 启动时空池：在首次健康检查前用主出站预填充
 
 #### 1.14.0.8
 

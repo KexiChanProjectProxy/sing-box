@@ -13,56 +13,30 @@ import (
 
 var approvedLegacyExceptions = map[string]struct{}{
 	// Build/tool CLI commands — not runtime logging, uses package-level log for CLI output
-	"cmd/internal/app_store_connect/main.go":     {},
-	"cmd/internal/build/main.go":              {},
-	"cmd/internal/build_libbox/main.go":        {},
-	"cmd/internal/build_shared/sdk.go":         {},
-	"cmd/internal/format_docs/main.go":         {},
-	"cmd/internal/read_tag/main.go":            {},
-	"cmd/internal/tun_bench/main.go":           {},
-	"cmd/internal/update_android_version/main.go": {},
-	"cmd/internal/update_apple_version/main.go": {},
-	"cmd/internal/update_certificates/main.go": {},
-	"cmd/sing-box/cmd.go":                     {},
-	"cmd/sing-box/cmd_check.go":               {},
-	"cmd/sing-box/cmd_format.go":              {},
-	"cmd/sing-box/cmd_generate.go":            {},
-	"cmd/sing-box/cmd_generate_ech.go":        {},
-	"cmd/sing-box/cmd_generate_tls.go":         {},
-	"cmd/sing-box/cmd_generate_vapid.go":      {},
-	"cmd/sing-box/cmd_generate_wireguard.go":  {},
-	"cmd/sing-box/cmd_geoip.go":               {},
-	"cmd/sing-box/cmd_geoip_export.go":       {},
-	"cmd/sing-box/cmd_geoip_list.go":         {},
-	"cmd/sing-box/cmd_geoip_lookup.go":        {},
-	"cmd/sing-box/cmd_geosite.go":             {},
-	"cmd/sing-box/cmd_geosite_export.go":      {},
-	"cmd/sing-box/cmd_geosite_list.go":        {},
-	"cmd/sing-box/cmd_geosite_lookup.go":      {},
-	"cmd/sing-box/cmd_merge.go":                {},
-	"cmd/sing-box/cmd_rule_set_compile.go":    {},
-	"cmd/sing-box/cmd_rule_set_convert.go":    {},
-	"cmd/sing-box/cmd_rule_set_decompile.go":  {},
-	"cmd/sing-box/cmd_rule_set_format.go":     {},
-	"cmd/sing-box/cmd_rule_set_match.go":      {},
-	"cmd/sing-box/cmd_rule_set_merge.go":      {},
-	"cmd/sing-box/cmd_rule_set_upgrade.go":    {},
-	"cmd/sing-box/cmd_run.go":                 {},
-	"cmd/sing-box/cmd_tools_connect.go":       {},
-	"cmd/sing-box/cmd_tools_fetch.go":        {},
-	"cmd/sing-box/cmd_tools_networkquality.go": {},
-	"cmd/sing-box/cmd_tools_stun.go":          {},
-	"cmd/sing-box/cmd_tools_synctime.go":     {},
-	"cmd/sing-box/generate_completions.go":   {},
-	"cmd/sing-box/main.go":                   {},
-	"constant/goos/gengoos.go":              {},
-	"debug_http.go":                         {},
+	"cmd/internal/app_store_connect/main.go":       {},
+	"cmd/internal/build/main.go":                   {},
+	"cmd/internal/build_boxdd/main.go":             {},
+	"cmd/internal/build_libbox/main.go":            {},
+	"cmd/internal/build_shared/sdk.go":             {},
+	"cmd/internal/format_docs/main.go":             {},
+	"cmd/internal/merge_aar/main.go":               {},
+	"cmd/internal/merge_apple_xcframework/main.go": {},
+	"cmd/internal/protogen/main.go":                {},
+	"cmd/internal/read_tag/main.go":                {},
+	"cmd/internal/tun_bench/main.go":               {},
+	"cmd/internal/update_android_version/main.go":  {},
+	"cmd/internal/update_apple_version/main.go":    {},
+	"cmd/internal/update_certificates/main.go":     {},
+	"cmd/internal/update_desktop_version/main.go":  {},
+	"constant/goos/gengoos.go":                     {},
+	"debug_http.go":                                {},
 }
 
 func TestGuardrail(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Dir(filepath.Dir(currentFile))
 	legacyMethods := map[string]bool{"Trace": true, "Debug": true, "Info": true, "Warn": true, "Error": true, "Fatal": true, "Panic": true, "TraceContext": true, "DebugContext": true, "InfoContext": true, "WarnContext": true, "ErrorContext": true, "FatalContext": true, "PanicContext": true}
+	eventMethods := map[string]bool{"TraceEvent": true, "DebugEvent": true, "InfoEvent": true, "WarnEvent": true, "ErrorEvent": true, "FatalEvent": true, "PanicEvent": true, "TraceEventContext": true, "DebugEventContext": true, "InfoEventContext": true, "WarnEventContext": true, "ErrorEventContext": true, "FatalEventContext": true, "PanicEventContext": true}
 	var violations []string
 	err := filepath.WalkDir(repoRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -99,12 +73,22 @@ func TestGuardrail(t *testing.T) {
 				return true
 			}
 			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || !legacyMethods[selector.Sel.Name] {
+			if !ok {
 				return true
 			}
-			if ident, ok := selector.X.(*ast.Ident); ok && (ident.Name == "log" || ident.Name == "logger") {
-				position := fset.Position(selector.Pos())
-				violations = append(violations, filepath.ToSlash(rel)+":"+strconvItoa(position.Line)+":"+selector.Sel.Name)
+			position := fset.Position(selector.Pos())
+			loc := filepath.ToSlash(rel) + ":" + strconvItoa(position.Line) + ":" + selector.Sel.Name
+			if legacyMethods[selector.Sel.Name] && isLegacyLoggerReceiver(selector.X) {
+				violations = append(violations, loc)
+			}
+			if eventMethods[selector.Sel.Name] {
+				eventArg, messageArg := eventCallArgs(selector.Sel.Name, call.Args)
+				if eventName, ok := stringLiteral(eventArg); ok && strings.HasSuffix(eventName, ".message") {
+					violations = append(violations, loc+":event "+eventName)
+				}
+				if isForbiddenMessageCall(messageArg) {
+					violations = append(violations, loc+":interpolated message")
+				}
 			}
 			return true
 		})
@@ -116,6 +100,58 @@ func TestGuardrail(t *testing.T) {
 	if len(violations) > 0 {
 		t.Fatalf("legacy logger calls must migrate to structured *Event APIs or be added to approvedLegacyExceptions with rationale:\n%s", strings.Join(violations, "\n"))
 	}
+}
+
+func isLegacyLoggerReceiver(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		return x.Name == "log" || x.Name == "logger" || strings.HasSuffix(x.Name, "Logger") || strings.HasSuffix(x.Name, "logger")
+	case *ast.SelectorExpr:
+		return x.Sel.Name == "logger" || x.Sel.Name == "Logger" || strings.HasSuffix(x.Sel.Name, "logger") || strings.HasSuffix(x.Sel.Name, "Logger")
+	default:
+		return false
+	}
+}
+
+func eventCallArgs(method string, args []ast.Expr) (eventArg ast.Expr, messageArg ast.Expr) {
+	if strings.HasSuffix(method, "EventContext") {
+		if len(args) >= 3 {
+			return args[1], args[2]
+		}
+		return nil, nil
+	}
+	if len(args) >= 2 {
+		return args[0], args[1]
+	}
+	return nil, nil
+}
+
+func stringLiteral(expr ast.Expr) (string, bool) {
+	lit, ok := expr.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return "", false
+	}
+	value, err := strconvUnquote(lit.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
+}
+
+func isForbiddenMessageCall(expr ast.Expr) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return ident.Name == "F" && selector.Sel.Name == "ToString" || ident.Name == "fmt" && selector.Sel.Name == "Sprintf"
 }
 
 func strconvItoa(value int) string {
@@ -131,3 +167,19 @@ func strconvItoa(value int) string {
 	}
 	return string(buf[i:])
 }
+
+func strconvUnquote(value string) (string, error) {
+	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+		return value[1 : len(value)-1], nil
+	}
+	if len(value) >= 2 && value[0] == '`' && value[len(value)-1] == '`' {
+		return value[1 : len(value)-1], nil
+	}
+	return "", errUnquote
+}
+
+type unquoteError struct{}
+
+func (unquoteError) Error() string { return "unquote" }
+
+var errUnquote unquoteError

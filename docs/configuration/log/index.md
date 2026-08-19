@@ -31,8 +31,8 @@ Output file path. Will not write log to console after enable.
 
 #### format
 
-Log format. When empty or not specified, outputs plain text logs. When set to `json`, outputs structured JSON logs.
-Invalid values are rejected.
+Log format. Optional. Only `json` is accepted. When omitted, logs are written as JSONL (one JSON object per line).
+Invalid values are rejected. `text` has been removed.
 
 #### timestamp
 

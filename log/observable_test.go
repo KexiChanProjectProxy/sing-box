@@ -10,32 +10,38 @@ import (
 )
 
 func newTestFactory(buf *bytes.Buffer, format string) ObservableFactory {
-	return NewDefaultFactory(context.Background(), Formatter{BaseTime: time.Unix(0, 0), DisableColors: true, FormatMode: format}, buf, "", nil, false, format)
+	return NewDefaultFactory(context.Background(), Formatter{}, buf, "", nil, false, format)
 }
 
 func TestStructuredLoggerEmitsFields(t *testing.T) {
 	var buf bytes.Buffer
-	logger := newTestFactory(&buf, "text").NewLogger("test")
+	logger := newTestFactory(&buf, "json").NewLogger("test")
 	logger.InfoEvent("login", "accepted", String("UserName", "alice"), Int("attempt", 1))
-	output := buf.String()
-	if !strings.Contains(output, "test: login: accepted user_name=alice attempt=1") {
-		t.Fatalf("missing structured fields: %s", output)
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded["logger"] != "test" || decoded["event"] != "login" || decoded["message"] != "accepted" || decoded["user_name"] != "alice" || decoded["attempt"].(float64) != 1 {
+		t.Fatalf("missing structured fields: %#v", decoded)
 	}
 }
 
 func TestVariadicLoggerCompatibilityMessageOnly(t *testing.T) {
 	var buf bytes.Buffer
-	logger := newTestFactory(&buf, "text").NewLogger("")
+	logger := newTestFactory(&buf, "json").NewLogger("")
 	logger.Info("a", 1)
-	if !strings.Contains(buf.String(), "a1") || strings.Contains(buf.String(), "a 1") {
-		t.Fatalf("variadic formatting changed: %q", buf.String())
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded["message"] != "a1" {
+		t.Fatalf("variadic formatting changed: %#v", decoded)
 	}
 }
-
 func TestStructuredLoggerAllLevels(t *testing.T) {
 	for _, level := range []Level{LevelTrace, LevelDebug, LevelInfo, LevelWarn, LevelError, LevelPanic} {
 		var buf bytes.Buffer
-		logger := newTestFactory(&buf, "text").NewLogger("")
+		logger := newTestFactory(&buf, "json").NewLogger("")
 		func() {
 			defer func() { _ = recover() }()
 			switch level {
@@ -83,14 +89,5 @@ func TestStructuredLoggerJSONFormat(t *testing.T) {
 	}
 	if decoded["logger"] != "api" || decoded["event"] != "request" || decoded["cached"] != true {
 		t.Fatalf("unexpected json output: %#v", decoded)
-	}
-}
-
-func TestStructuredLoggerTextFormat(t *testing.T) {
-	var buf bytes.Buffer
-	logger := newTestFactory(&buf, "text").NewLogger("api")
-	logger.InfoEvent("request", "ok", Bool("cached", true))
-	if !strings.Contains(buf.String(), "api: request: ok cached=true") {
-		t.Fatalf("unexpected text output: %q", buf.String())
 	}
 }

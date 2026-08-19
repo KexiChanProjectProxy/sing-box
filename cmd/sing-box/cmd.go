@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/user"
 	"strconv"
-	"time"
 
 	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/include"
@@ -52,7 +51,7 @@ func preRun(cmd *cobra.Command, args []string) {
 		globalCtx = filemanager.WithDefault(globalCtx, "", "", sudoUID, sudoGID)
 	}
 	if disableColor {
-		log.SetStdLogger(log.NewDefaultFactory(context.Background(), log.Formatter{BaseTime: time.Now(), DisableColors: true}, os.Stderr, "", nil, false, "text").Logger())
+		log.SetStdLogger(log.NewDefaultFactory(context.Background(), log.Formatter{}, os.Stderr, "", nil, false, "json").Logger())
 	}
 	if workingDir != "" {
 		_, err := os.Stat(workingDir)
@@ -61,7 +60,7 @@ func preRun(cmd *cobra.Command, args []string) {
 		}
 		err = os.Chdir(workingDir)
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	}
 	if len(configPaths) == 0 && len(configDirectories) == 0 {

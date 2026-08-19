@@ -8722,7 +8722,6 @@
         "format": {
           "type": "string",
           "enum": [
-            "text",
             "json"
           ]
         },

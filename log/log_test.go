@@ -28,14 +28,24 @@ func TestLogFormatInvalidRejected(t *testing.T) {
 	}
 }
 
-func TestLogFormatEmptyPreservesText(t *testing.T) {
+func TestLogFormatEmptyDefaultsJSON(t *testing.T) {
 	var buf bytes.Buffer
 	factory, err := New(Options{Context: context.Background(), Options: option.LogOptions{}, DefaultWriter: &buf, BaseTime: time.Unix(0, 0)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	factory.Logger().Info("hello")
-	if bytes.Contains(buf.Bytes(), []byte(`"level":"info"`)) || !bytes.Contains(buf.Bytes(), []byte("INFO")) {
-		t.Fatalf("expected text log, got %q", buf.String())
+	if !bytes.Contains(buf.Bytes(), []byte(`"level":"info"`)) {
+		t.Fatalf("expected json log, got %q", buf.String())
+	}
+}
+
+func TestLogFormatTextRejected(t *testing.T) {
+	_, err := New(Options{Context: context.Background(), Options: option.LogOptions{Format: "text"}})
+	if err == nil {
+		t.Fatal("expected text format error")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("text has been removed")) {
+		t.Fatalf("expected text-removed error, got %v", err)
 	}
 }

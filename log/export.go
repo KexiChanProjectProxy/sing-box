@@ -3,7 +3,6 @@ package log
 import (
 	"context"
 	"os"
-	"time"
 )
 
 var std StructuredLogger
@@ -11,12 +10,12 @@ var std StructuredLogger
 func init() {
 	std = NewDefaultFactory(
 		context.Background(),
-		Formatter{BaseTime: time.Now()},
+		Formatter{},
 		os.Stderr,
 		"",
 		nil,
 		false,
-		"text",
+		"json",
 	).Logger()
 }
 

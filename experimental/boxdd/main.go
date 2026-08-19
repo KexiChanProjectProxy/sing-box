@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/daemon"
@@ -35,10 +34,7 @@ func init() {
 }
 
 func main() {
-	log.SetStdLogger(log.NewDefaultFactory(context.Background(), log.Formatter{
-		BaseTime:      time.Now(),
-		DisableColors: true,
-	}, os.Stderr, "", nil, false, "").Logger())
+	log.SetStdLogger(log.NewDefaultFactory(context.Background(), log.Formatter{}, os.Stderr, "", nil, false, "json").Logger())
 	err := mainCommand.Execute()
 	if err != nil {
 		log.FatalEvent("cli.error", err.Error(), log.Err(err))

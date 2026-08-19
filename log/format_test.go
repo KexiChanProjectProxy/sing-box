@@ -35,7 +35,7 @@ func TestJSONFormatterParseable(t *testing.T) {
 }
 
 func TestJSONFormatterNoANSI(t *testing.T) {
-	output := Formatter{DisableColors: false}.FormatRecordJSON(testRecord())
+	output := Formatter{}.FormatRecordJSON(testRecord())
 	if strings.Contains(output, "\x1b[") {
 		t.Fatalf("json output contains ANSI escape: %q", output)
 	}
@@ -77,12 +77,5 @@ func TestJSONFormatterContextID(t *testing.T) {
 	output := Formatter{DisableLineBreak: true}.FormatRecordJSON(Record{Level: LevelInfo, Message: "m", Timestamp: time.Unix(0, 0), ContextID: 7, ContextAgeMs: 2.5})
 	if !strings.Contains(output, `"context_id":7,"context_age_ms":2.5`) {
 		t.Fatalf("context missing: %s", output)
-	}
-}
-
-func TestTextFormatterDomainFields(t *testing.T) {
-	output := Formatter{BaseTime: time.Unix(0, 0), DisableColors: true}.FormatRecord(testRecord())
-	if !strings.Contains(output, "dialer: connect: connected user_name=alice attempt=2") {
-		t.Fatalf("text output missing domain fields: %s", output)
 	}
 }

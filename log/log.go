@@ -29,10 +29,11 @@ func New(options Options) (Factory, error) {
 	}
 	format := logOptions.Format
 	switch format {
-	case "", "text":
-		format = "text"
-	case "json":
+	case "", "json":
+		format = "json"
 		logOptions.DisableColor = true
+	case "text":
+		return nil, E.New("log format text has been removed, use json")
 	default:
 		return nil, E.New("unknown log format: ", format)
 	}
@@ -54,14 +55,7 @@ func New(options Options) (Factory, error) {
 		logWriter = io.Discard
 		logFilePath = logOptions.Output
 	}
-	logFormatter := Formatter{
-		BaseTime:         options.BaseTime,
-		DisableColors:    logOptions.DisableColor || logFilePath != "",
-		DisableTimestamp: !logOptions.Timestamp && logFilePath != "",
-		FullTimestamp:    logOptions.Timestamp,
-		TimestampFormat:  "-0700 2006-01-02 15:04:05",
-		FormatMode:       format,
-	}
+	logFormatter := Formatter{}
 	factory := NewDefaultFactory(
 		options.Context,
 		logFormatter,

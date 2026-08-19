@@ -70,7 +70,7 @@ type LogOptions struct {
 	Disabled     bool   `json:"disabled,omitempty"`
 	Level        string `json:"level,omitempty" enum:"trace,debug,info,warn,warning,error,fatal,panic"`
 	Output       string `json:"output,omitempty"`
-	Format       string `json:"format,omitempty" enum:"text,json"`
+	Format       string `json:"format,omitempty" enum:"json"`
 	Timestamp    bool   `json:"timestamp,omitempty"`
 	DisableColor bool   `json:"-"`
 }

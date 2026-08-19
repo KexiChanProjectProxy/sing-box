@@ -45,29 +45,6 @@ func TestJSONLEndToEnd(t *testing.T) {
 	assertJSONValue(t, record, "elapsed", float64(100))
 }
 
-func TestTextEndToEnd(t *testing.T) {
-	var buf bytes.Buffer
-	logger := newIntegrationLogger(t, "text", &buf)
-
-	ctx := ContextWithID(context.Background(), ID{ID: 42, CreatedAt: time.Now().Add(-50 * time.Millisecond)})
-	logger.InfoEventContext(ctx, "test.event", "test message",
-		String("domain", "example.com"),
-		Int("rcode", 0),
-		Duration("elapsed", 100*time.Millisecond),
-	)
-
-	output := buf.String()
-	for _, want := range []string{"INFO", "integration-test", "test.event", "test message", "domain=example.com", "rcode=0", "elapsed=100", "[42 "} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("expected text output to contain %q, got %q", want, output)
-		}
-	}
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(output), &decoded); err == nil {
-		t.Fatalf("expected text output not to parse as JSON, got %#v", decoded)
-	}
-}
-
 func TestJSONLMultipleRecords(t *testing.T) {
 	var buf bytes.Buffer
 	logger := newIntegrationLogger(t, "json", &buf)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -24,7 +25,6 @@ type defaultFactory struct {
 	filePath          string
 	platformWriters   atomic.Pointer[[]PlatformWriter]
 	needObservable    bool
-	format            string
 	level             Level
 	subscriber        *observable.Subscriber[Entry]
 	observer          *observable.Observer[Entry]
@@ -44,22 +44,17 @@ func NewDefaultFactory(
 		ctx:       ctx,
 		formatter: formatter,
 		platformFormatter: Formatter{
-			BaseTime:         formatter.BaseTime,
 			DisableLineBreak: true,
 		},
 		writer:         writer,
 		filePath:       filePath,
 		needObservable: needObservable,
-		format:         format,
 		level:          LevelTrace,
 		subscriber:     observable.NewSubscriber[Entry](128),
 	}
 	if platformWriter != nil {
 		factory.platformWriters.Store(&[]PlatformWriter{platformWriter})
 	}
-	/*if platformWriter != nil {
-		factory.platformFormatter.DisableColors = platformWriter.DisableColors()
-	}*/
 	if needObservable {
 		factory.observer = observable.NewObserver[Entry](factory.subscriber, 64)
 	}
@@ -138,28 +133,23 @@ func (l *observableLogger) Log(ctx context.Context, level Level, args []any) {
 	nowTime := time.Now()
 	messageRaw := F.ToString(args...)
 	rec := l.recordFromContext(ctx, level, "", messageRaw, nowTime, nil)
+	formatted := l.formatter.FormatRecordJSON(rec)
 	if level <= l.level {
-		var message string
-		if l.format == "json" {
-			message = l.formatter.FormatRecordJSON(rec)
-		} else {
-			message = l.formatter.FormatRecord(rec)
-		}
-		l.writer.Write([]byte(message))
+		l.writer.Write([]byte(formatted))
 		if l.needObservable {
-			l.subscriber.Emit(Entry{level, messageRaw})
+			l.subscriber.Emit(Entry{level, strings.TrimRight(formatted, "\n")})
 		}
 		if level == LevelPanic {
-			panic(message)
+			panic(formatted)
 		}
 		if level == LevelFatal {
 			os.Exit(1)
 		}
 	}
 	if len(platformWriters) > 0 {
-		formatted := l.platformFormatter.FormatRecord(rec)
+		platformFormatted := l.platformFormatter.FormatRecordJSON(rec)
 		for _, platformWriter := range platformWriters {
-			platformWriter.WriteMessage(level, formatted)
+			platformWriter.WriteMessage(level, platformFormatted)
 		}
 	}
 }
@@ -284,16 +274,11 @@ func (l *observableLogger) logEvent(ctx context.Context, level Level, event stri
 	}
 	nowTime := time.Now()
 	rec := l.recordFromContext(ctx, level, event, message, nowTime, fields)
+	formatted := l.formatter.FormatRecordJSON(rec)
 	if level <= l.level {
-		var formatted string
-		if l.format == "json" {
-			formatted = l.formatter.FormatRecordJSON(rec)
-		} else {
-			formatted = l.formatter.FormatRecord(rec)
-		}
 		l.writer.Write([]byte(formatted))
 		if l.needObservable {
-			l.subscriber.Emit(Entry{level, message})
+			l.subscriber.Emit(Entry{level, strings.TrimRight(formatted, "\n")})
 		}
 		if level == LevelPanic {
 			panic(formatted)
@@ -303,9 +288,9 @@ func (l *observableLogger) logEvent(ctx context.Context, level Level, event stri
 		}
 	}
 	if len(platformWriters) > 0 {
-		formatted := l.platformFormatter.FormatRecord(rec)
+		platformFormatted := l.platformFormatter.FormatRecordJSON(rec)
 		for _, platformWriter := range platformWriters {
-			platformWriter.WriteMessage(level, formatted)
+			platformWriter.WriteMessage(level, platformFormatted)
 		}
 	}
 }

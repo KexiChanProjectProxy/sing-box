@@ -47,7 +47,7 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	}
 	for _, endpoint := range m.endpoints {
 		name := "endpoint/" + endpoint.Type() + "[" + endpoint.Tag() + "]"
-		done := adapter.LogElapsed(m.logger, stage, " ", name)
+		done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 		err := adapter.LegacyStart(endpoint, stage)
 		done()
 		if err != nil {
@@ -70,7 +70,7 @@ func (m *Manager) Close() error {
 	var err error
 	for _, endpoint := range endpoints {
 		name := "endpoint/" + endpoint.Type() + "[" + endpoint.Tag() + "]"
-		done := adapter.LogElapsed(m.logger, "close ", name)
+		done := adapter.LogElapsed(m.logger, "close "+name)
 		monitor.Start("close ", name)
 		err = E.Append(err, endpoint.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
@@ -127,7 +127,7 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if m.started {
 		name := "endpoint/" + endpoint.Type() + "[" + endpoint.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			done := adapter.LogElapsed(m.logger, stage, " ", name)
+			done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 			err = adapter.LegacyStart(endpoint, stage)
 			done()
 			if err != nil {

@@ -13,7 +13,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 )
 
 var _ adapter.OutboundManager = (*Manager)(nil)
@@ -82,7 +81,7 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 		m.access.Unlock()
 		for _, outbound := range outbounds {
 			name := "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
-			done := adapter.LogElapsed(m.logger, stage, " ", name)
+			done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 			err := adapter.LegacyStart(outbound, stage)
 			done()
 			if err != nil {
@@ -114,7 +113,7 @@ func (m *Manager) startOutbounds(outbounds []adapter.Outbound) error {
 			canContinue = true
 			name := "outbound/" + outboundToStart.Type() + "[" + outboundTag + "]"
 			if starter, isStarter := outboundToStart.(adapter.Lifecycle); isStarter {
-				done := adapter.LogElapsed(m.logger, "start ", name)
+				done := adapter.LogElapsed(m.logger, "start "+name)
 				monitor.Start("start ", name)
 				err := starter.Start(adapter.StartStateStart)
 				monitor.Finish()
@@ -125,7 +124,7 @@ func (m *Manager) startOutbounds(outbounds []adapter.Outbound) error {
 			} else if starter, isStarter := outboundToStart.(interface {
 				Start() error
 			}); isStarter {
-				done := adapter.LogElapsed(m.logger, "start ", name)
+				done := adapter.LogElapsed(m.logger, "start "+name)
 				monitor.Start("start ", name)
 				err := starter.Start()
 				monitor.Finish()
@@ -180,7 +179,7 @@ func (m *Manager) Close() error {
 	for _, outbound := range outbounds {
 		if closer, isCloser := outbound.(io.Closer); isCloser {
 			name := "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
-			done := adapter.LogElapsed(m.logger, "close ", name)
+			done := adapter.LogElapsed(m.logger, "close "+name)
 			monitor.Start("close ", name)
 			err = E.Append(err, closer.Close(), func(err error) error {
 				return E.Cause(err, "close ", name)
@@ -233,7 +232,7 @@ func (m *Manager) Remove(tag string) error {
 	if m.defaultOutbound == outbound {
 		if len(m.outbounds) > 0 {
 			m.defaultOutbound = m.outbounds[0]
-			m.logger.InfoEvent("adapter.message", F.ToString("updated default outbound to ", m.defaultOutbound.Tag()))
+			m.logger.InfoEvent("outbound.default.updated", "updated default outbound", log.String("tag", m.defaultOutbound.Tag()))
 
 		} else {
 			m.defaultOutbound = nil
@@ -270,7 +269,7 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if m.started {
 		name := "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			done := adapter.LogElapsed(m.logger, stage, " ", name)
+			done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 			err = adapter.LegacyStart(outbound, stage)
 			done()
 			if err != nil {
@@ -304,7 +303,7 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	if tag == m.defaultTag || (m.defaultTag == "" && m.defaultOutbound == nil) {
 		m.defaultOutbound = outbound
 		if m.started {
-			m.logger.InfoEvent("adapter.message", F.ToString("updated default outbound to ", outbound.Tag()))
+			m.logger.InfoEvent("outbound.default.updated", "updated default outbound", log.String("tag", outbound.Tag()))
 
 		}
 	}

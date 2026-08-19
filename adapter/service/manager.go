@@ -44,7 +44,7 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	m.access.Unlock()
 	for _, service := range services {
 		name := "service/" + service.Type() + "[" + service.Tag() + "]"
-		done := adapter.LogElapsed(m.logger, stage, " ", name)
+		done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 		err := adapter.LegacyStart(service, stage)
 		done()
 		if err != nil {
@@ -67,7 +67,7 @@ func (m *Manager) Close() error {
 	var err error
 	for _, service := range services {
 		name := "service/" + service.Type() + "[" + service.Tag() + "]"
-		done := adapter.LogElapsed(m.logger, "close ", name)
+		done := adapter.LogElapsed(m.logger, "close "+name)
 		monitor.Start("close ", name)
 		err = E.Append(err, service.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
@@ -124,7 +124,7 @@ func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag s
 	if m.started {
 		name := "service/" + service.Type() + "[" + service.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			done := adapter.LogElapsed(m.logger, stage, " ", name)
+			done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 			err = adapter.LegacyStart(service, stage)
 			done()
 			if err != nil {

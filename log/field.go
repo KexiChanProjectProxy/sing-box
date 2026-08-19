@@ -156,3 +156,8 @@ func ErrNamed(key string, err error) Field {
 func AnyStringer(key string, value fmt.Stringer) Field {
 	return newField(key, value, FieldTypeStringer)
 }
+
+// Addr creates a string field from an address Stringer. Use keys source or destination.
+func Addr(key string, addr fmt.Stringer) Field {
+	return String(key, addr.String())
+}

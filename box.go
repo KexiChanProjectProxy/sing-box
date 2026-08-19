@@ -625,7 +625,7 @@ func (s *Box) Close() error {
 		{"dns-transport", s.dnsTransport},
 		{"network", s.network},
 	} {
-		done := adapter.LogElapsed(s.logger, "close ", closeItem.name)
+		done := adapter.LogElapsed(s.logger, "close "+closeItem.name)
 		err = E.Append(err, closeItem.service.Close(), func(err error) error {
 			return E.Cause(err, "close ", closeItem.name)
 		})
@@ -640,7 +640,7 @@ func (s *Box) Close() error {
 		s.logger.TraceEvent("box.close.completed", "close service completed", log.String("service", s.httpClientService.Name()), log.Float64("elapsed_seconds", time.Since(startTime).Seconds()))
 	}
 	for _, lifecycleService := range s.internalService {
-		done := adapter.LogElapsed(s.logger, "close ", lifecycleService.Name())
+		done := adapter.LogElapsed(s.logger, "close "+lifecycleService.Name())
 		err = E.Append(err, lifecycleService.Close(), func(err error) error {
 			return E.Cause(err, "close ", lifecycleService.Name())
 		})

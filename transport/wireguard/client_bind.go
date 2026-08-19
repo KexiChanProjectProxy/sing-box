@@ -8,11 +8,8 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
-	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -118,7 +115,7 @@ func (c *ClientBind) receive(packets [][]byte, sizes []int, eps []conn.Endpoint)
 			return
 		default:
 		}
-		c.logger.ErrorEvent("transport.message", F.ToString(E.Cause(err, "connect to server")))
+		c.logger.ErrorEvent("connection.error", "open connection failed", log.Err(err))
 
 		err = nil
 		c.pauseManager.WaitActive()
@@ -131,7 +128,7 @@ func (c *ClientBind) receive(packets [][]byte, sizes []int, eps []conn.Endpoint)
 		select {
 		case <-c.done:
 		default:
-			c.logger.ErrorEvent("transport.message", F.ToString(E.Cause(err, "read packet")))
+			c.logger.ErrorEvent("connection.error", "process connection", log.Err(err))
 
 			err = nil
 		}

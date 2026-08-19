@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/interrupt"
@@ -162,7 +160,7 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	if err == nil {
 		return s.group.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
 	}
-	s.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+	s.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", outbound.Tag()))
 
 	s.group.history.DeleteURLTestHistory(outbound.Tag())
 	return nil, err
@@ -184,7 +182,7 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	if err == nil {
 		return s.group.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
 	}
-	s.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+	s.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", outbound.Tag()))
 
 	s.group.history.DeleteURLTestHistory(outbound.Tag())
 	return nil, err
@@ -410,11 +408,11 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 			defer cancel()
 			t, err := urltest.URLTest(testCtx, g.link, p)
 			if err != nil {
-				g.logger.DebugEvent("protocol.message", F.ToString("outbound ", tag, " unavailable: ", err))
+				g.logger.DebugEvent("urltest.error", "urltest error", log.Err(err), log.String("tag", tag))
 
 				g.history.DeleteURLTestHistory(realTag)
 			} else {
-				g.logger.DebugEvent("protocol.message", F.ToString("outbound ", tag, " available: ", t, "ms"))
+				g.logger.DebugEvent("urltest.result", "urltest result", log.String("tag", tag), log.Int64("latency_ms", int64(t)))
 
 				g.history.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
 					Time:  time.Now(),

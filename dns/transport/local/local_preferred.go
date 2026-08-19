@@ -40,7 +40,7 @@ func (r *PreferredDomainResolver) Start(stage adapter.StartStage) {
 	case adapter.StartStateInitialize:
 		defaultHosts, err := hosts.NewDefault()
 		if err != nil {
-			r.logger.Warn(err)
+			r.logger.WarnEvent("dns.hosts.reload.error", "reload hosts", log.Err(err))
 		} else {
 			r.hosts = defaultHosts
 		}

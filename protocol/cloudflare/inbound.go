@@ -152,7 +152,7 @@ func (h *icmpRouterHandler) RouteICMPFlow(source netip.Addr, destination netip.A
 			return nil, E.New("outbound is not a flow outbound")
 		}
 		if result.Destination.IsValid() && result.Destination.Addr() != destination {
-			h.logger.Trace("drop ICMP flow from ", source, " to ", destination, ": destination override is not supported from cloudflared")
+			h.logger.TraceEvent("cloudflare.icmp", "icmp flow", log.Addr("source", source), log.Addr("destination", destination), log.String("action", "drop"))
 			return nil, E.New("destination override is not supported")
 		}
 		inet4Address, inet6Address := flowOutbound.PortAddresses()
@@ -163,18 +163,18 @@ func (h *icmpRouterHandler) RouteICMPFlow(source netip.Addr, destination netip.A
 			portAddress = inet6Address
 		}
 		if !portAddress.IsValid() || !portAddress.IsUnspecified() {
-			h.logger.Trace("drop ICMP flow from ", source, " to ", destination, ": forwarding ICMP to outbound/", result.Outbound.Type(), "[", result.Outbound.Tag(), "] is not supported from cloudflared")
+			h.logger.TraceEvent("cloudflare.icmp", "icmp flow", log.Addr("source", source), log.Addr("destination", destination), log.String("action", "drop"), log.String("outbound", result.Outbound.Tag()))
 			return nil, E.New("unsupported flow outbound")
 		}
-		h.logger.Debug("link ICMP flow from ", source, " to ", destination, " via outbound/", result.Outbound.Type(), "[", result.Outbound.Tag(), "]")
+		h.logger.DebugEvent("cloudflare.icmp", "icmp flow", log.Addr("source", source), log.Addr("destination", destination), log.String("action", "link"), log.String("outbound", result.Outbound.Tag()))
 		return flowOutbound, nil
 	case adapter.PreMatchReject:
-		h.logger.Trace("reject ICMP flow from ", source, " to ", destination)
+		h.logger.TraceEvent("cloudflare.icmp", "icmp flow", log.Addr("source", source), log.Addr("destination", destination), log.String("action", "reject"))
 		return nil, E.New("rejected")
 	case adapter.PreMatchDrop:
 		return nil, E.New("dropped")
 	default:
-		h.logger.Trace("drop ICMP flow from ", source, " to ", destination, ": no direct route")
+		h.logger.TraceEvent("cloudflare.icmp", "icmp flow", log.Addr("source", source), log.Addr("destination", destination), log.String("action", "drop"))
 		return nil, E.New("no direct route")
 	}
 }

@@ -200,16 +200,16 @@ func (t *adaptiveTimer) poll() {
 	}
 	if rateTriggered {
 		if t.killerDisabled {
-			t.logger.Warn("memory growth rate critical (report only), usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample))
+			t.logger.WarnEvent("oom.rate.critical", "memory growth rate critical", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)), log.Bool("report_only", true))
 		} else {
-			t.logger.Error("memory growth rate critical, usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample), ", resetting network")
+			t.logger.ErrorEvent("oom.rate.critical", "memory growth rate critical", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)))
 			t.network.ResetNetwork()
 		}
 	} else {
 		if t.killerDisabled {
-			t.logger.Warn("memory threshold reached (report only), usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample))
+			t.logger.WarnEvent("oom.threshold", "memory threshold reached", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)), log.Bool("report_only", true))
 		} else {
-			t.logger.Error("memory threshold reached, usage: ", byteformats.FormatMemoryBytes(sample.usage), t.logDetails(sample), ", resetting network")
+			t.logger.ErrorEvent("oom.threshold", "memory threshold reached", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)))
 			t.network.ResetNetwork()
 		}
 	}

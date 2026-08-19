@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/common/taskmonitor"
@@ -380,7 +378,7 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			for _, routeRuleSet := range t.routeRuleSet {
 				ipSets := routeRuleSet.ExtractIPSet()
 				if len(ipSets) == 0 {
-					t.logger.WarnEvent("protocol.message", F.ToString("route_address_set: no destination IP CIDR rules found in rule-set: ", routeRuleSet.Name()))
+					t.logger.WarnEvent("tun.ruleset.empty", "no destination IP CIDR rules found", log.String("name", routeRuleSet.Name()))
 
 				}
 				routeRuleSet.IncRef()
@@ -392,7 +390,7 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			for _, routeExcludeRuleSet := range t.routeExcludeRuleSet {
 				ipSets := routeExcludeRuleSet.ExtractIPSet()
 				if len(ipSets) == 0 {
-					t.logger.WarnEvent("protocol.message", F.ToString("route_address_set: no destination IP CIDR rules found in rule-set: ", routeExcludeRuleSet.Name()))
+					t.logger.WarnEvent("tun.ruleset.empty", "no destination IP CIDR rules found", log.String("name", routeExcludeRuleSet.Name()))
 
 				}
 				routeExcludeRuleSet.IncRef()
@@ -439,7 +437,7 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 		if err != nil {
 			return E.Cause(err, "configure tun interface")
 		}
-		t.logger.Trace("creating stack")
+		t.logger.TraceEvent("tun.stack.creating", "creating stack")
 		t.tunIf = tunInterface
 		if t.platformInterface != nil {
 			err = t.platformInterface.ProcessPlatformOptions(t.platformOptions)
@@ -472,7 +470,7 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			return err
 		}
 		t.tunStack = tunStack
-		t.logger.InfoEvent("protocol.message", F.ToString("started at ", t.tunOptions.Name))
+		t.logger.InfoEvent("tun.started", "started", log.String("tun_name", t.tunOptions.Name))
 
 	case adapter.StartStatePostStart:
 		monitor := taskmonitor.New(t.logger, C.StartTimeout)
@@ -544,7 +542,7 @@ func (t *Inbound) NewDNSPacket(payload []byte, source M.Socksaddr, destination M
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Protocol = C.ProtocolDNS
-	t.logger.InfoContext(ctx, "inbound DNS packet from ", source)
+	t.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", source), log.String("network", "udp"))
 	t.router.HijackDNSPacket(ctx, payload, writer, metadata)
 }
 
@@ -559,10 +557,9 @@ func (t *Inbound) NewConnectionEx(ctx context.Context, conn net.Conn, source M.S
 		metadata.Protocol = C.ProtocolDNS
 	}
 	if metadata.Protocol == C.ProtocolDNS {
-		t.logger.InfoContext(ctx, "inbound DNS connection from ", metadata.Source)
+		t.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", metadata.Source), log.String("network", "tcp"))
 	} else {
-		t.logger.InfoContext(ctx, "inbound connection from ", metadata.Source)
-		t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+		adapter.LogInboundConnection(t.logger, ctx, metadata)
 	}
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -580,13 +577,9 @@ func (t *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 		}
 	}
 	if metadata.Protocol == C.ProtocolDNS {
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound DNS packet connection from ", metadata.Source))
-
+		t.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", metadata.Source), log.String("network", "udp"))
 	} else {
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", metadata.Source))
-
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
-
+		adapter.LogInboundPacket(t.logger, ctx, metadata)
 	}
 	t.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -610,13 +603,9 @@ func (t *autoRedirectHandler) NewConnectionEx(ctx context.Context, conn net.Conn
 		}
 	}
 	if metadata.Protocol == C.ProtocolDNS {
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound redirect DNS connection from ", metadata.Source))
-
+		t.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", metadata.Source), log.String("network", "tcp"))
 	} else {
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound redirect connection from ", metadata.Source))
-
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
-
+		adapter.LogInboundConnection(t.logger, ctx, metadata)
 	}
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

@@ -26,7 +26,7 @@ const (
 // (https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md) and gRPC-Web
 // streams over WebSocket, wire compatible with the improbable-eng/grpc-web
 // client transports.
-func newHTTPHandler(logger log.ContextLogger, grpcServer *grpc.Server, options option.APIServiceOptions, dashboard *dashboard) http.Handler {
+func newHTTPHandler(logger log.StructuredLogger, grpcServer *grpc.Server, options option.APIServiceOptions, dashboard *dashboard) http.Handler {
 	allowedOrigins := options.AccessControlAllowOrigin
 	if len(allowedOrigins) == 0 {
 		allowedOrigins = []string{"*"}
@@ -47,7 +47,7 @@ func newHTTPHandler(logger log.ContextLogger, grpcServer *grpc.Server, options o
 }
 
 type webBridge struct {
-	logger     log.ContextLogger
+	logger     log.StructuredLogger
 	grpcServer *grpc.Server
 	dashboard  *dashboard
 }

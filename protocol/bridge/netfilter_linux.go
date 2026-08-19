@@ -32,7 +32,7 @@ func enableBridgeForwarding(logger log.StructuredLogger, tunName string, inet4 b
 	enable := func(path string) bool {
 		content, err := os.ReadFile(path)
 		if err != nil {
-			logger.DebugEvent("protocol.bridge.error", "read forwarding setting", log.String("path", path), log.Err(err))
+			logger.DebugEvent("bridge.error", "read forwarding setting", log.String("path", path), log.Err(err), log.String("op", "sysctl"))
 			return false
 		}
 		value := strings.TrimSpace(string(content))
@@ -41,7 +41,7 @@ func enableBridgeForwarding(logger log.StructuredLogger, tunName string, inet4 b
 		}
 		err = os.WriteFile(path, []byte("1"), 0o644)
 		if err != nil {
-			logger.DebugEvent("protocol.bridge.error", "enable forwarding setting", log.String("path", path), log.Err(err))
+			logger.DebugEvent("bridge.error", "enable forwarding setting", log.String("path", path), log.Err(err), log.String("op", "sysctl"))
 			return false
 		}
 		restore = append(restore, sysctlState{name: path, value: value})
@@ -68,7 +68,7 @@ func overruleAcceptRA(logger log.StructuredLogger) []sysctlState {
 	var restore []sysctlState
 	entries, err := os.ReadDir("/proc/sys/net/ipv6/conf")
 	if err != nil {
-		logger.DebugEvent("protocol.bridge.error", "read IPv6 interface settings", log.Err(err))
+		logger.DebugEvent("bridge.error", "read IPv6 interface settings", log.Err(err), log.String("op", "sysctl"))
 		return nil
 	}
 	for _, entry := range entries {
@@ -86,7 +86,7 @@ func overruleAcceptRA(logger log.StructuredLogger) []sysctlState {
 		}
 		err = os.WriteFile(path, []byte("2"), 0o644)
 		if err != nil {
-			logger.DebugEvent("protocol.bridge.error", "override accept_ra", log.String("path", path), log.Err(err))
+			logger.DebugEvent("bridge.error", "override accept_ra", log.String("path", path), log.Err(err), log.String("op", "sysctl"))
 			continue
 		}
 		restore = append(restore, sysctlState{name: path, value: value})
@@ -188,7 +188,7 @@ func setupBridgeIptables(logger log.StructuredLogger, tableName string, tunName 
 	err = setupBridgeIptablesFamily("ip6tables", tableName, tunName)
 	if err != nil {
 		cleanupBridgeIptablesFamily("ip6tables", tableName)
-		logger.DebugEvent("protocol.bridge.error", "IPv6 NAT unavailable, disabling IPv6 forwarding", log.Err(err))
+		logger.DebugEvent("bridge.error", "IPv6 NAT unavailable", log.Err(err), log.String("op", "ipv6_routing"))
 		return false, nil
 	}
 	return true, nil

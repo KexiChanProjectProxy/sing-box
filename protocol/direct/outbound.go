@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -168,10 +166,9 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
-
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 	case N.NetworkUDP:
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 	}
 	return h.dialer.DialContext(ctx, network, destination)
@@ -184,7 +181,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection"))
+	adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 	conn, err := h.dialer.ListenPacket(ctx, destination)
 	if err != nil {
@@ -237,14 +234,14 @@ func (h *Outbound) DialParallel(ctx context.Context, network string, destination
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 		var err error
 		destinationAddresses, err = h.normalizeTCPDestinationAddresses(destinationAddresses)
 		if err != nil {
 			return nil, err
 		}
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 	}
 	return dialer.DialParallelNetwork(ctx, h.dialer, network, destination, destinationAddresses, len(destinationAddresses) > 0 && destinationAddresses[0].Is6(), nil, nil, nil, h.fallbackDelay)
 }
@@ -259,14 +256,14 @@ func (h *Outbound) DialParallelNetwork(ctx context.Context, network string, dest
 	network = N.NetworkName(network)
 	switch network {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 		var err error
 		destinationAddresses, err = h.normalizeTCPDestinationAddresses(destinationAddresses)
 		if err != nil {
 			return nil, err
 		}
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 	}
 	return dialer.DialParallelNetwork(ctx, h.dialer, network, destination, destinationAddresses, len(destinationAddresses) > 0 && destinationAddresses[0].Is6(), networkStrategy, networkType, fallbackNetworkType, fallbackDelay)
 }
@@ -278,7 +275,7 @@ func (h *Outbound) ListenSerialNetworkPacket(ctx context.Context, destination M.
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound packet connection")
+	adapter.LogOutboundPacket(h.logger, ctx, destination)
 	if h.xlat464 != nil && len(destinationAddresses) > 0 {
 		destinationAddresses = h.xlat464.synthesizeIPv4Addresses(destinationAddresses)
 		if len(destinationAddresses) == 0 {

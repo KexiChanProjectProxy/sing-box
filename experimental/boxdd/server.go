@@ -93,7 +93,7 @@ func newDaemon() (*Daemon, error) {
 
 func (d *Daemon) listen() (net.Listener, error) {
 	if listenAddress != "" {
-		d.logger.Warn("listening on TCP address ", listenAddress, ": development only, no access control")
+		d.logger.WarnEvent("daemon.listen", "listening on TCP", log.String("listen", listenAddress), log.String("reason", "development only, no access control"))
 		return net.Listen("tcp", listenAddress)
 	}
 	return listenEndpoint()
@@ -104,11 +104,11 @@ func (d *Daemon) Start() error {
 	if err != nil {
 		return err
 	}
-	d.logger.Info("daemon listening at ", listener.Addr())
+	d.logger.InfoEvent("daemon.listen", "daemon listening", log.String("listen", listener.Addr().String()))
 	go func() {
 		serveError := d.server.Serve(listener)
 		if serveError != nil && !errors.Is(serveError, grpc.ErrServerStopped) {
-			d.logger.Error("serve: ", serveError)
+			d.logger.ErrorEvent("daemon.error", "serve error", log.Err(serveError), log.String("op", "serve"))
 		}
 	}()
 	go d.restore()
@@ -124,7 +124,7 @@ func (d *Daemon) restore() {
 	ownerState, err := loadOwnerState()
 	if err != nil {
 		if !os.IsNotExist(err) {
-			d.logger.Warn("load owner: ", err)
+			d.logger.WarnEvent("daemon.error", "load owner", log.Err(err), log.String("op", "load_owner"))
 		}
 		return
 	}
@@ -132,23 +132,23 @@ func (d *Daemon) restore() {
 	ownerWorkingDirectory := userWorkingDirectory(ownerUserID)
 	err = d.configureWorkingDirectoryLocked(ownerWorkingDirectory)
 	if err != nil {
-		d.logger.Warn("configure working directory: ", err)
+		d.logger.WarnEvent("daemon.error", "configure working directory", log.Err(err), log.String("op", "configure"))
 		return
 	}
 	options, err := loadStartOptions(ownerUserID)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			d.logger.Warn("load start options: ", err)
+			d.logger.WarnEvent("daemon.error", "load start options", log.Err(err), log.String("op", "load"))
 		}
 		return
 	}
 	err = tagUnownedReports(filepath.Join(ownerWorkingDirectory, crashReportsDirectoryName), ownerUserID)
 	if err != nil {
-		d.logger.Warn("tag crash reports: ", err)
+		d.logger.WarnEvent("daemon.error", "tag crash reports", log.Err(err), log.String("op", "tag_crash"))
 	}
 	err = tagUnownedReports(filepath.Join(ownerWorkingDirectory, oomReportsDirectoryName), ownerUserID)
 	if err != nil {
-		d.logger.Warn("tag OOM reports: ", err)
+		d.logger.WarnEvent("daemon.error", "tag OOM reports", log.Err(err), log.String("op", "tag_oom"))
 	}
 	if !options.WasRunning {
 		return
@@ -157,18 +157,18 @@ func (d *Daemon) restore() {
 		d.platform.SetSystemProxyPreference(options.systemProxyEnabled())
 		err = d.platform.RestoreOwner(ownerState)
 		if err != nil {
-			d.logger.Warn("restore owner session: ", err)
+			d.logger.WarnEvent("daemon.restore", "restore owner session", log.Err(err), log.String("op", "session"))
 		}
 	}
 	configContent, err := loadServiceConfig(ownerUserID)
 	if err != nil {
-		d.logger.Error("restore service: ", err)
+		d.logger.ErrorEvent("daemon.restore", "restore service", log.Err(err))
 		return
 	}
-	d.logger.Info("restoring service")
+	d.logger.InfoEvent("daemon.restore", "restoring service")
 	err = d.startServiceLocked(d.ctx, ownerUserID, configContent, options)
 	if err != nil {
-		d.logger.Error("restore service: ", err)
+		d.logger.ErrorEvent("daemon.restore", "restore service", log.Err(err))
 	}
 }
 

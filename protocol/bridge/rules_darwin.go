@@ -280,7 +280,7 @@ func enableDarwinForwarding(forwardingLogger log.StructuredLogger, inet4Active b
 		mib := forwardingMibs[name]
 		value, err := getSysctlInt32(mib)
 		if err != nil {
-			forwardingLogger.Debug(E.Cause(err, "read ", name))
+			forwardingLogger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "sysctl"), log.String("name", name))
 			return
 		}
 		if value == 1 {
@@ -288,7 +288,7 @@ func enableDarwinForwarding(forwardingLogger log.StructuredLogger, inet4Active b
 		}
 		err = setSysctlInt32(mib, 1)
 		if err != nil {
-			forwardingLogger.Debug(E.Cause(err, "enable ", name))
+			forwardingLogger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "sysctl"), log.String("name", name))
 			return
 		}
 		restore = append(restore, sysctlState{name: name, value: strconv.Itoa(int(value))})

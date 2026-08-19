@@ -8,12 +8,12 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
+	"github.com/sagernet/sing-box/log"
 	dnsOutbound "github.com/sagernet/sing-box/protocol/dns"
 	R "github.com/sagernet/sing-box/route/rule"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
-
 	mDNS "github.com/miekg/dns"
 )
 
@@ -45,7 +45,7 @@ func (r *Router) HijackDNSPacket(ctx context.Context, payload []byte, writer N.P
 	var message mDNS.Msg
 	err := message.Unpack(payload)
 	if err != nil {
-		r.logger.ErrorContext(ctx, E.Cause(err, "process DNS packet: unpack request"))
+		r.logger.ErrorEventContext(ctx, "dns.packet.error", "process DNS packet", log.Err(err))
 		return
 	}
 	destination := metadata.Destination
@@ -55,7 +55,7 @@ func (r *Router) HijackDNSPacket(ctx context.Context, payload []byte, writer N.P
 			exchangeErr = r.writeDNSPacketResponse(&message, response, writer, destination)
 		}
 		if exchangeErr != nil && !R.IsRejected(exchangeErr) && !E.IsClosedOrCanceled(exchangeErr) {
-			r.logger.ErrorContext(ctx, E.Cause(exchangeErr, "process DNS packet"))
+			r.logger.ErrorEventContext(ctx, "dns.packet.error", "process DNS packet", log.Err(exchangeErr))
 		}
 	})
 }

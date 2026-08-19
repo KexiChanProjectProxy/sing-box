@@ -5,8 +5,6 @@ import (
 	"net"
 	"syscall"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	C "github.com/sagernet/sing-box/constant"
@@ -35,13 +33,13 @@ func New(ctx context.Context, router adapter.Router, logger log.StructuredLogger
 }
 
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("blocked connection to ", destination))
+	h.logger.InfoEventContext(ctx, "outbound.blocked", "blocked connection", log.Addr("destination", destination), log.String("network", "tcp"))
 
 	return nil, syscall.EPERM
 }
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("blocked packet connection to ", destination))
+	h.logger.InfoEventContext(ctx, "outbound.blocked", "blocked connection", log.Addr("destination", destination), log.String("network", "udp"))
 
 	return nil, syscall.EPERM
 }

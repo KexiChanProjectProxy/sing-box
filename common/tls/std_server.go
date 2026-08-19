@@ -17,7 +17,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/ntp"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/filemanager"
@@ -216,7 +215,7 @@ func (c *STDServerConfig) Start() error {
 	}
 	err := c.startWatcher()
 	if err != nil {
-		c.logger.WarnEvent("common.tls.message", F.ToString("create fsnotify watcher: ", err))
+		c.logger.WarnEvent("tls.certificate.reload.error", "create fsnotify watcher", log.Err(err))
 
 	}
 	return nil
@@ -244,7 +243,7 @@ func (c *STDServerConfig) startWatcher() error {
 		Callback: func(path string) {
 			err := c.certificateUpdated(path)
 			if err != nil {
-				c.logger.ErrorEvent("common.tls.message", F.ToString(E.Cause(err, "reload certificate")))
+				c.logger.ErrorEvent("tls.certificate.reload.error", "reload certificate", log.Err(err))
 
 			}
 		},
@@ -285,18 +284,18 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.Certificates = []tls.Certificate{keyPair}
 		c.config = config
 		c.access.Unlock()
-		c.logger.Info("reloaded TLS certificate")
+		c.logger.InfoEvent("tls.certificate.reloaded", "reloaded TLS certificate", log.String("path", path))
 	} else if common.Contains(c.clientCertificatePath, path) {
 		clientCertificateCA := x509.NewCertPool()
 		var reloaded bool
 		for _, certPath := range c.clientCertificatePath {
 			content, err := filemanager.ReadFile(c.ctx, certPath)
 			if err != nil {
-				c.logger.Error(E.Cause(err, "reload certificate from ", certPath))
+				c.logger.ErrorEvent("tls.certificate.reload.error", "reload certificate", log.Err(err), log.String("path", certPath))
 				continue
 			}
 			if !clientCertificateCA.AppendCertsFromPEM(content) {
-				c.logger.Error(E.New("invalid client certificate file: ", certPath))
+				c.logger.ErrorEvent("tls.certificate.reload.error", "invalid client certificate file", log.String("path", certPath))
 				continue
 			}
 			reloaded = true
@@ -309,7 +308,7 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		config.ClientCAs = clientCertificateCA
 		c.config = config
 		c.access.Unlock()
-		c.logger.Info("reloaded client certificates")
+		c.logger.InfoEvent("tls.certificate.reloaded", "reloaded client certificates")
 	} else if path == c.echKeyPath {
 		echKey, err := filemanager.ReadFile(c.ctx, c.echKeyPath)
 		if err != nil {
@@ -319,7 +318,7 @@ func (c *STDServerConfig) certificateUpdated(path string) error {
 		if err != nil {
 			return err
 		}
-		c.logger.InfoEvent("common.tls.message", F.ToString("reloaded ECH keys"))
+		c.logger.InfoEvent("tls.certificate.reloaded", "reloaded ECH keys", log.String("path", path))
 
 	}
 	return nil

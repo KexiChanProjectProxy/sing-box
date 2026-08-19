@@ -5,7 +5,6 @@ import (
 	"net"
 	"strings"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -17,7 +16,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
-	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -102,7 +100,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		tlsConn, err := tls.ServerHandshake(ctx, conn, h.tlsConfig)
 		if err != nil {
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake")))
+			adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 
 			return
 		}
@@ -111,7 +109,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.service.NewConnection(adapter.WithContext(ctx, &metadata), conn, metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 
 	}
 }
@@ -129,11 +127,7 @@ func (h *inboundHandler) NewConnectionEx(ctx context.Context, conn net.Conn, sou
 	metadata.Destination = destination.Unwrap()
 	if userName, _ := auth.UserFromContext[string](ctx); userName != "" {
 		metadata.User = userName
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", metadata.Destination))
-
-	} else {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
-
 	}
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

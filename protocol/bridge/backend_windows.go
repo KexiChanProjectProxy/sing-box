@@ -182,9 +182,9 @@ func (b *backendWindows) start() error {
 	b.syncEgress()
 	state = b.egress.Load()
 	if !state.inet4.IsValid() && !state.inet6.IsValid() {
-		b.logger.Debug("bridge egress unavailable, dropping forwarded traffic")
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", b.egressLabel()), log.Bool("available", false))
 	}
-	b.logger.Info("bridge started (WinDivert, egress ", b.egressLabel(), ")")
+	b.logger.InfoEvent("bridge.started", "bridge started", log.String("tun_name", b.tunName), log.String("egress", b.egressLabel()), log.String("mode", "WinDivert"))
 	return nil
 }
 
@@ -299,7 +299,7 @@ func (b *backendWindows) divertLoop(d *diverter, kind divertKind, isV6 bool) {
 				return
 			default:
 			}
-			b.logger.Debug(E.Cause(err, "bridge divert recv"))
+			b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "divert_recv"))
 			select {
 			case <-b.closed:
 				return
@@ -558,7 +558,7 @@ func (b *backendWindows) reinject(handle *windivert.Handle, packet []byte, addr 
 		select {
 		case <-b.closed:
 		default:
-			b.logger.Debug(E.Cause(err, "bridge reinject"))
+			b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "reinject"))
 		}
 	}
 }
@@ -617,7 +617,7 @@ func (b *backendWindows) flushOutboundLocked() {
 		select {
 		case <-b.closed:
 		default:
-			b.logger.Debug(E.Cause(err, "bridge inject"))
+			b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "inject"))
 		}
 	}
 	b.sendBuffer = b.sendBuffer[:0]
@@ -654,7 +654,7 @@ func (b *backendWindows) prepareOutbound(packet []byte, state *egressState) bool
 				return false
 			}
 			if !b.portReserved(binary.BigEndian.Uint16(info.transport[0:2])) {
-				b.logger.Debug("bridge: dropping outbound packet with source port outside the reserved block")
+				b.logger.DebugEvent("bridge.error", "dropped outbound packet", log.String("reason", "source_port_unreserved"))
 				return false
 			}
 		}
@@ -695,16 +695,16 @@ func (b *backendWindows) syncEgress() {
 		return
 	}
 	if (b.inet4Port.IsValid() && !state.inet4.IsValid()) || (b.inet6Port.IsValid() && !state.inet6.IsValid()) {
-		b.logger.Debug("bridge egress address unavailable, dropping affected traffic")
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", b.egressLabel()), log.Bool("available", false))
 	}
 	err := b.rebuildDivertersLocked(state)
 	if err != nil {
 		b.egress.Store(&egressState{})
-		b.logger.Debug(E.Cause(err, "bridge rebuild diverters"))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "rebuild_diverters"))
 		return
 	}
 	b.egress.Store(state)
-	b.logger.Debug("bridge egress ", b.egressLabel(), " updated")
+	b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", b.egressLabel()), log.Bool("available", true))
 }
 
 func (b *backendWindows) currentEgressState() *egressState {
@@ -719,7 +719,7 @@ func (b *backendWindows) currentEgressState() *egressState {
 	}
 	err := finder.Update()
 	if err != nil {
-		b.logger.Debug(E.Cause(err, "bridge update interfaces"))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "update_interfaces"))
 		return state
 	}
 	egressInterface, err := finder.ByName(egressName)

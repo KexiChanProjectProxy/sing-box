@@ -158,11 +158,11 @@ func (t *Outbound) start() error {
 	proxyPort := "127.0.0.1:" + F.ToString(t.proxy.Port())
 	proxyUsername := t.proxy.Username()
 	proxyPassword := t.proxy.Password()
-	t.logger.TraceEvent("protocol.message", F.ToString("created upstream proxy at ", proxyPort))
+	t.logger.TraceEvent("tor.proxy.created", "created upstream proxy", log.String("listen", proxyPort))
 
-	t.logger.TraceEvent("protocol.message", F.ToString("upstream proxy username ", proxyUsername))
+	t.logger.TraceEvent("tor.proxy.auth", "upstream proxy username", log.String("user", proxyUsername))
 
-	t.logger.TraceEvent("protocol.message", F.ToString("upstream proxy password ", proxyPassword))
+	t.logger.TraceEvent("tor.proxy.auth", "upstream proxy password", log.String("detail", proxyPassword))
 
 	confOptions := []*control.KeyVal{
 		control.NewKeyVal("Socks5Proxy", proxyPort),
@@ -198,7 +198,7 @@ func (t *Outbound) start() error {
 	if len(info) != 1 || info[0].Key != "net/listeners/socks" {
 		return E.New("get socks proxy address")
 	}
-	t.logger.TraceEvent("protocol.message", F.ToString("obtained tor socks5 address ", info[0].Val))
+	t.logger.TraceEvent("tor.socks.ready", "obtained tor socks5 address", log.String("listen", info[0].Val))
 
 	// TODO: set password for tor socks5 server if supported
 	t.socksClient = socks.NewClient(N.SystemDialer, M.ParseSocksaddr(info[0].Val), socks.Version5, "", "")
@@ -212,21 +212,21 @@ func (t *Outbound) recvLoop() {
 			event.Raw = strings.ToLower(event.Raw)
 			switch event.Severity {
 			case control.EventCodeLogDebug, control.EventCodeLogInfo:
-				t.logger.TraceEvent("protocol.message", F.ToString(event.Raw))
+				t.logger.TraceEvent("tor.log", "tor log", log.String("detail", event.Raw))
 
 			case control.EventCodeLogNotice:
 				if strings.Contains(event.Raw, "disablenetwork") || strings.Contains(event.Raw, "socks listener") {
-					t.logger.TraceEvent("protocol.message", F.ToString(event.Raw))
+					t.logger.TraceEvent("tor.log", "tor log", log.String("detail", event.Raw))
 
 					continue
 				}
-				t.logger.InfoEvent("protocol.message", F.ToString(event.Raw))
+				t.logger.InfoEvent("tor.log", "tor log", log.String("detail", event.Raw))
 
 			case control.EventCodeLogWarn:
-				t.logger.WarnEvent("protocol.message", F.ToString(event.Raw))
+				t.logger.WarnEvent("tor.log", "tor log", log.String("detail", event.Raw))
 
 			case control.EventCodeLogErr:
-				t.logger.ErrorEvent("protocol.message", F.ToString(event.Raw))
+				t.logger.ErrorEvent("tor.log", "tor log", log.String("detail", event.Raw))
 
 			}
 		}
@@ -246,7 +246,7 @@ func (t *Outbound) Close() error {
 }
 
 func (t *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+	adapter.LogOutboundConnection(t.logger, ctx, destination)
 
 	return t.socksClient.DialContext(ctx, network, destination)
 }

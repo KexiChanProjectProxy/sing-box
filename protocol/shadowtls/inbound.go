@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -16,7 +15,6 @@ import (
 	shadowtls "github.com/sagernet/sing-shadowtls"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
-	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -113,13 +111,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.service.NewConnection(adapter.WithContext(log.ContextWithNewID(ctx), &metadata), conn, metadata.Source, metadata.Destination, onClose)
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
-		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
-
-		} else {
-			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
-
-		}
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 	}
 }
 
@@ -136,11 +128,7 @@ func (h *inboundHandler) NewConnectionEx(ctx context.Context, conn net.Conn, sou
 	metadata.Destination = destination
 	if userName, _ := auth.UserFromContext[string](ctx); userName != "" {
 		metadata.User = userName
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", metadata.Destination))
-
-	} else {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
-
 	}
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

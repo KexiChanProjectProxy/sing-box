@@ -4,8 +4,6 @@ import (
 	"context"
 	"net"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -84,20 +82,20 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	if h.multiplexDialer == nil {
 		switch N.NetworkName(network) {
 		case N.NetworkTCP:
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+			adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 		case N.NetworkUDP:
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+			adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 		}
 		return (*trojanDialer)(h).DialContext(ctx, network, destination)
 	} else {
 		switch N.NetworkName(network) {
 		case N.NetworkTCP:
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound multiplex connection to ", destination))
+			adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 		case N.NetworkUDP:
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound multiplex packet connection to ", destination))
+			adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 		}
 		return h.multiplexDialer.DialContext(ctx, network, destination)
@@ -106,11 +104,11 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	if h.multiplexDialer == nil {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 		return (*trojanDialer)(h).ListenPacket(ctx, destination)
 	} else {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound multiplex packet connection to ", destination))
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 		return h.multiplexDialer.ListenPacket(ctx, destination)
 	}

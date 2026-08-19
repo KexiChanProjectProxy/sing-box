@@ -56,7 +56,7 @@ type Service struct {
 	nextProtos    []string
 }
 
-func NewCertificateProvider(ctx context.Context, logger log.ContextLogger, tag string, options option.ACMECertificateProviderOptions) (adapter.CertificateProviderService, error) {
+func NewCertificateProvider(ctx context.Context, logger log.StructuredLogger, tag string, options option.ACMECertificateProviderOptions) (adapter.CertificateProviderService, error) {
 	if len(options.Domain) == 0 {
 		return nil, E.New("missing domain")
 	}
@@ -153,7 +153,7 @@ func NewCertificateProvider(ctx context.Context, logger log.ContextLogger, tag s
 				return account, nil
 			}
 			var err error
-			acmeIssuer.ExternalAccount, account, err = createZeroSSLExternalAccountBinding(ctx, acmeIssuer, account, acmeHTTPClient)
+			acmeIssuer.ExternalAccount, account, err = createZeroSSLExternalAccountBinding(ctx, logger, acmeIssuer, account, acmeHTTPClient)
 			return account, err
 		}
 	}
@@ -274,7 +274,7 @@ func newDNSSolver(dnsOptions *option.ACMEProviderDNS01ChallengeOptions, logger *
 	return solver, nil
 }
 
-func createZeroSSLExternalAccountBinding(ctx context.Context, acmeIssuer *certmagic.ACMEIssuer, account acme.Account, httpClient *http.Client) (*acme.EAB, acme.Account, error) {
+func createZeroSSLExternalAccountBinding(ctx context.Context, logger log.StructuredLogger, acmeIssuer *certmagic.ACMEIssuer, account acme.Account, httpClient *http.Client) (*acme.EAB, acme.Account, error) {
 	email := strings.TrimSpace(acmeIssuer.Email)
 	if email == "" {
 		return nil, acme.Account{}, E.New("email is required to use the ZeroSSL ACME endpoint without external_account")
@@ -322,7 +322,7 @@ func createZeroSSLExternalAccountBinding(ctx context.Context, acmeIssuer *certma
 		return nil, account, E.New("failed getting ZeroSSL EAB credentials: ", result.Error.Type, " (code ", result.Error.Code, ")")
 	}
 
-	acmeIssuer.Logger.Info("generated ZeroSSL EAB credentials", zap.String("key_id", result.EABKID))
+	logger.InfoEvent("acme.eab.generated", "generated ZeroSSL EAB credentials", log.String("key_id", result.EABKID))
 
 	return &acme.EAB{
 		KeyID:  result.EABKID,

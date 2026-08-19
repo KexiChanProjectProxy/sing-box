@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/taskmonitor"
@@ -12,7 +11,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 )
 
 var _ adapter.CertificateProviderManager = (*Manager)(nil)
@@ -46,15 +44,12 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	m.access.Unlock()
 	for _, provider := range providers {
 		name := "certificate-provider/" + provider.Type() + "[" + provider.Tag() + "]"
-		m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name))
-
-		startTime := time.Now()
+		done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 		err := adapter.LegacyStart(provider, stage)
+		done()
 		if err != nil {
 			return E.Cause(err, stage, " ", name)
 		}
-		m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)"))
-
 	}
 	return nil
 }
@@ -72,15 +67,13 @@ func (m *Manager) Close() error {
 	var err error
 	for _, provider := range providers {
 		name := "certificate-provider/" + provider.Type() + "[" + provider.Tag() + "]"
-		m.logger.TraceEvent("adapter.message", F.ToString("close ", name))
-
-		startTime := time.Now()
+		done := adapter.LogElapsed(m.logger, "close "+name)
 		monitor.Start("close ", name)
 		err = E.Append(err, provider.Close(), func(err error) error {
 			return E.Cause(err, "close ", name)
 		})
 		monitor.Finish()
-		m.logger.TraceEvent("adapter.message", F.ToString("close ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)"))
+		done()
 
 	}
 	return err
@@ -132,15 +125,12 @@ func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag s
 	if m.started {
 		name := "certificate-provider/" + provider.Type() + "[" + provider.Tag() + "]"
 		for _, stage := range adapter.ListStartStages {
-			m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name))
-
-			startTime := time.Now()
+			done := adapter.LogElapsed(m.logger, stage.String()+" "+name)
 			err = adapter.LegacyStart(provider, stage)
+			done()
 			if err != nil {
 				return E.Cause(err, stage, " ", name)
 			}
-			m.logger.TraceEvent("adapter.message", F.ToString(stage, " ", name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)"))
-
 		}
 	}
 	if existsProvider, loaded := m.providerByTag[tag]; loaded {

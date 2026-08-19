@@ -88,7 +88,7 @@ func (s *Service) start() error {
 	}
 	err = assignBridgePortAddress(tunName, s.inet6Local, s.inet6Port)
 	if err != nil {
-		s.logger.Debug(E.Cause(err, "IPv6 bridge routing unavailable, disabling IPv6 forwarding"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "ipv6_routing"))
 		s.inet6Port = netip.Addr{}
 	}
 	device, err := openPfDevice()
@@ -126,9 +126,9 @@ func (s *Service) syncEgressLocked() error {
 	}
 	s.currentRules = rules
 	if buildErr != nil || s.egressName == "" {
-		s.logger.Debug("bridge egress unavailable, dropping forwarded traffic")
+		s.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", s.egressName), log.Bool("available", false))
 	} else {
-		s.logger.Debug("bridge egress ", s.egressName)
+		s.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", s.egressName), log.Bool("available", true))
 	}
 	return buildErr
 }

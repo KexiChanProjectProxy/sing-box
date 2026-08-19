@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
 
 	"github.com/coder/websocket"
@@ -38,7 +39,7 @@ func (b *webBridge) serveWebSocket(writer http.ResponseWriter, request *http.Req
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
-		b.logger.Error("upgrade websocket request: ", err)
+		b.logger.ErrorEvent("websocket.error", "upgrade websocket request", log.Err(err))
 		return
 	}
 	conn.SetReadLimit(webSocketReadLimit)
@@ -55,7 +56,7 @@ func (b *webBridge) serveWebSocket(writer http.ResponseWriter, request *http.Req
 	}
 	header, err := parseWebSocketHeader(firstMessage)
 	if err != nil {
-		b.logger.Error("parse websocket request metadata: ", err)
+		b.logger.ErrorEvent("websocket.error", "parse websocket request metadata", log.Err(err))
 		conn.CloseNow()
 		return
 	}

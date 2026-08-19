@@ -114,7 +114,7 @@ func (b *backendDarwin) start() error {
 	}
 	err = assignBridgePortAddress(b.tunName, b.inet6Local, b.inet6Port)
 	if err != nil {
-		b.logger.Debug(E.Cause(err, "IPv6 bridge routing unavailable, disabling IPv6 forwarding"))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "ipv6_routing"))
 		b.inet6Port = netip.Addr{}
 	}
 	err = b.enablePf()
@@ -133,7 +133,7 @@ func (b *backendDarwin) start() error {
 	b.registerMonitors(b.syncEgress)
 	b.syncEgress()
 	go b.batchReadLoop()
-	b.logger.Info("bridge started at ", b.tunName, " (masquerade, egress ", b.egressLabel(), ")")
+	b.logger.InfoEvent("bridge.started", "bridge started", log.String("tun_name", b.tunName), log.String("egress", b.egressLabel()), log.String("mode", "masquerade"))
 	return nil
 }
 
@@ -175,7 +175,7 @@ func (b *backendDarwin) startPlatform() error {
 	b.registerMonitors(b.syncSessionEgress)
 	b.syncSessionEgress()
 	go b.batchReadLoop()
-	b.logger.Info("bridge started at ", b.tunName, " (platform, egress ", b.egressLabel(), ")")
+	b.logger.InfoEvent("bridge.started", "bridge started", log.String("tun_name", b.tunName), log.String("egress", b.egressLabel()), log.String("mode", "platform"))
 	return nil
 }
 
@@ -262,7 +262,7 @@ func (b *backendDarwin) batchReadLoop() {
 			if E.IsClosed(err) || errors.Is(err, syscall.EBADF) {
 				return
 			}
-			b.logger.Debug(E.Cause(err, "bridge tun read"))
+			b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "read"))
 			continue
 		}
 		if len(packets) == 0 {
@@ -337,23 +337,23 @@ func (b *backendDarwin) syncEgress() {
 	}
 	if slices.Equal(rules, b.currentRules) {
 		if buildErr != nil {
-			b.logger.Debug(buildErr)
+			b.logger.DebugEvent("bridge.error", "bridge error", log.Err(buildErr), log.String("op", "apply_egress"))
 		}
 		return
 	}
 	err := b.pfDevice.LoadAnchor(b.anchorName, rules)
 	if err != nil {
-		b.logger.Debug(E.Cause(err, "apply bridge egress ", egress))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "apply_egress"))
 		return
 	}
 	b.currentRules = rules
 	if buildErr != nil || egress == "" {
-		b.logger.Debug("bridge egress unavailable, dropping forwarded traffic")
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", egress), log.Bool("available", false))
 	} else {
-		b.logger.Debug("bridge egress ", egress)
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", egress), log.Bool("available", true))
 	}
 	if buildErr != nil {
-		b.logger.Debug(buildErr)
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(buildErr), log.String("op", "apply_egress"))
 	}
 }
 

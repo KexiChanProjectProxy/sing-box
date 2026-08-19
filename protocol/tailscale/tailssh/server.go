@@ -120,10 +120,10 @@ func (s *Server) loadOrGenerateHostKey() (gossh.Signer, error) {
 		if err == nil {
 			signer, parseErr := gossh.ParsePrivateKey(keyData)
 			if parseErr == nil {
-				s.logger.Debug("loaded SSH host key via platform")
+				s.logger.DebugEvent("tailssh.key", "loaded host key")
 				return signer, nil
 			}
-			s.logger.Warn("failed to parse SSH host key from platform: ", parseErr)
+			s.logger.WarnEvent("tailssh.key", "failed to parse host key", log.Err(parseErr))
 		}
 	}
 	// Read the system host key when privileged, but never write back to it: the
@@ -136,10 +136,10 @@ func (s *Server) loadOrGenerateHostKey() (gossh.Signer, error) {
 			if err == nil {
 				signer, parseErr := gossh.ParsePrivateKey(keyData)
 				if parseErr == nil {
-					s.logger.Debug("loaded SSH host key from ", systemKey)
+					s.logger.DebugEvent("tailssh.key", "loaded host key", log.String("path", systemKey))
 					return signer, nil
 				}
-				s.logger.Warn("failed to parse system SSH host key: ", parseErr)
+				s.logger.WarnEvent("tailssh.key", "failed to parse host key", log.Err(parseErr))
 			}
 		}
 	}
@@ -148,10 +148,10 @@ func (s *Server) loadOrGenerateHostKey() (gossh.Signer, error) {
 	if err == nil {
 		signer, parseErr := gossh.ParsePrivateKey(keyData)
 		if parseErr == nil {
-			s.logger.Debug("loaded SSH host key from ", keyPath)
+			s.logger.DebugEvent("tailssh.key", "loaded host key", log.String("path", keyPath))
 			return signer, nil
 		}
-		s.logger.Warn("failed to parse SSH host key, regenerating: ", parseErr)
+		s.logger.WarnEvent("tailssh.key", "failed to parse host key", log.Err(parseErr))
 	}
 	_, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -171,7 +171,7 @@ func (s *Server) loadOrGenerateHostKey() (gossh.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.logger.Info("generated SSH host key at ", keyPath)
+	s.logger.InfoEvent("tailssh.key", "generated host key", log.String("path", keyPath))
 	return gossh.NewSignerFromKey(privateKey)
 }
 
@@ -222,10 +222,10 @@ func (s *Server) Start() error {
 	go func() {
 		err := sshServer.Serve(listener)
 		if err != nil && !errors.Is(err, gliderssh.ErrServerClosed) {
-			s.logger.Error("SSH server stopped: ", err)
+			s.logger.ErrorEvent("tailssh.error", "SSH server stopped", log.Err(err))
 		}
 	}()
-	s.logger.Info("SSH server started on :22")
+	s.logger.InfoEvent("tailssh.started", "SSH server started", log.String("listen", ":22"))
 	return nil
 }
 
@@ -284,50 +284,50 @@ func (s *Server) authenticate(ctx gliderssh.Context, conn gossh.ConnMetadata) (*
 	// stops offering further auth methods instead of re-running policy
 	// evaluation (and hold-and-delegate) once per method.
 	if !found {
-		s.logger.Warn("SSH auth: unknown peer ", remoteAddrPort)
+		s.logger.WarnEvent("tailssh.auth", "unknown peer", log.Addr("source", remoteAddrPort))
 		return nil, &gossh.PartialSuccessError{}
 	}
 	netMap := localBackend.NetMapNoPeers()
 	if netMap == nil || netMap.SSHPolicy == nil {
-		s.logger.Warn("SSH auth: no SSH policy")
+		s.logger.WarnEvent("tailssh.auth", "no SSH policy")
 		return nil, &gossh.PartialSuccessError{}
 	}
 	srcIP := remoteAddrPort.Addr()
 	connInfo, err := s.evaluatePolicy(netMap.SSHPolicy, conn.User(), node, userProfile, srcIP)
 	if err != nil {
-		s.logger.Info("SSH auth rejected for ", userProfile.LoginName, " -> ", conn.User(), ": ", err)
+		s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Err(err), log.Bool("accepted", false))
 		return nil, &gossh.PartialSuccessError{}
 	}
 	if connInfo.action.Reject {
-		s.logger.Info("SSH auth rejected for ", userProfile.LoginName, " -> ", conn.User())
+		s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
 		return nil, &gossh.PartialSuccessError{}
 	}
 	connInfo.action0 = connInfo.action
 	for hops := 0; connInfo.action.HoldAndDelegate != ""; hops++ {
 		if hops >= 10 {
-			s.logger.Info("SSH auth rejected: hold-and-delegate chain too long")
+			s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("reason", "hold-and-delegate chain too long"), log.Bool("accepted", false))
 			return nil, &gossh.PartialSuccessError{}
 		}
 		delegatedAction, delegateErr := s.holdAndDelegate(ctx, connInfo.action, node, conn.User(), connInfo.localUser, srcIP)
 		if delegateErr != nil {
-			s.logger.Info("SSH auth rejected for ", userProfile.LoginName, ": ", delegateErr)
+			s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Err(delegateErr), log.Bool("accepted", false))
 			return nil, &gossh.PartialSuccessError{}
 		}
 		connInfo.action = delegatedAction
 		if connInfo.action.Reject {
-			s.logger.Info("SSH auth rejected for ", userProfile.LoginName, " -> ", conn.User())
+			s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
 			return nil, &gossh.PartialSuccessError{}
 		}
 	}
 	if !connInfo.action.Accept {
-		s.logger.Info("SSH auth rejected for ", userProfile.LoginName, " -> ", conn.User())
+		s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
 		return nil, &gossh.PartialSuccessError{}
 	}
 	connInfo.sshUser = conn.User()
 	connInfo.srcIP = srcIP
 	connInfo.connID = newConnID()
 	ctx.SetValue(sshConnContextKey{}, connInfo)
-	s.logger.Info("SSH auth accepted: ", userProfile.LoginName, " -> ", connInfo.localUser)
+	s.logger.InfoEvent("tailssh.auth", "auth accepted", log.String("user", userProfile.LoginName), log.Bool("accepted", true))
 	return &gossh.Permissions{}, nil
 }
 
@@ -460,7 +460,7 @@ func (s *Server) holdAndDelegate(ctx context.Context, action *tailcfg.SSHAction,
 		}
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
-			s.logger.Warn("hold and delegate: unexpected status ", resp.Status)
+			s.logger.WarnEvent("tailssh.error", "hold and delegate", log.String("reason", resp.Status), log.String("op", "delegate"))
 			backoffErr := s.delegateBackoff(ctx)
 			if backoffErr != nil {
 				return nil, backoffErr
@@ -558,7 +558,7 @@ func (s *Server) handleSession(session gliderssh.Session) {
 	}
 	err = verifyShellIdentity(s.platformInterface, localUser)
 	if err != nil {
-		s.logger.Warn("shell rejected for ", localUser.Username, ": ", err)
+		s.logger.WarnEvent("tailssh.error", "shell rejected", log.String("user", localUser.Username), log.Err(err))
 		fmt.Fprintf(session.Stderr(), "%s\r\n", err)
 		session.Exit(1)
 		return
@@ -571,7 +571,7 @@ func (s *Server) handleSession(session gliderssh.Session) {
 			agentSocketPath = agentListener.Addr().String()
 			go gliderssh.ForwardAgentConnections(agentListener, session)
 		} else {
-			s.logger.Warn("create agent listener: ", err)
+			s.logger.WarnEvent("tailssh.error", "create agent listener", log.Err(err))
 		}
 	}
 	env := s.buildEnvironment(session, connInfo, localUser)
@@ -597,7 +597,7 @@ func (s *Server) handleSession(session gliderssh.Session) {
 			if errors.As(err, &rejected) && rejected.message != "" {
 				io.WriteString(session.Stderr(), rejected.message+"\r\n")
 			}
-			s.logger.Error("recording: ", err)
+			s.logger.ErrorEvent("tailssh.error", "recording", log.Err(err))
 			session.Exit(1)
 			return
 		}
@@ -619,7 +619,7 @@ func (s *Server) handleSession(session gliderssh.Session) {
 		Cols:    cols,
 	})
 	if err != nil {
-		s.logger.Error("failed to open shell session: ", err)
+		s.logger.ErrorEvent("tailssh.error", "failed to open shell session", log.Err(err))
 		fmt.Fprintf(session.Stderr(), "failed to open shell: %s\r\n", err)
 		session.Exit(1)
 		return
@@ -696,7 +696,7 @@ func (s *Server) pumpSession(ctx context.Context, session gliderssh.Session, she
 	go func() {
 		exitStatus, err := shell.Wait()
 		if err != nil {
-			s.logger.Error("wait session: ", err)
+			s.logger.ErrorEvent("tailssh.error", "wait session", log.Err(err))
 			exitStatus = 1
 		}
 		exitCh <- exitStatus
@@ -729,24 +729,24 @@ func (s *Server) handleSFTP(ctx context.Context, session gliderssh.Session, conn
 	if err != nil {
 		match, matchErr := requestedUserMatchesProcess(localUser)
 		if matchErr != nil {
-			s.logger.Warn("builtin sftp rejected for ", localUser.Username, ": ", matchErr)
+			s.logger.WarnEvent("tailssh.error", "builtin sftp rejected", log.String("user", localUser.Username), log.Err(matchErr))
 			fmt.Fprint(session.Stderr(), "SFTP unavailable: builtin server cannot impersonate a different local user.\r\n")
 			session.Exit(1)
 			return
 		}
 		if !match {
-			s.logger.Warn("builtin sftp rejected for ", localUser.Username, ": running process identity differs from requested user")
+			s.logger.WarnEvent("tailssh.error", "builtin sftp rejected", log.String("user", localUser.Username), log.String("reason", "running process identity differs from requested user"))
 			fmt.Fprint(session.Stderr(), "SFTP unavailable: builtin server cannot impersonate a different local user.\r\n")
 			session.Exit(1)
 			return
 		}
-		s.logger.Debug("sftp-server not found, using builtin: ", err)
+		s.logger.DebugEvent("tailssh.error", "sftp-server not found", log.Err(err))
 		s.serveBuiltinSFTP(ctx, session, localUser)
 		return
 	}
 	err = verifyShellIdentity(s.platformInterface, localUser)
 	if err != nil {
-		s.logger.Warn("sftp rejected for ", localUser.Username, ": ", err)
+		s.logger.WarnEvent("tailssh.error", "sftp rejected", log.String("user", localUser.Username), log.Err(err))
 		fmt.Fprintf(session.Stderr(), "%s\r\n", err)
 		session.Exit(1)
 		return
@@ -758,7 +758,7 @@ func (s *Server) handleSFTP(ctx context.Context, session gliderssh.Session, conn
 		Env:     env,
 	})
 	if err != nil {
-		s.logger.Error("failed to start sftp-server: ", err)
+		s.logger.ErrorEvent("tailssh.error", "failed to start sftp-server", log.Err(err))
 		fmt.Fprintf(session.Stderr(), "failed to start SFTP: %s\r\n", err)
 		session.Exit(1)
 		return
@@ -780,7 +780,7 @@ func (s *Server) serveBuiltinSFTP(ctx context.Context, session gliderssh.Session
 	}
 	server, err := sftp.NewServer(session, opts...)
 	if err != nil {
-		s.logger.Error("create builtin sftp server: ", err)
+		s.logger.ErrorEvent("tailssh.error", "create builtin sftp server", log.Err(err))
 		fmt.Fprintf(session.Stderr(), "failed to start SFTP: %s\r\n", err)
 		session.Exit(1)
 		return
@@ -794,7 +794,7 @@ func (s *Server) serveBuiltinSFTP(ctx context.Context, session gliderssh.Session
 	defer stop()
 	err = server.Serve()
 	if err != nil && !errors.Is(err, io.EOF) {
-		s.logger.Error("builtin sftp serve: ", err)
+		s.logger.ErrorEvent("tailssh.error", "builtin sftp serve", log.Err(err))
 		session.Exit(1)
 		return
 	}
@@ -976,7 +976,7 @@ func (s *Server) OnReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCfg 
 		if err == nil && !newConnInfo.action.Reject && (newConnInfo.action.Accept || newConnInfo.action.HoldAndDelegate != "") && newConnInfo.localUser == connInfo.localUser {
 			continue
 		}
-		s.logger.Info("revoking SSH access for ", connInfo.userProfile.LoginName)
+		s.logger.InfoEvent("tailssh.auth", "revoking access", log.String("user", connInfo.userProfile.LoginName))
 		active.cancel()
 	}
 }

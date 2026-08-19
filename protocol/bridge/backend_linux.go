@@ -125,7 +125,7 @@ func (b *backendLinux) start() error {
 	}
 	err = setupBridgeFamily(b.tunName, b.ruleIndex, b.routeTable, unix.AF_INET6, b.inet6Port)
 	if err != nil {
-		b.logger.Debug(E.Cause(err, "IPv6 bridge routing unavailable, disabling IPv6 forwarding"))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "ipv6_routing"))
 		removeBridgeFamily(b.tunName, b.ruleIndex, b.routeTable, unix.AF_INET6, b.inet6Port)
 		b.inet6Port = netip.Addr{}
 	}
@@ -144,7 +144,7 @@ func (b *backendLinux) start() error {
 			element := monitor.RegisterCallback(func() { b.syncEgress() })
 			b.unregister = func() { monitor.UnregisterCallback(element) }
 		} else {
-			b.logger.Debug("network monitor unavailable, pinned egress will not track interface changes")
+			b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", b.boundInterface), log.Bool("available", false), log.String("reason", "monitor_unavailable"))
 		}
 		b.syncEgress()
 	} else {
@@ -159,7 +159,7 @@ func (b *backendLinux) start() error {
 	if fullConeSupported() {
 		natMode = "full-cone NAT"
 	}
-	b.logger.Info("bridge started at ", b.tunName, " (", natMode, ", egress ", egress, ")")
+	b.logger.InfoEvent("bridge.started", "bridge started", log.String("tun_name", b.tunName), log.String("egress", egress), log.String("mode", natMode))
 	return nil
 }
 
@@ -221,7 +221,7 @@ func (b *backendLinux) startPlatform() error {
 	if b.boundInterface != "" {
 		egress = b.boundInterface
 	}
-	b.logger.Info("bridge started at ", b.tunName, " (platform, egress ", egress, ")")
+	b.logger.InfoEvent("bridge.started", "bridge started", log.String("tun_name", b.tunName), log.String("egress", egress), log.String("mode", "platform"))
 	return nil
 }
 
@@ -339,7 +339,7 @@ func (b *backendLinux) batchReadLoop() {
 			if E.IsClosed(err) {
 				return
 			}
-			b.logger.Debug(E.Cause(err, "bridge tun read"))
+			b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "read"))
 			continue
 		}
 		if n == 0 || len(returnPaths) == 0 {
@@ -393,7 +393,7 @@ func (b *backendLinux) syncEgress() {
 		for _, family := range activeBridgeFamilies(b.inet6Port) {
 			blackholeBridgeDefault(b.routeTable, family)
 		}
-		b.logger.Debug("pinned egress ", b.boundInterface, " absent, dropping forwarded traffic")
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", b.boundInterface), log.Bool("available", false))
 		return
 	}
 	for _, family := range activeBridgeFamilies(b.inet6Port) {
@@ -457,7 +457,7 @@ func (b *backendLinux) updateClampLocked() {
 	}
 	err := setupBridgeClamp(b.nftTableName, b.tunName, b.inet4Port, b.inet6Port, mtu)
 	if err != nil {
-		b.logger.Debug(E.Cause(err, "update bridge MSS clamp"))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "mss_clamp"))
 		return
 	}
 	b.clampMTU = mtu

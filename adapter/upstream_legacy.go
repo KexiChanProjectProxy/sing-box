@@ -6,7 +6,6 @@ import (
 
 	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -203,7 +202,7 @@ func (w *legacyRouteHandlerWrapper) NewPacketConnection(ctx context.Context, con
 
 // Deprecated: Use ConnectionRouterEx instead.
 func (w *legacyRouteHandlerWrapper) NewError(ctx context.Context, err error) {
-	w.logger.ErrorEventContext(ctx, "adapter.message", F.ToString(err))
+	w.logger.ErrorEventContext(ctx, "adapter.error", "connection error", log.Err(err))
 
 }
 
@@ -241,6 +240,6 @@ func (w *legacyRouteContextHandlerWrapper) NewPacketConnection(ctx context.Conte
 
 // Deprecated: Use ConnectionRouterEx instead.
 func (w *legacyRouteContextHandlerWrapper) NewError(ctx context.Context, err error) {
-	w.logger.ErrorEventContext(ctx, "adapter.message", F.ToString(err))
+	w.logger.ErrorEventContext(ctx, "adapter.error", "connection error", log.Err(err))
 
 }

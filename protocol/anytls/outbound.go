@@ -5,8 +5,6 @@ import (
 	"net"
 	"os"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -41,10 +39,10 @@ type Outbound struct {
 	client         *anytls.Client
 	sessionClient  *session.Client
 	uotClient      *uot.Client
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.AnyTLSOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSOutboundOptions) (adapter.Outbound, error) {
 	outbound := &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeAnyTLS, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.DialerOptions),
 		ctx:     ctx,
@@ -152,10 +150,10 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	metadata.Destination = destination
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 		return h.createProxy(ctx, destination)
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound UoT packet connection to ", destination)
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 		return h.uotClient.DialContext(ctx, network, destination)
 	}
 	return nil, os.ErrInvalid
@@ -165,7 +163,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+	adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 	return h.uotClient.ListenPacket(ctx, destination)
 }

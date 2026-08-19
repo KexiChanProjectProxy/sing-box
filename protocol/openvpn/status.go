@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	ovpn "github.com/sagernet/sing-openvpn"
 )
 
@@ -103,12 +104,12 @@ func (c *ClientEndpoint) watchChallenges() {
 func (c *ClientEndpoint) logChallenge(challenge *ovpn.Challenge) {
 	switch challenge.Kind {
 	case ovpn.ChallengeCredentials:
-		c.logger.Info("waiting for credentials")
+		c.logger.InfoEvent("openvpn.auth", "waiting for credentials")
 	case ovpn.ChallengeSecret:
-		c.logger.Info("waiting for challenge response: ", challenge.Message)
+		c.logger.InfoEvent("openvpn.auth", "waiting for challenge response", log.String("detail", challenge.Message))
 	case ovpn.ChallengeMessage:
-		c.logger.Info("authentication message: ", challenge.Message)
+		c.logger.InfoEvent("openvpn.auth", "authentication message", log.String("detail", challenge.Message))
 	case ovpn.ChallengeOpenURL:
-		c.logger.Info("waiting for authentication: ", challenge.URL)
+		c.logger.InfoEvent("openvpn.auth", "waiting for authentication", log.String("path", challenge.URL))
 	}
 }

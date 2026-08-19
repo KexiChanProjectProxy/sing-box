@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -59,14 +58,14 @@ func (h *Redirect) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 	destination, err := redir.GetOriginalDestination(conn)
 	if err != nil {
 		conn.Close()
-		h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString("process connection from ", conn.RemoteAddr(), ": get redirect destination: ", err))
+		adapter.LogConnectionError(h.logger, ctx, err, M.SocksaddrFromNet(conn.RemoteAddr()))
 
 		return
 	}
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	metadata.Destination = M.SocksaddrFromNetIP(destination)
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }

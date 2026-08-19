@@ -7,7 +7,7 @@ import "github.com/sagernet/sing-box/log"
 func main() {
 	err := generateCompletions()
 	if err != nil {
-		log.Fatal(err)
+		log.FatalEvent("cli.error", err.Error(), log.Err(err))
 	}
 }
 

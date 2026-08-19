@@ -52,8 +52,7 @@ func (e *endpointBase) newConnection(ctx context.Context, endpoint adapter.Endpo
 		destination.Addr = loopbackAddressFor(destination.Addr)
 	}
 	metadata.Destination = destination
-	e.logger.InfoContext(ctx, "inbound connection from ", source)
-	e.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	adapter.LogInboundConnection(e.logger, ctx, metadata)
 	e.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -68,8 +67,7 @@ func (e *endpointBase) newPacketConnection(ctx context.Context, endpoint adapter
 		conn = bufio.NewNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, destination)
 	}
 	metadata.Destination = destination
-	e.logger.InfoContext(ctx, "inbound packet connection from ", source)
-	e.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+	adapter.LogInboundPacket(e.logger, ctx, metadata)
 	e.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -81,7 +79,7 @@ func (e *endpointBase) newDNSPacket(ctx context.Context, endpoint adapter.Endpoi
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Protocol = C.ProtocolDNS
-	e.logger.InfoContext(ctx, "inbound DNS packet from ", source)
+	e.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", source), log.String("network", "udp"))
 	e.router.HijackDNSPacket(ctx, payload, writer, metadata)
 }
 
@@ -288,10 +286,10 @@ func configurationFromClientEvent(event ovpn.TunnelConfigurationEvent, logger lo
 		ignoredOptions = append(ignoredOptions, "dhcp-option "+strings.TrimSpace(dhcpOption))
 	}
 	if len(ignoredOptions) > 0 && logger != nil {
-		logger.DebugEvent("protocol.openvpn.message", "ignored pushed options", log.String("options", strings.Join(ignoredOptions, ", ")))
+		logger.DebugEvent("openvpn.options.ignored", "ignored pushed options", log.String("detail", strings.Join(ignoredOptions, ", ")))
 	}
 	if len(notApplicableOptions) > 0 && logger != nil {
-		logger.DebugEvent("protocol.openvpn.message", "pushed options are not applicable", log.String("options", strings.Join(notApplicableOptions, ", ")))
+		logger.DebugEvent("openvpn.options.skipped", "pushed options are not applicable", log.String("detail", strings.Join(notApplicableOptions, ", ")))
 	}
 	return ovpntransport.Configuration{
 		MTU:            mtu,

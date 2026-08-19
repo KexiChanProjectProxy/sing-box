@@ -120,7 +120,7 @@ func (o *Outbound) DialContext(ctx context.Context, network string, destination 
 	if err != nil {
 		return nil, err
 	}
-	o.logger.InfoEventContext(ctx, "protocol.message", "outbound connection to "+destination.String())
+	adapter.LogOutboundConnection(o.logger, ctx, destination)
 	return session.DialContext(ctx, destination)
 }
 

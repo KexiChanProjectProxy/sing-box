@@ -14,7 +14,6 @@ import (
 	"github.com/sagernet/sing-box/route"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -141,7 +140,7 @@ func (s *Selector) SelectOutbound(tag string) bool {
 		if cacheFile != nil {
 			err := cacheFile.StoreSelected(s.Tag(), tag)
 			if err != nil {
-				s.logger.ErrorEvent("protocol.message", F.ToString("store selected: ", err))
+				s.logger.ErrorEvent("selector.error", "store selected", log.Err(err))
 
 			}
 		}

@@ -252,7 +252,7 @@ func serviceUninstall() error {
 	service, err := manager.OpenService(serviceName)
 	if err != nil {
 		if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
-			log.InfoEvent("cli.message", "service not installed")
+			log.InfoEvent("cli.service", "service not installed")
 			return nil
 		}
 		return E.Cause(err, "open service")
@@ -260,7 +260,7 @@ func serviceUninstall() error {
 	defer service.Close()
 	err = stopServiceAndWait(service)
 	if err != nil {
-		log.WarnEvent("cli.message", "stop service", log.Err(err))
+		log.WarnEvent("cli.error", "stop service", log.Err(err))
 	}
 	err = service.Delete()
 	if err != nil {
@@ -268,7 +268,7 @@ func serviceUninstall() error {
 	}
 	err = eventlog.Remove(serviceName)
 	if err != nil {
-		log.WarnEvent("cli.message", "remove event log source", log.Err(err))
+		log.WarnEvent("cli.error", "remove event log source", log.Err(err))
 	}
 	return nil
 }
@@ -296,7 +296,7 @@ func serviceStop() error {
 	service, err := manager.OpenService(serviceName)
 	if err != nil {
 		if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
-			log.InfoEvent("cli.message", "service not installed")
+			log.InfoEvent("cli.service", "service not installed")
 			return nil
 		}
 		return E.Cause(err, "open service")

@@ -6,6 +6,6 @@ import "github.com/sagernet/sing-box/log"
 
 func main() {
 	if err := mainCommand.Execute(); err != nil {
-		log.Fatal(err)
+		log.FatalEvent("cli.error", err.Error(), log.Err(err))
 	}
 }

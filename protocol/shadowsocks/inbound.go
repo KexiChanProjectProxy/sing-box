@@ -5,7 +5,6 @@ import (
 	"net"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -112,13 +111,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.service.NewConnection(ctx, conn, adapter.UpstreamMetadata(metadata))
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
-		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
-
-		} else {
-			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
-
-		}
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 	}
 }
 
@@ -126,13 +119,13 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 func (h *Inbound) NewPacket(buffer *buf.Buffer, source M.Socksaddr) {
 	err := h.service.NewPacket(h.ctx, &stubPacketConn{h.listener.PacketWriter()}, buffer, M.Metadata{Source: source})
 	if err != nil {
-		h.logger.ErrorEvent("protocol.message", F.ToString(E.Cause(err, "process packet from ", source)))
+		adapter.LogConnectionError(h.logger, h.ctx, err, source)
 
 	}
 }
 
 func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
@@ -141,9 +134,7 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 
 func (h *Inbound) newPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
 	ctx = log.ContextWithNewID(ctx)
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", metadata.Source))
-
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
+	adapter.LogInboundPacket(h.logger, ctx, metadata)
 
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
@@ -187,11 +178,5 @@ func (h *Inbound) NewError(ctx context.Context, err error) {
 // Deprecated: remove
 func NewError(logger log.StructuredLogger, ctx context.Context, err error) {
 	common.Close(err)
-	if E.IsClosedOrCanceled(err) {
-		logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
-
-		return
-	}
-	logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
-
+	adapter.LogConnectionError(logger, ctx, err, M.Socksaddr{})
 }

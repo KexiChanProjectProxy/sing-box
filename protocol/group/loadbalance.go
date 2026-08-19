@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/interrupt"
@@ -183,7 +181,7 @@ func (l *LoadBalance) DialContext(ctx context.Context, network string, destinati
 	}
 	conn, err := candidate.Outbound.DialContext(ctx, network, destination)
 	if err != nil {
-		l.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
 
 		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
 		return nil, err
@@ -205,7 +203,7 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	}
 	conn, err := candidate.Outbound.ListenPacket(ctx, destination)
 	if err != nil {
-		l.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(err))
+		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
 
 		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
 		return nil, err

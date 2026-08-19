@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -108,16 +107,11 @@ func (i *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		destination.Port = i.overrideDestination.Port
 	}
 	metadata.Destination = destination
-	if i.overrideOption != 0 {
-		i.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
-
-	}
+	adapter.LogInboundConnection(i.logger, ctx, metadata)
 	i.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	i.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", source))
-
 	var metadata adapter.InboundContext
 	metadata.Inbound = i.Tag()
 	metadata.InboundType = i.Type()
@@ -135,9 +129,8 @@ func (i *Inbound) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 		destination.Port = i.overrideDestination.Port
 	default:
 	}
-	i.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", destination))
-
 	metadata.Destination = destination
+	adapter.LogInboundPacket(i.logger, ctx, metadata)
 	if i.overrideOption != 0 {
 		conn = bufio.NewDestinationNATPacketConn(bufio.NewNetPacketConn(conn), i.listener.UDPAddr(), destination)
 	}

@@ -6,7 +6,6 @@ import (
 	"net/netip"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -32,12 +31,12 @@ type TProxy struct {
 	inbound.Adapter
 	ctx      context.Context
 	router   adapter.Router
-	logger   log.ContextLogger
+	logger   log.StructuredLogger
 	listener *listener.Listener
 	udpNat   *tun.UDPNat
 }
 
-func NewTProxy(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TProxyInboundOptions) (adapter.Inbound, error) {
+func NewTProxy(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.TProxyInboundOptions) (adapter.Inbound, error) {
 	tproxy := &TProxy{
 		Adapter: inbound.NewAdapter(C.TypeTProxy, tag),
 		ctx:     ctx,
@@ -100,29 +99,26 @@ func (t *TProxy) NewConnection(ctx context.Context, conn net.Conn, metadata adap
 	metadata.Inbound = t.Tag()
 	metadata.InboundType = t.Type()
 	metadata.Destination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
-	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+	adapter.LogInboundConnection(t.logger, ctx, metadata)
 
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (t *TProxy) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", source))
-
-	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", destination))
-
 	var metadata adapter.InboundContext
 	metadata.Inbound = t.Tag()
 	metadata.InboundType = t.Type()
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.OriginDestination = t.listener.UDPAddr()
+	adapter.LogInboundPacket(t.logger, ctx, metadata)
 	t.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (t *TProxy) NewPacket(buffer *buf.Buffer, oob []byte, source M.Socksaddr) {
 	destination, err := redir.GetOriginalDestinationFromOOB(oob)
 	if err != nil {
-		t.logger.WarnEvent("protocol.message", F.ToString("process packet from ", source, ": get tproxy destination: ", err))
+		adapter.LogConnectionError(t.logger, t.ctx, err, source)
 
 		return
 	}

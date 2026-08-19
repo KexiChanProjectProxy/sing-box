@@ -116,7 +116,7 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 		}
 		err = E.Cause(err, "open connection to ", remoteString, dialerString)
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", log.Err(err))
+		m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", connectionErrorFields(err, remoteString, this)...)
 		return
 	}
 	err = N.ReportConnHandshakeSuccess(conn, remoteConn)
@@ -124,7 +124,7 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 		err = E.Cause(err, "report handshake success")
 		remoteConn.Close()
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", log.Err(err))
+		m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", connectionErrorFields(err, connectionDestination(metadata), this)...)
 		return
 	}
 	if metadata.TLSFragment || metadata.TLSRecordFragment {
@@ -136,7 +136,7 @@ func (m *ConnectionManager) NewConnection(ctx context.Context, this N.Dialer, co
 			spoofErr = E.Cause(spoofErr, "tls_spoof setup")
 			remoteConn.Close()
 			N.CloseOnHandshakeFailure(conn, onClose, spoofErr)
-			m.logger.ErrorEventContext(ctx, "connection.error", "tls_spoof setup failed", log.Err(spoofErr))
+			m.logger.ErrorEventContext(ctx, "connection.error", "tls_spoof setup failed", connectionErrorFields(spoofErr, connectionDestination(metadata), this)...)
 			return
 		}
 		remoteConn = spoofConn
@@ -191,7 +191,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			err = E.Cause(err, "open packet connection to ", remoteString, dialerString)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", log.Err(err))
+			m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", connectionErrorFields(err, remoteString, this)...)
 			return
 		}
 		remotePacketConn = bufio.NewUnbindPacketConn(remoteConn)
@@ -214,7 +214,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 			}
 			err = E.Cause(err, "listen packet connection using ", dialerString)
 			N.CloseOnHandshakeFailure(conn, onClose, err)
-			m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", log.Err(err))
+			m.logger.ErrorEventContext(ctx, "connection.error", "open connection failed", connectionErrorFields(err, connectionDestination(metadata), this)...)
 			return
 		}
 	}
@@ -222,7 +222,7 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 	if err != nil {
 		conn.Close()
 		remotePacketConn.Close()
-		m.logger.ErrorEventContext(ctx, "connection.error", "report packet handshake success failed", log.Err(err))
+		m.logger.ErrorEventContext(ctx, "connection.error", "report packet handshake success failed", connectionErrorFields(err, connectionDestination(metadata), this)...)
 		return
 	}
 	if destinationAddress.IsValid() {
@@ -440,4 +440,22 @@ func (c *trackedPacketConn) ReaderReplaceable() bool {
 
 func (c *trackedPacketConn) WriterReplaceable() bool {
 	return true
+}
+
+func connectionDestination(metadata adapter.InboundContext) string {
+	if len(metadata.DestinationAddresses) > 0 {
+		return "[" + strings.Join(common.Map(metadata.DestinationAddresses, netip.Addr.String), ",") + "]"
+	}
+	return metadata.Destination.String()
+}
+
+func connectionErrorFields(err error, destination string, this N.Dialer) []log.Field {
+	fields := []log.Field{log.Err(err)}
+	if destination != "" {
+		fields = append(fields, log.String("destination", destination))
+	}
+	if outbound, isOutbound := this.(adapter.Outbound); isOutbound {
+		fields = append(fields, log.String("outbound", outbound.Tag()), log.String("outbound_type", outbound.Type()))
+	}
+	return fields
 }

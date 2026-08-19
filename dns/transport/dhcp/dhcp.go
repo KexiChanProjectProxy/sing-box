@@ -63,7 +63,7 @@ type Transport struct {
 	optional          bool
 }
 
-func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.DHCPDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, options option.DHCPDNSServerOptions) (adapter.DNSTransport, error) {
 	transportDialer, err := dns.NewLocalDialer(ctx, options.LocalDNSServerOptions)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, opt
 	}, nil
 }
 
-func NewRawTransport(transportAdapter dns.TransportAdapter, ctx context.Context, dialer N.Dialer, logger log.ContextLogger) *Transport {
+func NewRawTransport(transportAdapter dns.TransportAdapter, ctx context.Context, dialer N.Dialer, logger log.StructuredLogger) *Transport {
 	return &Transport{
 		TransportAdapter:  transportAdapter,
 		ctx:               ctx,
@@ -106,9 +106,9 @@ func (t *Transport) Start(stage adapter.StartStage) error {
 		err := t.fetch()
 		if err != nil {
 			if errors.Is(err, errInterfaceIsCellular) && t.optional {
-				t.logger.Debug(E.Cause(errInterfaceIsCellular, "dhcp: fetch DNS servers"))
+				t.logger.DebugEvent("dns.dhcp.error", "fetch DNS servers", log.Err(errInterfaceIsCellular))
 			} else {
-				t.logger.Error(E.Cause(err, "dhcp: fetch DNS servers"))
+				t.logger.ErrorEvent("dns.dhcp.error", "fetch DNS servers", log.Err(err))
 			}
 		}
 	}()
@@ -240,9 +240,9 @@ func (t *Transport) startRefresh() {
 		err := t.updateServers()
 		if err != nil {
 			if errors.Is(err, errInterfaceIsCellular) && t.optional {
-				t.logger.Debug(E.Cause(err, "dhcp: refresh DNS servers"))
+				t.logger.DebugEvent("dns.dhcp.error", "refresh DNS servers", log.Err(err))
 			} else {
-				t.logger.Error(E.Cause(err, "dhcp: refresh DNS servers"))
+				t.logger.ErrorEvent("dns.dhcp.error", "refresh DNS servers", log.Err(err))
 			}
 		}
 	}()
@@ -281,7 +281,7 @@ func (t *Transport) updateServers() error {
 		t.updatedAt = time.Now()
 		return E.Cause(err, "prepare interface")
 	}
-	t.logger.Info("dhcp: query DNS servers on ", iface.Name)
+	t.logger.InfoEvent("dns.dhcp.query", "query DNS servers", log.String("interface", iface.Name))
 	fetchCtx, cancel := context.WithTimeout(t.ctx, C.DHCPTimeout)
 	err = t.fetchServers0(fetchCtx, iface)
 	cancel()
@@ -304,9 +304,9 @@ func (t *Transport) interfaceUpdated(defaultInterface *control.Interface, flags 
 	t.transportLock.Unlock()
 	if err != nil {
 		if errors.Is(err, errInterfaceIsCellular) && t.optional {
-			t.logger.Debug(E.Cause(errInterfaceIsCellular, "dhcp: update DNS servers"))
+			t.logger.DebugEvent("dns.dhcp.error", "update DNS servers", log.Err(errInterfaceIsCellular))
 		} else {
-			t.logger.Error("dhcp: update DNS servers: ", err)
+			t.logger.ErrorEvent("dns.dhcp.error", "update DNS servers", log.Err(err))
 		}
 	}
 }
@@ -409,7 +409,7 @@ func (t *Transport) recreateServers(iface *control.Interface, dhcpPacket *dhcpv4
 		return M.SocksaddrFrom(M.AddrFromIP(it), 53)
 	})
 	if len(serverAddrs) > 0 && !slices.Equal(t.servers, serverAddrs) {
-		t.logger.Info("dhcp: updated DNS servers from ", iface.Name, ": [", strings.Join(common.Map(serverAddrs, M.Socksaddr.String), ","), "], search: [", strings.Join(t.search, ","), "]")
+		t.logger.InfoEvent("dns.dhcp.updated", "updated DNS servers", log.String("interface", iface.Name), log.String("servers", strings.Join(common.Map(serverAddrs, M.Socksaddr.String), ",")), log.String("search", strings.Join(t.search, ",")))
 	}
 	if !slices.Equal(t.servers, serverAddrs) || t.serverTransports == nil {
 		t.closeServerTransports()

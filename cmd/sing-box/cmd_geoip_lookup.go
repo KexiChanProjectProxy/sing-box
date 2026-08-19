@@ -18,7 +18,7 @@ var commandGeoipLookup = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := geoipLookup(args[0])
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }

@@ -9,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -62,7 +60,7 @@ func (s *linuxSearcher) FindProcessInfo(ctx context.Context, network string, sou
 	}
 	processPath, err := s.processPathCache.findProcessPath(inode, uid)
 	if err != nil {
-		s.logger.DebugEventContext(ctx, "common.process.message", F.ToString("find process path: ", err))
+		s.logger.DebugEventContext(ctx, "process.lookup.error", "find process path", log.Err(err))
 
 	} else {
 		processInfo.ProcessPath = processPath

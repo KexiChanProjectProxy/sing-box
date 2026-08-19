@@ -11,8 +11,6 @@ import (
 	"net"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/common/dialer"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -88,8 +86,7 @@ func NewRealityServer(ctx context.Context, logger log.StructuredLogger, options 
 	tlsConfig.SessionTicketsDisabled = true
 	tlsConfig.Log = func(format string, v ...any) {
 		if logger != nil {
-			logger.TraceEvent("common.tls.message", F.ToString(fmt.Sprintf(format, v...)))
-
+			logger.TraceEvent("tls.reality.debug", "reality debug", log.String("detail", fmt.Sprintf(format, v...)))
 		}
 	}
 	tlsConfig.Type = N.NetworkTCP

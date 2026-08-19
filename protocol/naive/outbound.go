@@ -19,7 +19,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/uot"
@@ -129,7 +128,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		dnsResolver = func(dnsContext context.Context, request *mDNS.Msg) *mDNS.Msg {
 			response, err := dnsRouter.Exchange(dnsContext, request, outboundDialer.(dialer.ResolveDialer).QueryOptions())
 			if err != nil {
-				logger.ErrorEvent("protocol.message", F.ToString("DNS exchange failed: ", err))
+				logger.ErrorEvent("dns.exchange.error", "exchange failed", log.Err(err))
 
 				return dns.FixedResponseStatus(request, mDNS.RcodeServerFailure)
 			}
@@ -228,7 +227,7 @@ func (h *Outbound) Start(stage adapter.StartStage) error {
 	if err != nil {
 		return err
 	}
-	h.logger.InfoEvent("protocol.message", F.ToString("NaiveProxy started, version: ", h.client.Engine().Version()))
+	h.logger.InfoEvent("naive.started", "NaiveProxy started", log.String("detail", h.client.Engine().Version()))
 
 	return nil
 }
@@ -236,14 +235,14 @@ func (h *Outbound) Start(stage adapter.StartStage) error {
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 		return h.client.DialEarly(ctx, destination)
 	case N.NetworkUDP:
 		if h.uotClient == nil {
 			return nil, E.New("UDP is not supported unless UDP over TCP is enabled")
 		}
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 		return h.uotClient.DialContext(ctx, network, destination)
 	default:

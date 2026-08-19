@@ -8,8 +8,6 @@ import (
 	"os"
 
 	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/quic-go"
 	"github.com/sagernet/quic-go/http3"
 	"github.com/sagernet/sing-box/adapter"
@@ -80,7 +78,7 @@ func (s *Server) acceptLoop() {
 		go func() {
 			hErr := s.streamAcceptLoop(conn)
 			if hErr != nil && !E.IsClosedOrCanceled(hErr) {
-				s.logger.ErrorEventContext(conn.Context(), "transport.message", F.ToString(hErr))
+				s.logger.ErrorEventContext(conn.Context(), "connection.error", "process connection", log.Err(hErr))
 
 			}
 		}()

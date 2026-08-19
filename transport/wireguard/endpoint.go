@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/sagernet/sing-box/common/dialer"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -194,10 +195,10 @@ func (e *Endpoint) Start(resolve bool) error {
 	}
 	logger := &device.Logger{
 		Verbosef: func(format string, args ...any) {
-			e.options.Logger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
+			e.options.Logger.DebugEvent("wireguard.debug", "wireguard debug", log.String("detail", fmt.Sprintf(strings.ToLower(format), args...)))
 		},
 		Errorf: func(format string, args ...any) {
-			e.options.Logger.Error(fmt.Sprintf(strings.ToLower(format), args...))
+			e.options.Logger.ErrorEvent("wireguard.error", "wireguard error", log.String("detail", fmt.Sprintf(strings.ToLower(format), args...)))
 		},
 	}
 	wgDevice := device.NewDevice(e.options.Context, e.returnDevice, bind, logger, e.options.Workers)

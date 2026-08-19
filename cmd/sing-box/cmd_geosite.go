@@ -20,7 +20,7 @@ var commandGeoSite = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		err := geositePreRun()
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }

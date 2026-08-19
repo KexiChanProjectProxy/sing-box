@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing-box/log"
@@ -95,7 +93,7 @@ func (s *Server) invalidRequest(writer http.ResponseWriter, request *http.Reques
 	if statusCode > 0 {
 		writer.WriteHeader(statusCode)
 	}
-	s.logger.ErrorEventContext(request.Context(), "transport.message", F.ToString(E.Cause(err, "process connection from ", request.RemoteAddr)))
+	s.logger.ErrorEventContext(request.Context(), "connection.error", "process connection", log.Err(err), log.String("source", request.RemoteAddr))
 
 }
 

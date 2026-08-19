@@ -31,7 +31,7 @@ type Service struct {
 	boxService.Adapter
 	ctx            context.Context
 	cancel         context.CancelFunc
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 	options        option.APIServiceOptions
 	listener       *listener.Listener
 	tlsConfig      tls.ServerConfig
@@ -41,7 +41,7 @@ type Service struct {
 	dashboard      *dashboard
 }
 
-func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.APIServiceOptions) (adapter.Service, error) {
+func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.APIServiceOptions) (adapter.Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &Service{
 		Adapter: boxService.NewAdapter(C.TypeAPI, tag),
@@ -111,7 +111,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	go func() {
 		serveErr := s.httpServer.Serve(tcpListener)
 		if serveErr != nil && s.ctx.Err() == nil {
-			s.logger.Error("serve error: ", serveErr)
+			s.logger.ErrorEvent("listener.error", "listener error", log.Err(serveErr))
 		}
 	}()
 	return nil

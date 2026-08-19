@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	M "github.com/sagernet/sing/common/metadata"
@@ -115,7 +116,7 @@ func (w *systemDevice) Start() error {
 		tunInterface.Close()
 		return err
 	}
-	w.options.Logger.Info("started at ", w.options.Name)
+	w.options.Logger.InfoEvent("tun.started", "server started", log.String("name", w.options.Name))
 	w.device = tunInterface
 	batchTUN, isBatchTUN := tunInterface.(tun.LinuxTUN)
 	if isBatchTUN && batchTUN.BatchSize() > 1 {

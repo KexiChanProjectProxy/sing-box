@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	F "github.com/sagernet/sing/common/format"
 	"net"
 	"os"
 
@@ -60,7 +59,7 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+	adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 	return h.client.DialContext(ctx, network, destination)
 }
@@ -101,7 +100,7 @@ func (h *DynamicOutbound) DialContext(ctx context.Context, network string, desti
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+	adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 	password, err := dynamicHTTPPassword(metadata)
 	if err != nil {

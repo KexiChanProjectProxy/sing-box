@@ -141,7 +141,7 @@ func (d *Service) Start(stage adapter.StartStage) error {
 		}
 
 		server := derpserver.New(config.PrivateKey, func(format string, args ...any) {
-			d.logger.DebugEvent("service.derp.message", fmt.Sprintf(format, args...))
+			d.logger.DebugEvent("derp.log", "derp log", log.String("detail", fmt.Sprintf(format, args...)))
 		})
 
 		if len(d.verifyClientURL) > 0 {
@@ -302,7 +302,7 @@ func (d *Service) startMeshWithHost(derpServer *derpserver.Server, server *optio
 		}
 	}
 	logf := func(format string, args ...any) {
-		d.logger.DebugEvent("service.derp.mesh.message", fmt.Sprintf(format, args...), log.String("host", hostname))
+		d.logger.DebugEvent("derp.mesh.log", "derp mesh log", log.String("detail", fmt.Sprintf(format, args...)), log.String("host", hostname))
 	}
 	var meshHost string
 	if server.ServerPort == 0 || server.ServerPort == 443 {

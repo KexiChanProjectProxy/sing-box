@@ -18,6 +18,7 @@ import (
 
 	gliderssh "github.com/sagernet/gliderssh"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/tailscale/sessionrecording"
 	"github.com/sagernet/tailscale/tailcfg"
@@ -92,10 +93,10 @@ func (s *Server) startNewRecording(sessionCtx context.Context, cancel context.Ca
 			s.notifyControl(uploadCtx, nodeKey, eventType, attempts, onFailure.NotifyURL, connInfo, localUser)
 		}
 		if onFailure != nil && onFailure.RejectSessionWithMessage != "" {
-			s.logger.Error("recording: error starting recording (rejecting session): ", err)
+			s.logger.ErrorEvent("tailssh.error", "error starting recording", log.Err(err))
 			return nil, &recordingRejectedError{message: onFailure.RejectSessionWithMessage, cause: err}
 		}
-		s.logger.Warn("recording: error starting recording (failing open): ", err)
+		s.logger.WarnEvent("tailssh.error", "error starting recording", log.Err(err))
 		return nil, nil
 	}
 	rec.out = out
@@ -105,7 +106,7 @@ func (s *Server) startNewRecording(sessionCtx context.Context, cancel context.Ca
 		if uploadErr == nil {
 			select {
 			case <-sessionCtx.Done():
-				s.logger.Debug("recording: finished uploading recording")
+				s.logger.DebugEvent("tailssh.error", "finished uploading recording", log.String("op", "upload"))
 				return
 			default:
 				uploadErr = E.New("recording upload ended before the SSH session")
@@ -121,12 +122,12 @@ func (s *Server) startNewRecording(sessionCtx context.Context, cancel context.Ca
 			s.notifyControl(uploadCtx, nodeKey, eventType, attempts, onFailure.NotifyURL, connInfo, localUser)
 		}
 		if onFailure != nil && onFailure.TerminateSessionWithMessage != "" {
-			s.logger.Error("recording: error uploading recording (closing session): ", uploadErr)
+			s.logger.ErrorEvent("tailssh.error", "error uploading recording", log.Err(uploadErr))
 			io.WriteString(session.Stderr(), onFailure.TerminateSessionWithMessage+"\r\n")
 			cancel()
 			return
 		}
-		s.logger.Warn("recording: error uploading recording (failing open): ", uploadErr)
+		s.logger.WarnEvent("tailssh.error", "error uploading recording", log.Err(uploadErr))
 	}()
 
 	castHeader := sessionrecording.CastHeader{
@@ -177,22 +178,22 @@ func (s *Server) notifyControl(ctx context.Context, nodeKey key.NodePublic, even
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
-		s.logger.Warn("notifyControl: marshal request: ", err)
+		s.logger.WarnEvent("tailssh.error", "notify control", log.Err(err), log.String("op", "marshal"))
 		return
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, notifyURL, bytes.NewReader(body))
 	if err != nil {
-		s.logger.Warn("notifyControl: create request: ", err)
+		s.logger.WarnEvent("tailssh.error", "notify control", log.Err(err), log.String("op", "create"))
 		return
 	}
 	response, err := s.tsnetServer.ExportLocalBackend().DoNoiseRequest(httpRequest)
 	if err != nil {
-		s.logger.Warn("notifyControl: send noise request: ", err)
+		s.logger.WarnEvent("tailssh.error", "notify control", log.Err(err), log.String("op", "send"))
 		return
 	}
 	response.Body.Close()
 	if response.StatusCode != http.StatusCreated {
-		s.logger.Warn("notifyControl: noise request returned status ", response.Status)
+		s.logger.WarnEvent("tailssh.error", "notify control", log.String("reason", response.Status), log.String("op", "send"))
 	}
 }
 

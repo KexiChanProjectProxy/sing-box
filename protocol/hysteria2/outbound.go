@@ -9,8 +9,6 @@ import (
 	"os"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -186,7 +184,7 @@ func outboundTLSOptions(options option.Hysteria2OutboundOptions) (string, option
 func (h *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 		return h.client.DialConn(ctx, destination)
 	case N.NetworkUDP:
@@ -201,7 +199,7 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 }
 
 func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+	adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 	return h.client.ListenPacket(ctx)
 }

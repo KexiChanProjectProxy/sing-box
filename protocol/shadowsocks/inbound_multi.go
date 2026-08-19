@@ -21,7 +21,6 @@ import (
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
@@ -141,13 +140,7 @@ func (h *MultiInbound) NewConnection(ctx context.Context, conn net.Conn, metadat
 	err := h.service.NewConnection(ctx, conn, adapter.UpstreamMetadata(metadata))
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
-		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
-
-		} else {
-			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
-
-		}
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 	}
 }
 
@@ -155,7 +148,7 @@ func (h *MultiInbound) NewConnection(ctx context.Context, conn net.Conn, metadat
 func (h *MultiInbound) NewPacket(buffer *buf.Buffer, source M.Socksaddr) {
 	err := h.service.NewPacket(h.ctx, &stubPacketConn{h.listener.PacketWriter()}, buffer, M.Metadata{Source: source})
 	if err != nil {
-		h.logger.ErrorEvent("protocol.message", F.ToString(E.Cause(err, "process packet from ", source)))
+		adapter.LogConnectionError(h.logger, h.ctx, err, source)
 
 	}
 }
@@ -166,12 +159,10 @@ func (h *MultiInbound) newConnection(ctx context.Context, conn net.Conn, metadat
 		return os.ErrInvalid
 	}
 	user := h.users[userIndex].Name
-	if user == "" {
-		user = F.ToString(userIndex)
-	} else {
+	if user != "" {
 		metadata.User = user
 	}
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound connection to ", metadata.Destination))
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
@@ -190,15 +181,11 @@ func (h *MultiInbound) newPacketConnection(ctx context.Context, conn N.PacketCon
 		return os.ErrInvalid
 	}
 	user := h.users[userIndex].Name
-	if user == "" {
-		user = F.ToString(userIndex)
-	} else {
+	if user != "" {
 		metadata.User = user
 	}
 	ctx = log.ContextWithNewID(ctx)
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound packet connection from ", metadata.Source))
-
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound packet connection to ", metadata.Destination))
+	adapter.LogInboundPacket(h.logger, ctx, metadata)
 
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()

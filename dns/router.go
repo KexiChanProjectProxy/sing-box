@@ -192,7 +192,7 @@ func (r *Router) buildRules(startRules bool) ([]adapter.DNSRule, bool, dnsRuleMo
 			return nil, false, dnsRuleModeFlags{}, err
 		}
 		for _, warning := range validationWarnings {
-			r.logger.Warn(warning)
+			r.logger.WarnEvent("dns.validation.warning", "legacy DNS mode validation", log.String("reason", warning))
 		}
 	}
 	err = validateEvaluateFakeIPRules(r.rawRules, r.transport)
@@ -518,7 +518,7 @@ func (r *Router) settleDNSFutures(ctx context.Context, message *mDNS.Msg, state 
 		}
 		future.settled = true
 		if future.err != nil && !future.terminal {
-			r.logger.ErrorContext(ctx, E.Cause(future.err, "exchange failed for ", FormatQuestion(message.Question[0].String())))
+			r.logger.ErrorEventContext(ctx, "dns.exchange.error", "exchange failed", log.Err(future.err), log.String("domain", FqdnToDomain(message.Question[0].Name)), log.String("question", FormatQuestion(message.Question[0].String())))
 		}
 		if future.tag == "" {
 			continue
@@ -587,7 +587,7 @@ func (r *Router) walkDNSRules(ctx context.Context, rules []adapter.DNSRule, mess
 					}
 				}
 				if len(pendingFutures) > 0 {
-					r.logger.DebugContext(ctx, "armed[", state.ruleIndex, "] ", currentRule, " => ", currentRule.Action())
+					r.logger.DebugEventContext(ctx, "dns.rule.armed", "armed rule", log.Int("rule_index", state.ruleIndex), log.String("rule", currentRule.String()), log.String("action", currentRule.Action().String()))
 				}
 				state.armedRules = append(state.armedRules, &dnsArmedRule{
 					ruleIndex:       state.ruleIndex,
@@ -643,7 +643,7 @@ func (r *Router) walkDNSRules(ctx context.Context, rules []adapter.DNSRule, mess
 		case *R.RuleActionEvaluate:
 			transport, loaded := r.transport.Transport(action.Server)
 			if !loaded {
-				r.logger.ErrorContext(ctx, "transport not found: ", action.Server)
+				r.logger.ErrorEventContext(ctx, "dns.transport.not_found", "transport not found", log.String("server", action.Server))
 				if action.Tag == "" {
 					state.anonymousFuture = nil
 				}
@@ -852,7 +852,7 @@ func (r *Router) sweepArmedDNSRules(ctx context.Context, message *mDNS.Msg, stat
 			transport, status := r.resolveDNSRoute(action.Server, action.RuleActionDNSRouteOptions, allowFakeIP, &queryOptions)
 			switch status {
 			case dnsRouteStatusMissing:
-				r.logger.ErrorContext(ctx, "transport not found: ", action.Server)
+				r.logger.ErrorEventContext(ctx, "dns.transport.not_found", "transport not found", log.String("server", action.Server))
 				continue
 			case dnsRouteStatusSkipped:
 				continue
@@ -1036,7 +1036,7 @@ type dnsExchangeContext struct {
 
 func (r *Router) prepareExchange(ctx context.Context, message *mDNS.Msg) (*dnsExchangeContext, *mDNS.Msg, error) {
 	if len(message.Question) != 1 {
-		r.logger.WarnContext(ctx, "bad question size: ", len(message.Question))
+		r.logger.WarnEventContext(ctx, "dns.query.invalid", "bad question size", log.Int("question_size", len(message.Question)))
 		return nil, &mDNS.Msg{
 			MsgHdr: mDNS.MsgHdr{
 				Id:       message.Id,
@@ -1054,7 +1054,7 @@ func (r *Router) prepareExchange(ctx context.Context, message *mDNS.Msg) (*dnsEx
 	rules := r.rules
 	legacyDNSMode := r.legacyDNSMode
 	r.rulesAccess.RUnlock()
-	r.logger.DebugContext(ctx, "exchange ", FormatQuestion(message.Question[0].String()))
+	r.logger.DebugEventContext(ctx, "dns.exchange", "exchange", log.String("domain", FqdnToDomain(message.Question[0].Name)), log.String("question", FormatQuestion(message.Question[0].String())))
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Destination = M.Socksaddr{}
 	metadata.QueryType = message.Question[0].Qtype
@@ -1128,14 +1128,14 @@ func (r *Router) exchangeLegacy(ctx context.Context, exchangeCtx *dnsExchangeCon
 		if err != nil {
 			if errors.Is(err, ErrResponseRejectedCached) {
 				rejected = true
-				r.logger.DebugContext(ctx, E.Cause(err, "response rejected for ", FormatQuestion(message.Question[0].String())), " (cached)")
+				r.logger.DebugEventContext(ctx, "dns.response.rejected", "response rejected", log.String("domain", FqdnToDomain(message.Question[0].Name)), log.Bool("cached", true), log.Err(err))
 			} else if errors.Is(err, ErrResponseRejected) {
 				rejected = true
-				r.logger.DebugContext(ctx, E.Cause(err, "response rejected for ", FormatQuestion(message.Question[0].String())))
+				r.logger.DebugEventContext(ctx, "dns.response.rejected", "response rejected", log.String("domain", FqdnToDomain(message.Question[0].Name)), log.Bool("cached", false), log.Err(err))
 			} else if len(message.Question) > 0 {
-				r.logger.ErrorContext(ctx, E.Cause(err, "exchange failed for ", FormatQuestion(message.Question[0].String())))
+				r.logger.ErrorEventContext(ctx, "dns.exchange.error", "exchange failed", log.Err(err), log.String("domain", FqdnToDomain(message.Question[0].Name)), log.String("question", FormatQuestion(message.Question[0].String())))
 			} else {
-				r.logger.ErrorContext(ctx, E.Cause(err, "exchange failed for <empty query>"))
+				r.logger.ErrorEventContext(ctx, "dns.exchange.error", "exchange failed", log.Err(err))
 			}
 		}
 		if responseCheck != nil && rejected {
@@ -1223,22 +1223,22 @@ func (r *Router) Lookup(ctx context.Context, domain string, options adapter.DNSQ
 		}
 		if err != nil {
 			if errors.Is(err, ErrResponseRejectedCached) {
-				r.logger.DebugContext(ctx, "response rejected for ", domain, " (cached)")
+				r.logger.DebugEventContext(ctx, "dns.response.rejected", "response rejected", log.String("domain", domain), log.Bool("cached", true))
 			} else if errors.Is(err, ErrResponseRejected) {
-				r.logger.DebugContext(ctx, "response rejected for ", domain)
+				r.logger.DebugEventContext(ctx, "dns.response.rejected", "response rejected", log.String("domain", domain), log.Bool("cached", false))
 			} else if R.IsRejected(err) {
-				r.logger.DebugContext(ctx, "lookup rejected for ", domain)
+				r.logger.DebugEventContext(ctx, "dns.lookup.rejected", "lookup rejected", log.String("domain", domain))
 			} else if errors.Is(err, ErrNotCached) {
-				r.logger.DebugContext(ctx, "cache-only lookup missed for ", domain)
+				r.logger.DebugEventContext(ctx, "dns.cache.miss", "cache-only lookup missed", log.String("domain", domain))
 			} else {
-				r.logger.ErrorContext(ctx, E.Cause(err, "lookup failed for ", domain))
+				r.logger.ErrorEventContext(ctx, "dns.lookup.error", "lookup failed", log.String("domain", domain), log.Err(err))
 			}
 		}
 		if err != nil {
 			err = E.Cause(err, "lookup ", domain)
 		}
 	}
-	r.logger.DebugContext(ctx, "lookup domain ", domain)
+	r.logger.DebugEventContext(ctx, "dns.lookup", "lookup", log.String("domain", domain))
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Destination = M.Socksaddr{}
 	metadata.Domain = FqdnToDomain(domain)

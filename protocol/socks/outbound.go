@@ -4,8 +4,6 @@ import (
 	"context"
 	"net"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -74,15 +72,15 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	metadata.Destination = destination
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 
 	case N.NetworkUDP:
 		if h.uotClient != nil {
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT connect packet connection to ", destination))
+			adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 			return h.uotClient.DialContext(ctx, network, destination)
 		}
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 	default:
 		return nil, E.Extend(N.ErrUnknownNetwork, network)
@@ -102,7 +100,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
 	if h.uotClient != nil {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound UoT packet connection to ", destination))
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 		return h.uotClient.ListenPacket(ctx, destination)
 	}
@@ -117,7 +115,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 		}
 		return packetConn, nil
 	}
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+	adapter.LogOutboundPacket(h.logger, ctx, destination)
 
 	return h.client.ListenPacket(ctx, destination)
 }

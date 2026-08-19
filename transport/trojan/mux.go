@@ -10,7 +10,6 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/task"
@@ -45,7 +44,7 @@ func HandleMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr,
 func newMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, handler Handler, logger log.StructuredLogger) {
 	err := newMuxConnection0(ctx, conn, source, handler)
 	if err != nil {
-		logger.ErrorEventContext(ctx, "transport.message", F.ToString(E.Cause(err, "process trojan-go multiplex connection")))
+		logger.ErrorEventContext(ctx, "connection.error", "process connection", log.Err(err), log.Addr("source", source))
 
 	}
 }

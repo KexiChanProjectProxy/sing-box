@@ -7,8 +7,6 @@ import (
 	"syscall"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/redir"
 	C "github.com/sagernet/sing-box/constant"
@@ -79,7 +77,7 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.logger.InfoEvent("common.listener.message", F.ToString("tcp server started at ", tcpListener.Addr()))
+	l.logger.InfoEvent("listener.started", "server started", log.String("listen", tcpListener.Addr().String()), log.String("network", "tcp"))
 
 	l.tcpListener = tcpListener
 	return tcpListener, err
@@ -93,7 +91,7 @@ func (l *Listener) loopTCPIn() {
 		if err != nil {
 			//nolint:staticcheck
 			if netError, isNetError := err.(net.Error); isNetError && netError.Temporary() {
-				l.logger.ErrorEvent("common.listener.message", F.ToString(err))
+				l.logger.ErrorEvent("listener.error", "listener error", log.Err(err))
 
 				continue
 			}
@@ -101,7 +99,7 @@ func (l *Listener) loopTCPIn() {
 				return
 			}
 			l.tcpListener.Close()
-			l.logger.ErrorEvent("common.listener.message", F.ToString("tcp listener closed: ", err))
+			l.logger.ErrorEvent("listener.closed", "listener closed", log.Err(err))
 
 			continue
 		}
@@ -110,7 +108,7 @@ func (l *Listener) loopTCPIn() {
 		metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
 		metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 		ctx := log.ContextWithNewID(l.ctx)
-		l.logger.InfoEventContext(ctx, "common.listener.message", F.ToString("inbound connection from ", metadata.Source))
+		l.logger.InfoEventContext(ctx, "inbound.accepted", "inbound accepted", log.Addr("source", metadata.Source))
 
 		go l.connHandler.NewConnection(ctx, conn, metadata, nil)
 	}

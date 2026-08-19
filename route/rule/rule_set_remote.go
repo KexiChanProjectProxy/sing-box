@@ -100,7 +100,7 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
 		if savedSet := s.cacheFile.LoadRuleSet(s.tag); savedSet != nil {
 			err = s.loadBytes(savedSet.Content)
 			if err != nil {
-				s.logger.Warn(E.Cause(err, "restore cached rule-set, will refetch"))
+				s.logger.WarnEvent("ruleset.error", "restore cached rule-set", log.String("tag", s.tag), log.Err(err))
 			} else {
 				s.lastUpdated = savedSet.LastUpdated
 				s.lastEtag = savedSet.LastEtag
@@ -115,7 +115,7 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
 			err = s.loadBytes(content)
 		}
 		if err != nil {
-			s.logger.Warn(E.Cause(err, "load initial rule-set from ", s.initialPath))
+			s.logger.WarnEvent("ruleset.error", "load initial rule-set", log.String("tag", s.tag), log.String("path", s.initialPath), log.Err(err))
 		} else {
 			loadedFromInitialPath = true
 		}
@@ -218,14 +218,14 @@ func (s *RemoteRuleSet) loadBytes(content []byte) error {
 func (s *RemoteRuleSet) updateOnce() {
 	err := s.fetch(s.ctx, false)
 	if err != nil {
-		s.logger.Error("fetch rule-set ", s.tag, ": ", err)
+		s.logger.ErrorEvent("ruleset.error", "fetch rule-set", log.String("tag", s.tag), log.Err(err))
 	} else if s.refs.Load() == 0 {
 		s.rules = nil
 	}
 }
 
 func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
-	s.logger.Debug("updating rule-set ", s.tag, " from URL: ", s.url)
+	s.logger.DebugEvent("ruleset.fetch", "updating rule-set", log.String("tag", s.tag), log.String("path", s.url))
 	request, err := http.NewRequest("GET", s.url, nil)
 	if err != nil {
 		return err
@@ -251,12 +251,12 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
 				savedRuleSet.LastUpdated = s.lastUpdated
 				err = s.cacheFile.SaveRuleSet(s.tag, savedRuleSet)
 				if err != nil {
-					s.logger.Error("save rule-set updated time: ", err)
+					s.logger.ErrorEvent("ruleset.error", "save rule-set updated time", log.String("tag", s.tag), log.Err(err))
 					return nil
 				}
 			}
 		}
-		s.logger.Info("update rule-set ", s.tag, ": not modified")
+		s.logger.InfoEvent("ruleset.not_modified", "rule-set not modified", log.String("tag", s.tag))
 		return nil
 	default:
 		return E.New("unexpected status: ", response.Status)
@@ -281,10 +281,10 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, isStart bool) error {
 			LastEtag:    s.lastEtag,
 		})
 		if err != nil {
-			s.logger.Error("save rule-set cache: ", err)
+			s.logger.ErrorEvent("ruleset.error", "save rule-set cache", log.String("tag", s.tag), log.Err(err))
 		}
 	}
-	s.logger.Info("updated rule-set ", s.tag)
+	s.logger.InfoEvent("ruleset.updated", "updated rule-set", log.String("tag", s.tag))
 	return nil
 }
 

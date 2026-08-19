@@ -17,7 +17,6 @@ import (
 	"github.com/sagernet/sing-snell/snellv6"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -37,7 +36,7 @@ type Inbound struct {
 	users    []option.SnellUser
 }
 
-func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SnellInboundOptions) (adapter.Inbound, error) {
+func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.SnellInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
 		Adapter: inbound.NewAdapter(C.TypeSnell, tag),
 		router:  uot.NewRouter(router, logger),
@@ -133,11 +132,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.service.NewConnection(adapter.WithContext(ctx, &metadata), conn, metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugContext(ctx, "connection closed: ", err)
-		} else {
-			h.logger.ErrorContext(ctx, E.Cause(err, "process connection from ", metadata.Source))
-		}
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 	}
 }
 
@@ -173,15 +168,11 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 			return
 		}
 		user := h.users[userIndex].Name
-		if user == "" {
-			user = F.ToString(userIndex)
-		} else {
+		if user != "" {
 			metadata.User = user
 		}
-		h.logger.InfoContext(ctx, "[", user, "] inbound connection to ", metadata.Destination)
-	} else {
-		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
 	}
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -195,14 +186,10 @@ func (h *Inbound) newPacketConnection(ctx context.Context, conn N.PacketConn, me
 			return
 		}
 		user := h.users[userIndex].Name
-		if user == "" {
-			user = F.ToString(userIndex)
-		} else {
+		if user != "" {
 			metadata.User = user
 		}
-		h.logger.InfoContext(ctx, "[", user, "] inbound packet connection from ", metadata.Source)
-	} else {
-		h.logger.InfoContext(ctx, "inbound packet connection from ", metadata.Source)
 	}
+	adapter.LogInboundPacket(h.logger, ctx, metadata)
 	h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }

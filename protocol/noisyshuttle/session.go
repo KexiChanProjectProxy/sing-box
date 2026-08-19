@@ -36,7 +36,7 @@ func (p *SessionPool) OpenStream(ctx context.Context) (*streamConn, error) {
 		if session != nil && session.tryAcquire() {
 			streamID := p.outbound.allocateStreamID()
 			p.mu.Unlock()
-			p.logger.DebugEventContext(ctx, "protocol.message", "session reuse hit")
+			p.logger.DebugEventContext(ctx, "noisyshuttle.session.hit", "session reuse hit")
 			return session.open(streamID), nil
 		}
 		p.mu.Unlock()
@@ -55,7 +55,7 @@ func (p *SessionPool) OpenStream(ctx context.Context) (*streamConn, error) {
 			if newSession.tryAcquire() {
 				streamID := p.outbound.allocateStreamID()
 				p.mu.Unlock()
-				p.logger.DebugEventContext(ctx, "protocol.message", "session reuse miss, created new session")
+				p.logger.DebugEventContext(ctx, "noisyshuttle.session.miss", "session reuse miss")
 				return newSession.open(streamID), nil
 			}
 		}

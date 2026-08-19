@@ -80,7 +80,7 @@ func (t *Endpoint) NewDNSPacket(payload []byte, source M.Socksaddr, destination 
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Protocol = C.ProtocolDNS
-	t.logger.InfoContext(ctx, "inbound DNS packet from ", source)
+	t.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", source), log.String("network", "udp"))
 	t.router.HijackDNSPacket(ctx, payload, writer, metadata)
 }
 

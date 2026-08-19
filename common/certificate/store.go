@@ -83,7 +83,7 @@ func NewStore(ctx context.Context, logger log.StructuredLogger, options option.C
 			Callback: func(_ string) {
 				err := store.update()
 				if err != nil {
-					logger.ErrorEvent("common.certificate.message", "reload certificates", log.Err(err))
+					logger.ErrorEvent("certificate.reload.error", "reload certificates", log.Err(err))
 				}
 			},
 		})

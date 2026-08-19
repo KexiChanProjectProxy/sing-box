@@ -203,9 +203,9 @@ func (t *DNSTransport) updateConfiguration(configuration openconnecttransport.Co
 		}
 	}
 	if len(resolverByAddress) > 0 {
-		t.logger.Info("updated ", len(routes), " DNS routes and ", len(resolverByAddress), " resolvers")
+		t.logger.InfoEvent("dns.updated", "updated DNS configuration", log.Int("accepted", len(resolverByAddress)))
 	} else {
-		t.logger.Info("cleared DNS configuration")
+		t.logger.InfoEvent("dns.updated", "cleared DNS configuration")
 	}
 }
 

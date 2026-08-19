@@ -16,7 +16,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -198,7 +197,7 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 		conn.Close()
 		return nil, E.New("connect failed: ", response.Message)
 	}
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
+	adapter.LogOutboundConnection(h.logger, ctx, destination)
 	return conn, nil
 }
 

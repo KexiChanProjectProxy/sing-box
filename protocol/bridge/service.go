@@ -9,7 +9,6 @@ import (
 
 	"github.com/sagernet/sing-box/log"
 	tun "github.com/sagernet/sing-tun"
-	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/x/list"
 )
 
@@ -61,21 +60,21 @@ func (s *serviceBase) syncEgress() {
 	}
 	err := s.applyEgress()
 	if err != nil {
-		s.logger.Debug(E.Cause(err, "update bridge egress"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "update_egress"))
 	}
 }
 
 func (s *serviceBase) startNetworkMonitor() {
 	networkMonitor, err := tun.NewNetworkUpdateMonitor(s.logger)
 	if err != nil {
-		s.logger.Debug(E.Cause(err, "create network monitor, egress will not track route changes"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "create_monitor"))
 		return
 	}
 	s.monitorElement = networkMonitor.RegisterCallback(func() { s.syncEgress() })
 	s.networkMonitor = networkMonitor
 	err = networkMonitor.Start()
 	if err != nil {
-		s.logger.Debug(E.Cause(err, "start network monitor, egress will not track route changes"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "start_monitor"))
 	}
 }
 

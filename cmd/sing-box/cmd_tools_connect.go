@@ -24,7 +24,7 @@ var commandConnect = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := connect(args[0])
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }
@@ -65,9 +65,9 @@ func connect(address string) error {
 	})
 	err = group.Run(context.Background())
 	if E.IsClosed(err) {
-		log.Info(err)
+		log.InfoEvent("cli.closed", "connection closed", log.Err(err))
 	} else {
-		log.Error(err)
+		log.ErrorEvent("cli.error", "cli error", log.Err(err))
 	}
 	return nil
 }

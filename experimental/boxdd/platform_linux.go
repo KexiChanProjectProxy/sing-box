@@ -69,7 +69,7 @@ func (p *linuxPlatformInterface) ProcessPlatformOptions(options option.TunPlatfo
 		p.executeAsOwner,
 	)
 	if err != nil {
-		p.daemon.logger.Warn("initialize system proxy: ", err)
+		p.daemon.logger.WarnEvent("daemon.error", "initialize system proxy", log.Err(err), log.String("op", "system_proxy"))
 		return nil
 	}
 	p.access.Lock()

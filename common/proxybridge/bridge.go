@@ -11,8 +11,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
-	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/protocol/socks"
@@ -87,16 +85,9 @@ func (b *Bridge) acceptLoop() {
 		ctx := log.ContextWithNewID(b.ctx)
 		go func() {
 			hErr := socks.HandleConnectionEx(ctx, tcpConn, std_bufio.NewReader(tcpConn), b.authenticator, b, nil, 0, M.SocksaddrFromNet(tcpConn.RemoteAddr()), nil)
-			if hErr == nil {
-				return
+			if hErr != nil {
+				adapter.LogConnectionError(b.logger, ctx, hErr, M.SocksaddrFromNet(tcpConn.RemoteAddr()))
 			}
-			if E.IsClosedOrCanceled(hErr) {
-				b.logger.DebugEventContext(ctx, "common.proxybridge.message", F.ToString(E.Cause(hErr, b.tag, " connection closed")))
-
-				return
-			}
-			b.logger.ErrorEventContext(ctx, "common.proxybridge.message", F.ToString(E.Cause(hErr, b.tag)))
-
 		}()
 	}
 }
@@ -106,7 +97,7 @@ func (b *Bridge) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Network = N.NetworkTCP
-	b.logger.InfoEventContext(ctx, "common.proxybridge.message", F.ToString(b.tag, " connection to ", metadata.Destination))
+	adapter.LogInboundConnection(b.logger, ctx, metadata)
 
 	b.connection.NewConnection(ctx, b.dialer, conn, metadata, onClose)
 }
@@ -116,7 +107,7 @@ func (b *Bridge) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, s
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Network = N.NetworkUDP
-	b.logger.InfoEventContext(ctx, "common.proxybridge.message", F.ToString(b.tag, " packet connection to ", metadata.Destination))
+	adapter.LogInboundPacket(b.logger, ctx, metadata)
 
 	b.connection.NewPacketConnection(ctx, b.dialer, conn, metadata, onClose)
 }

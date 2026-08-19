@@ -164,9 +164,9 @@ func (t *resolve1Manager) log(sender dbus.Sender, message ...any) {
 		} else if metadata.ProcessInfo.UserId != 0 {
 			prefix = F.ToString("uid:", metadata.ProcessInfo.UserId)
 		}
-		t.logger.InfoEvent("resolved.message", F.ToString(message...), log.String("prefix", prefix))
+		t.logger.InfoEvent("resolved.log", "resolved log", log.String("detail", F.ToString(message...)), log.String("prefix", prefix))
 	} else {
-		t.logger.InfoEvent("resolved.message", F.ToString(message...))
+		t.logger.InfoEvent("resolved.log", "resolved log", log.String("detail", F.ToString(message...)))
 	}
 }
 
@@ -182,9 +182,9 @@ func (t *resolve1Manager) logRequest(sender dbus.Sender, message ...any) context
 		} else if metadata.ProcessInfo.UserId != 0 {
 			prefix = F.ToString("uid:", metadata.ProcessInfo.UserId)
 		}
-		t.logger.InfoContext(ctx, "(", prefix, ") ", strings.Join(F.MapToString(message), " "))
+		t.logger.InfoEventContext(ctx, "resolved.request", "resolved request", log.String("detail", strings.Join(F.MapToString(message), " ")), log.String("prefix", prefix))
 	} else {
-		t.logger.InfoContext(ctx, strings.Join(F.MapToString(message), " "))
+		t.logger.InfoEventContext(ctx, "resolved.request", "resolved request", log.String("detail", strings.Join(F.MapToString(message), " ")))
 	}
 	return adapter.WithContext(ctx, &metadata)
 }

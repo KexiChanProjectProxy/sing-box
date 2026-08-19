@@ -10,6 +10,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing-tun/gtcpip/header"
@@ -86,7 +87,7 @@ func (d *systemDevice) startLocked() error {
 		return err
 	}
 	d.device = tunInterface
-	d.options.Logger.Info("started at ", d.options.Name)
+	d.options.Logger.InfoEvent("tun.started", "server started", log.String("name", d.options.Name))
 	go d.readLoop(tunInterface, int(d.options.MTU))
 	return nil
 }
@@ -140,7 +141,7 @@ func (d *systemDevice) readLoop(tunInterface tun.Tun, mtu int) {
 			if E.IsClosed(err) {
 				return
 			}
-			d.options.Logger.Error(E.Cause(err, "read packet"))
+			d.options.Logger.ErrorEvent("tun.error", "read packet", log.Err(err))
 			return
 		}
 		if readN <= tun.PacketOffset {
@@ -155,7 +156,7 @@ func (d *systemDevice) readLoop(tunInterface tun.Tun, mtu int) {
 		err = d.writeOutbound([]*buf.Buffer{packetBuffer})
 		packetBuffer.DecRef()
 		if err != nil {
-			d.options.Logger.Error(E.Cause(err, "write packet"))
+			d.options.Logger.ErrorEvent("tun.error", "write packet", log.Err(err))
 			return
 		}
 	}
@@ -193,7 +194,7 @@ func (d *systemDevice) readLoopLinux(tunInterface tun.LinuxTUN, batchSize int, m
 				packetBuffer.DecRef()
 			}
 			if writeErr != nil {
-				d.options.Logger.Error(E.Cause(writeErr, "write packet batch"))
+				d.options.Logger.ErrorEvent("tun.error", "write packet", log.Err(writeErr), log.String("op", "batch"))
 				return
 			}
 		}
@@ -201,7 +202,7 @@ func (d *systemDevice) readLoopLinux(tunInterface tun.LinuxTUN, batchSize int, m
 			if E.IsClosed(readErr) {
 				return
 			}
-			d.options.Logger.Error(E.Cause(readErr, "batch read packet"))
+			d.options.Logger.ErrorEvent("tun.error", "read packet", log.Err(readErr), log.String("op", "batch"))
 			return
 		}
 	}
@@ -226,7 +227,7 @@ func (d *systemDevice) readLoopDarwin(tunInterface tun.DarwinTUN) {
 		if len(outboundBuffers) > 0 {
 			writeErr := d.writeOutbound(outboundBuffers)
 			if writeErr != nil {
-				d.options.Logger.Error(E.Cause(writeErr, "write packet batch"))
+				d.options.Logger.ErrorEvent("tun.error", "write packet", log.Err(writeErr), log.String("op", "batch"))
 				return
 			}
 		}
@@ -234,7 +235,7 @@ func (d *systemDevice) readLoopDarwin(tunInterface tun.DarwinTUN) {
 			if E.IsClosed(readErr) || E.IsMulti(readErr, syscall.EBADF) {
 				return
 			}
-			d.options.Logger.Error(E.Cause(readErr, "batch read packet"))
+			d.options.Logger.ErrorEvent("tun.error", "read packet", log.Err(readErr), log.String("op", "batch"))
 			return
 		}
 	}

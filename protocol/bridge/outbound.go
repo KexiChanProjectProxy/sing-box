@@ -36,13 +36,13 @@ type Backend interface {
 
 type Outbound struct {
 	outbound.Adapter
-	logger            log.ContextLogger
+	logger            log.StructuredLogger
 	networkManager    adapter.NetworkManager
 	platformInterface adapter.PlatformInterface
 	backend           Backend
 }
 
-func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.BridgeOutboundOptions) (adapter.Outbound, error) {
+func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.BridgeOutboundOptions) (adapter.Outbound, error) {
 	networkManager := service.FromContext[adapter.NetworkManager](ctx)
 	outboundBackend, err := newBackend(ctx, logger, networkManager, tag, options)
 	if err != nil {
@@ -75,7 +75,7 @@ func (o *Outbound) PreferredAddress(metadata *adapter.InboundContext, address ne
 
 func (o *Outbound) PreMatchFlow(network string, destination netip.Addr) adapter.PreMatchAction {
 	if o.isLocalDestination(destination) {
-		o.logger.Warn("rejected connection to local destination ", destination, ": traffic to local addresses is not supported by bridge, exclude them in route rules")
+		o.logger.WarnEvent("bridge.error", "rejected local destination", log.Addr("destination", destination), log.String("reason", "local_destination"))
 		return adapter.PreMatchReject
 	}
 	return adapter.PreMatchFlow

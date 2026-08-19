@@ -23,7 +23,7 @@ var commandRuleSetFormat = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := formatRuleSet(args[0])
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }

@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -104,13 +103,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	err := h.newConnection(ctx, conn, metadata, onClose)
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
-		if E.IsClosedOrCanceled(err) {
-			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("connection closed: ", err))
-
-		} else {
-			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
-
-		}
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 	}
 }
 
@@ -138,41 +131,19 @@ func (h *Inbound) newConnection(ctx context.Context, conn net.Conn, metadata ada
 func (h *Inbound) newUserConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
-	user, loaded := auth.UserFromContext[string](ctx)
-	if !loaded {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
-
-		h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
-		return
+	if user, loaded := auth.UserFromContext[string](ctx); loaded {
+		metadata.User = user
 	}
-	metadata.User = user
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound connection to ", metadata.Destination))
-
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 func (h *Inbound) streamUserPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
-	user, loaded := auth.UserFromContext[string](ctx)
-	if !loaded {
-		if !metadata.Destination.IsValid() {
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection"))
-
-		} else {
-			h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", metadata.Destination))
-
-		}
-		h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
-		return
+	if user, loaded := auth.UserFromContext[string](ctx); loaded {
+		metadata.User = user
 	}
-	metadata.User = user
-	if !metadata.Destination.IsValid() {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound packet connection"))
-
-	} else {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound packet connection to ", metadata.Destination))
-
-	}
+	adapter.LogInboundPacket(h.logger, ctx, metadata)
 	h.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/tailscale/ipn"
 	"github.com/sagernet/tailscale/ipn/ipnstate"
 )
@@ -59,9 +60,9 @@ func (t *Endpoint) SubscribeTailscaleStatus(ctx context.Context, fn func(*adapte
 			return ctx.Err()
 		}
 		if busError != "" {
-			t.logger.Warn("restarting status watcher: ", busError)
+			t.logger.WarnEvent("tailscale.watcher.restart", "restarting status watcher", log.String("reason", busError))
 		} else {
-			t.logger.Warn("status watcher stopped unexpectedly, restarting")
+			t.logger.WarnEvent("tailscale.watcher.restart", "status watcher stopped unexpectedly, restarting")
 		}
 		select {
 		case <-ctx.Done():

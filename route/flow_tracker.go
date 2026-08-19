@@ -8,7 +8,6 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing/common/byteformats"
 	N "github.com/sagernet/sing/common/network"
 )
 
@@ -19,7 +18,7 @@ var (
 
 type flowLogger struct {
 	ctx         context.Context
-	logger      log.ContextLogger
+	logger      log.StructuredLogger
 	network     string
 	source      string
 	destination string
@@ -29,7 +28,7 @@ type flowLogger struct {
 	download    atomic.Int64
 }
 
-func newFlowLogger(ctx context.Context, logger log.ContextLogger, metadata adapter.InboundContext, outbound adapter.Outbound) *flowLogger {
+func newFlowLogger(ctx context.Context, logger log.StructuredLogger, metadata adapter.InboundContext, outbound adapter.Outbound) *flowLogger {
 	var source, destination string
 	if metadata.Network == N.NetworkICMP {
 		source = metadata.Source.AddrString()
@@ -64,8 +63,11 @@ func (l *flowLogger) FlowEstablished() {
 }
 
 func (l *flowLogger) CloseFlow(reason tun.FlowCloseReason) {
-	l.logger.DebugContext(l.ctx, "flow closed: ", reason,
-		", upload ", byteformats.FormatBytes(uint64(l.upload.Load())), ", download ", byteformats.FormatBytes(uint64(l.download.Load())))
+	l.logger.DebugEventContext(l.ctx, "connection.closed", "connection closed",
+		log.String("reason", reason.String()),
+		log.Uint64("upload", uint64(l.upload.Load())),
+		log.Uint64("download", uint64(l.download.Load())),
+	)
 }
 
 type multiFlowTracker []tun.FlowTracker

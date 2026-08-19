@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
 
@@ -311,12 +309,12 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	s.userCounts[user.name]++
 	sess.timer = time.AfterFunc(sessionTTL, func() {
 		if s.removeExpiredSession(sess) {
-			s.logger.DebugEvent("protocol.message", F.ToString("[", sess.username, "] session expired realm=", sess.realmID))
+			s.logger.DebugEvent("hysteria2.realm.expired", "session expired", log.String("user", sess.username), log.String("realm", sess.realmID))
 
 		}
 	})
 	s.access.Unlock()
-	s.logger.InfoEventContext(r.Context(), "protocol.message", F.ToString("[", user.name, "] registered realm=", id))
+	s.logger.InfoEventContext(r.Context(), "hysteria2.realm.registered", "registered", log.String("user", user.name), log.String("realm", id))
 
 	render.JSON(w, r, render.M{
 		"session_id": sess.id,
@@ -326,7 +324,7 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleDeregister(w http.ResponseWriter, r *http.Request) {
 	sess := r.Context().Value(contextKeySession).(*realmSession)
-	s.logger.InfoEventContext(r.Context(), "protocol.message", F.ToString("[", sess.username, "] deregistered realm=", sess.realmID))
+	s.logger.InfoEventContext(r.Context(), "hysteria2.realm.deregistered", "deregistered", log.String("user", sess.username), log.String("realm", sess.realmID))
 
 	s.removeSession(sess)
 	render.NoContent(w, r)
@@ -358,7 +356,7 @@ func (s *server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	sess.timer.Reset(sessionTTL)
 	s.access.Unlock()
-	s.logger.DebugEventContext(r.Context(), "protocol.message", F.ToString("[", sess.username, "] heartbeat realm=", sess.realmID))
+	s.logger.DebugEventContext(r.Context(), "hysteria2.realm.heartbeat", "heartbeat", log.String("user", sess.username), log.String("realm", sess.realmID))
 
 	s.sendEvent(sess, realmEvent{kind: "heartbeat_ack", data: render.M{"ttl": int(sessionTTL.Seconds())}})
 	render.JSON(w, r, render.M{"ttl": int(sessionTTL.Seconds())})
@@ -451,7 +449,7 @@ func (s *server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, render.M{"error": "rate_limited", "message": "server event buffer full"})
 		return
 	}
-	s.logger.DebugEventContext(r.Context(), "protocol.message", F.ToString("[", user.name, "] connect realm=", id))
+	s.logger.DebugEventContext(r.Context(), "hysteria2.realm.connect", "connect", log.String("user", user.name), log.String("realm", id))
 
 	timer := time.NewTimer(connectResponseTimeout)
 	defer timer.Stop()
@@ -510,7 +508,7 @@ func (s *server) handleConnectResponse(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, render.M{"error": "attempt_not_found", "message": "no pending attempt for nonce"})
 		return
 	}
-	s.logger.DebugEventContext(r.Context(), "protocol.message", F.ToString("[", sess.username, "] connect-response realm=", sess.realmID))
+	s.logger.DebugEventContext(r.Context(), "hysteria2.realm.connect", "connect response", log.String("user", sess.username), log.String("realm", sess.realmID))
 
 	render.NoContent(w, r)
 }

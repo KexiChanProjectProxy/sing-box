@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-openconnect"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/service"
@@ -141,9 +142,9 @@ func (e *Endpoint) watchAuthForms() {
 		if authChallenge != nil && authChallenge.ID != loggedAuthChallengeID {
 			loggedAuthChallengeID = authChallenge.ID
 			if authChallenge.Browser != nil {
-				e.logger.Info("waiting for browser authentication")
+				e.logger.InfoEvent("openconnect.auth", "waiting for authentication", log.String("mode", "browser"))
 			} else {
-				e.logger.Info("waiting for authentication")
+				e.logger.InfoEvent("openconnect.auth", "waiting for authentication")
 			}
 		}
 		e.notifyStatusUpdated()

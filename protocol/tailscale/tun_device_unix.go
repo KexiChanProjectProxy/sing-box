@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
 
 	singTun "github.com/sagernet/sing-tun"
 	wgTun "github.com/sagernet/wireguard-go/tun"
@@ -153,6 +152,6 @@ func (a *tunDeviceAdapter) debugPacket(direction string, packet []byte) {
 	if len(sample) > 64 {
 		sample = sample[:64]
 	}
-	a.logger.TraceEvent("protocol.message", F.ToString("tailscale tun ", direction, " len=", len(packet), " head=", hex.EncodeToString(sample)))
+	a.logger.TraceEvent("tun.packet", "tailscale tun packet", log.String("op", direction), log.String("detail", hex.EncodeToString(sample)))
 
 }

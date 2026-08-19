@@ -72,11 +72,11 @@ func (s *Service) start(bridgeName string) error {
 	}
 	err = setTCPOffload(tunFileDescriptor)
 	if err != nil {
-		s.logger.Warn(E.Cause(err, "set TCP offload"))
+		s.logger.WarnEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "tcp_offload"))
 	}
 	err = setUDPOffload(tunFileDescriptor)
 	if err != nil {
-		s.logger.Warn(E.Cause(err, "set UDP offload"))
+		s.logger.WarnEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "udp_offload"))
 	}
 	s.tunFileDescriptor = tunFileDescriptor
 	tunLink, err := netlink.LinkByName(s.tunName)
@@ -105,7 +105,7 @@ func (s *Service) start(bridgeName string) error {
 	}
 	err = setupBridgeFamily(s.tunName, s.ruleIndex, s.routeTable, unix.AF_INET6, s.inet6Port)
 	if err != nil {
-		s.logger.Debug(E.Cause(err, "IPv6 bridge routing unavailable, disabling IPv6 forwarding"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "ipv6_routing"))
 		removeBridgeFamily(s.tunName, s.ruleIndex, s.routeTable, unix.AF_INET6, s.inet6Port)
 		s.inet6Port = netip.Addr{}
 	}
@@ -129,7 +129,7 @@ func (s *Service) syncEgressLocked() error {
 		for _, family := range activeBridgeFamilies(s.inet6Port) {
 			blackholeBridgeDefault(s.routeTable, family)
 		}
-		s.logger.Debug("bridge egress ", s.egressName, " absent, dropping forwarded traffic")
+		s.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", s.egressName), log.Bool("available", false))
 		return nil
 	}
 	for _, family := range activeBridgeFamilies(s.inet6Port) {
@@ -176,7 +176,7 @@ func (s *Service) syncEgressFamilyLocked(family int, linkIndex int) {
 	}
 	if defaultRoute == nil {
 		blackholeBridgeDefault(s.routeTable, family)
-		s.logger.Debug("no default route on bridge egress ", s.egressName)
+		s.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", s.egressName), log.Bool("available", false))
 		return
 	}
 	defaultRoute.Table = s.routeTable
@@ -184,7 +184,7 @@ func (s *Service) syncEgressFamilyLocked(family int, linkIndex int) {
 	err = netlink.RouteReplace(defaultRoute)
 	if err != nil {
 		blackholeBridgeDefault(s.routeTable, family)
-		s.logger.Debug(E.Cause(err, "pin bridge egress default route"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "pin_route"))
 	}
 }
 
@@ -198,7 +198,7 @@ func (s *Service) updateClampLocked(egressMTU int) {
 	}
 	err := setupBridgeClamp(s.nftTableName, s.tunName, s.inet4Port, s.inet6Port, mtu)
 	if err != nil {
-		s.logger.Debug(E.Cause(err, "update bridge MSS clamp"))
+		s.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "mss_clamp"))
 		return
 	}
 	s.clampMTU = mtu

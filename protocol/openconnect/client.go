@@ -447,7 +447,7 @@ func (e *Endpoint) readLoop() {
 			if E.IsClosedOrCanceled(err) || e.loopContext.Err() != nil {
 				return
 			}
-			e.logger.Error(E.Cause(err, "client terminated"))
+			e.logger.ErrorEvent("openconnect.error", "client terminated", log.Err(err))
 			e.setTerminalError(err)
 			return
 		}
@@ -455,7 +455,7 @@ func (e *Endpoint) readLoop() {
 		buf.ReleaseMulti(packetBuffers)
 		if err != nil {
 			err = E.Cause(err, "write packet to device")
-			e.logger.Error(err)
+			e.logger.ErrorEvent("openconnect.error", "write packet to device", log.Err(err), log.String("op", "write"))
 			e.setTerminalError(err)
 			return
 		}
@@ -557,9 +557,9 @@ func (e *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 func (e *Endpoint) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch network {
 	case N.NetworkTCP:
-		e.logger.InfoContext(ctx, "outbound connection to ", destination)
+		adapter.LogOutboundConnection(e.logger, ctx, destination)
 	case N.NetworkUDP:
-		e.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		adapter.LogOutboundPacket(e.logger, ctx, destination)
 	}
 	if !e.ready() || !e.client.Ready() {
 		return nil, E.New("endpoint is not ready yet")
@@ -578,7 +578,7 @@ func (e *Endpoint) DialContext(ctx context.Context, network string, destination 
 }
 
 func (e *Endpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {
-	e.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	adapter.LogOutboundPacket(e.logger, ctx, destination)
 	if !e.ready() || !e.client.Ready() {
 		return nil, netip.Addr{}, E.New("endpoint is not ready yet")
 	}

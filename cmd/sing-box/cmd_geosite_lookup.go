@@ -28,7 +28,7 @@ var commandGeositeLookup = &cobra.Command{
 		}
 		err := geositeLookup(source, target)
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }

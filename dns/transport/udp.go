@@ -107,7 +107,7 @@ func (t *UDPTransport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, cal
 	t.updateUDPSize(message)
 	t.multiplexer.ExchangeAsync(ctx, message, func(response *mDNS.Msg, err error) {
 		if err == nil && response.Truncated {
-			t.logger.InfoContext(ctx, "response truncated, retrying with TCP")
+			t.logger.InfoEventContext(ctx, "dns.response.truncated", "response truncated, retrying with TCP")
 			go func() {
 				callback(t.exchangeTCP(ctx, message))
 			}()
@@ -158,7 +158,7 @@ func (t *UDPTransport) readResponse(conn net.Conn) (*mDNS.Msg, error) {
 	var message mDNS.Msg
 	err = message.Unpack(buffer.Bytes())
 	if err != nil {
-		t.logger.Debug("discarded malformed UDP response: ", err)
+		t.logger.DebugEvent("dns.response.malformed", "discarded malformed UDP response", log.Err(err))
 		return nil, nil
 	}
 	return &message, nil

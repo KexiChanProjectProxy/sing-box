@@ -4,8 +4,6 @@ import (
 	"context"
 	"sync"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -80,7 +78,7 @@ func (m *Manager) DefaultTransport() adapter.HTTPTransport {
 	if m.defaultTransport == nil && m.defaultTransportFallback != nil {
 		transport, err := m.defaultTransportFallback()
 		if err != nil {
-			m.logger.ErrorEvent("common.httpclient.message", F.ToString(E.Cause(err, "create default http client")))
+			m.logger.ErrorEvent("httpclient.error", "create default http client", log.Err(err))
 
 			return nil
 		}

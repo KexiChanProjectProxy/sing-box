@@ -194,10 +194,10 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 			Dir:      stateDirectory,
 			Hostname: hostname,
 			Logf: func(format string, args ...any) {
-				logger.TraceEvent("protocol.tailscale.message", fmt.Sprintf(format, args...))
+				logger.TraceEvent("tailscale.debug", "tailscale debug", log.String("detail", fmt.Sprintf(format, args...)))
 			},
 			UserLogf: func(format string, args ...any) {
-				logger.DebugEvent("protocol.tailscale.message", fmt.Sprintf(format, args...))
+				logger.DebugEvent("tailscale.debug", "tailscale debug", log.String("detail", fmt.Sprintf(format, args...)))
 			},
 			Ephemeral:     options.Ephemeral,
 			AuthKey:       options.AuthKey,
@@ -457,10 +457,10 @@ func (t *Endpoint) postStart() error {
 	if sshEnabled {
 		degraded, fatal := tailssh.CheckServerSupport(t.platformInterface)
 		if fatal != nil {
-			t.logger.Warn(E.Cause(fatal, "SSH server unavailable"))
+			t.logger.WarnEvent("tailscale.ssh.unavailable", "SSH server unavailable", log.Err(fatal))
 			sshEnabled = false
 		} else if degraded != "" {
-			t.logger.Warn("SSH server degraded: ", degraded)
+			t.logger.WarnEvent("tailscale.ssh.degraded", "SSH server degraded", log.String("reason", degraded))
 		}
 	}
 	err = t.editPrefs(sshEnabled)
@@ -492,7 +492,7 @@ func (t *Endpoint) watchState() {
 	tryApplyExitNode := func() {
 		err := t.applyExitNode()
 		if err != nil {
-			t.logger.Error("set exit node: ", err)
+			t.logger.ErrorEvent("tailscale.exit.error", "set exit node", log.Err(err))
 		} else {
 			exitNodePending = false
 		}
@@ -522,7 +522,7 @@ func (t *Endpoint) watchState() {
 					return true
 				}
 				reportedAuthURL = authURL
-				t.logger.Info("Waiting for authentication: ", authURL)
+				t.logger.InfoEvent("tailscale.auth", "waiting for authentication", log.String("detail", authURL))
 				if t.platformInterface != nil && t.platformInterface.UsePlatformNotification() {
 					err := t.platformInterface.SendNotification(&adapter.Notification{
 						Identifier: "tailscale-authentication",
@@ -533,7 +533,7 @@ func (t *Endpoint) watchState() {
 						OpenURL:    authURL,
 					})
 					if err != nil {
-						t.logger.Error("send authentication notification: ", err)
+						t.logger.ErrorEvent("tailscale.auth.error", "send authentication notification", log.Err(err))
 					}
 				}
 			case ipn.Running.String():
@@ -548,9 +548,9 @@ func (t *Endpoint) watchState() {
 			return
 		}
 		if busError != "" {
-			t.logger.Warn("restarting state watcher: ", busError)
+			t.logger.WarnEvent("tailscale.watcher.restart", "restarting state watcher", log.String("reason", busError))
 		} else {
-			t.logger.Warn("state watcher stopped unexpectedly, restarting")
+			t.logger.WarnEvent("tailscale.watcher.restart", "state watcher stopped unexpectedly, restarting")
 		}
 		select {
 		case <-t.ctx.Done():
@@ -725,11 +725,9 @@ func (t *Endpoint) InterfaceUpdated() {
 func (t *Endpoint) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch network {
 	case N.NetworkTCP:
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
-
+		adapter.LogOutboundConnection(t.logger, ctx, destination)
 	case N.NetworkUDP:
-		t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
-
+		adapter.LogOutboundPacket(t.logger, ctx, destination)
 	}
 	if !t.started.Load() {
 		return nil, E.New("Tailscale is not ready yet")
@@ -822,7 +820,7 @@ func (t *Endpoint) listenPacketWithAddress(ctx context.Context, destination M.So
 }
 
 func (t *Endpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {
-	t.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+	adapter.LogOutboundPacket(t.logger, ctx, destination)
 
 	if destination.IsDomain() {
 		destinationAddresses, err := t.dnsRouter.Lookup(ctx, destination.Fqdn, adapter.DNSQueryOptions{})
@@ -878,8 +876,7 @@ func (t *Endpoint) NewConnectionEx(ctx context.Context, conn net.Conn, source M.
 		}
 	}
 	metadata.Destination = destination
-	t.logger.InfoContext(ctx, "inbound connection from ", source)
-	t.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
+	adapter.LogInboundConnection(t.logger, ctx, metadata)
 	t.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -906,8 +903,7 @@ func (t *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 		conn = bufio.NewNATPacketConn(bufio.NewNetPacketConn(conn), originDestination, destination)
 	}
 	metadata.Destination = destination
-	t.logger.InfoContext(ctx, "inbound packet connection from ", source)
-	t.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
+	adapter.LogInboundPacket(t.logger, ctx, metadata)
 	t.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
 
@@ -995,17 +991,15 @@ type endpointDialer struct {
 func (d *endpointDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		d.logger.InfoEventContext(ctx, "protocol.message", F.ToString("output connection to ", destination))
-
+		adapter.LogOutboundConnection(d.logger, ctx, destination)
 	case N.NetworkUDP:
-		d.logger.InfoEventContext(ctx, "protocol.message", F.ToString("output packet connection to ", destination))
-
+		adapter.LogOutboundPacket(d.logger, ctx, destination)
 	}
 	return d.Dialer.DialContext(ctx, network, destination)
 }
 
 func (d *endpointDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	d.logger.InfoEventContext(ctx, "protocol.message", F.ToString("output packet connection"))
+	adapter.LogOutboundPacket(d.logger, ctx, destination)
 
 	return d.Dialer.ListenPacket(ctx, destination)
 }
@@ -1051,7 +1045,7 @@ func (t *peerDNSQueryHandler) HandlePeerDNSQuery(ctx context.Context, query []by
 	response, err := t.dnsRouter.Exchange(adapter.WithContext(ctx, &metadata), &message, adapter.DNSQueryOptions{})
 	if err != nil {
 		if !R.IsRejected(err) && !E.IsClosedOrCanceled(err) {
-			t.logger.ErrorContext(ctx, E.Cause(err, "process peer DNS query"))
+			t.logger.ErrorEventContext(ctx, "dns.query.error", "process peer DNS query", log.Err(err))
 		}
 		return nil, err
 	}

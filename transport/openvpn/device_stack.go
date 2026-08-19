@@ -102,7 +102,7 @@ func (d *stackDevice) UpdateConfiguration(configuration Configuration) error {
 	d.stateAccess.Lock()
 	defer d.stateAccess.Unlock()
 	if d.logRouteOptions && hasRouteOptions(configuration.Routes) {
-		d.options.Logger.Debug("route gateway and metric options are not representable by the gVisor stack device; routes are installed by prefix")
+		d.options.Logger.DebugEvent("tun.route.unsupported", "route options not representable")
 		d.logRouteOptions = false
 	}
 	if configuration.MTU != 0 {

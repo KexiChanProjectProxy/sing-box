@@ -310,6 +310,17 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	return nil
 }
 
+func ruleLogFields(index int, rule adapter.Rule) []log.Field {
+	fields := []log.Field{
+		log.Int("rule_index", index),
+		log.String("action", rule.Action().String()),
+	}
+	if description := rule.String(); description != "" {
+		fields = append(fields, log.String("rule", description))
+	}
+	return fields
+}
+
 func (r *Router) PreMatch(metadata adapter.InboundContext, firstPacket []byte) adapter.PreMatchResult {
 	ctx := log.ContextWithNewID(r.ctx)
 	metadata.PreMatch = true
@@ -324,12 +335,7 @@ func (r *Router) PreMatch(metadata adapter.InboundContext, firstPacket []byte) a
 		if !currentRule.Match(&metadata) {
 			continue
 		}
-		ruleDescription := currentRule.String()
-		if ruleDescription != "" {
-			r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] ", currentRule, " => ", currentRule.Action())
-		} else {
-			r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] => ", currentRule.Action())
-		}
+		r.logger.DebugEventContext(ctx, "route.pre_match", "pre-match", ruleLogFields(currentRuleIndex, currentRule)...)
 		switch action := currentRule.Action().(type) {
 		case *R.RuleActionSniff:
 			if metadata.Network == N.NetworkICMP {
@@ -367,15 +373,10 @@ func (r *Router) PreMatch(metadata adapter.InboundContext, firstPacket []byte) a
 					Port: metadata.Destination.Port,
 				}
 			}
-			if metadata.Domain != "" && metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain, ", client: ", metadata.Client)
-			} else if metadata.Domain != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", domain: ", metadata.Domain)
-			} else if metadata.Client != "" {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol, ", client: ", metadata.Client)
-			} else {
-				r.logger.DebugContext(ctx, "sniffed packet protocol: ", metadata.Protocol)
-			}
+			sniffFields := []log.Field{log.String("protocol", metadata.Protocol)}
+			sniffFields = append(sniffFields, log.OptionalString("domain", metadata.Domain)...)
+			sniffFields = append(sniffFields, log.OptionalString("client", metadata.Client)...)
+			r.logger.DebugEventContext(ctx, "route.sniff", "sniffed", sniffFields...)
 		case *R.RuleActionRouteOptions:
 			applyRouteOptionsOverride(&metadata, action)
 		case *R.RuleActionRoute:
@@ -404,7 +405,7 @@ func (r *Router) PreMatch(metadata adapter.InboundContext, firstPacket []byte) a
 		case *R.RuleActionResolve:
 			resolveErr := r.actionResolve(adapter.WithContext(ctx, &metadata), &metadata, action)
 			if resolveErr != nil {
-				r.logger.DebugContext(ctx, "pre-match[", currentRuleIndex, "] ", currentRule, " => ", action, ": ", resolveErr)
+				r.logger.DebugEventContext(ctx, "route.pre_match", "pre-match", append(ruleLogFields(currentRuleIndex, currentRule), log.Err(resolveErr))...)
 				return adapter.PreMatchResult{Action: adapter.PreMatchReject}
 			}
 		default:
@@ -495,9 +496,19 @@ func (r *Router) preMatchFlow(ctx context.Context, metadata *adapter.InboundCont
 		}
 		if !newDestination.IsValid() {
 			if len(metadata.DestinationAddresses) == 0 {
-				r.logger.WarnContext(ctx, "pre-match: reject ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to fake destination ", metadata.Destination.Fqdn, ": a resolve action is required before routing to outbound/", outbound.Type(), "[", outbound.Tag(), "]")
+				r.logger.WarnEventContext(ctx, "route.reject", "reject",
+					log.String("reason", "resolve action required"),
+					log.String("network", metadata.Network),
+					log.Addr("source", metadata.Source),
+					log.Addr("destination", metadata.Destination),
+				)
 			} else {
-				r.logger.DebugContext(ctx, "pre-match: reject ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to fake destination ", metadata.Destination.Fqdn, ": no resolved address for this address family")
+				r.logger.DebugEventContext(ctx, "route.reject", "reject",
+					log.String("reason", "no resolved address"),
+					log.String("network", metadata.Network),
+					log.Addr("source", metadata.Source),
+					log.Addr("destination", metadata.Destination),
+				)
 			}
 			return adapter.PreMatchResult{Action: adapter.PreMatchReject}
 		}
@@ -509,7 +520,13 @@ func (r *Router) preMatchFlow(ctx context.Context, metadata *adapter.InboundCont
 	} else if metadata.Destination != packetDestination {
 		result.Destination = metadata.Destination.AddrPort()
 	}
-	r.logger.InfoContext(ctx, "pre-match: forward ", metadata.Network, " connection from ", metadata.Source.AddrString(), " to ", metadata.Destination.AddrString(), " via outbound/", outbound.Type(), "[", outbound.Tag(), "]")
+	r.logger.InfoEventContext(ctx, "route.forward", "forward",
+		log.String("network", metadata.Network),
+		log.Addr("source", metadata.Source),
+		log.Addr("destination", metadata.Destination),
+		log.String("outbound", outbound.Tag()),
+		log.String("outbound_type", outbound.Type()),
+	)
 	metadataCopy := *metadata
 	result.NewTracker = func() tun.FlowTracker {
 		flowTrackers := make([]tun.FlowTracker, 0, len(r.trackers)+1)
@@ -594,12 +611,7 @@ match:
 		if !currentRule.Match(metadata) {
 			continue
 		}
-		ruleDescription := currentRule.String()
-		if ruleDescription != "" {
-			r.logger.DebugContext(ctx, "match[", currentRuleIndex, "] ", currentRule, " => ", currentRule.Action())
-		} else {
-			r.logger.DebugContext(ctx, "match[", currentRuleIndex, "] => ", currentRule.Action())
-		}
+		r.logger.DebugEventContext(ctx, "route.match", "rule matched", ruleLogFields(currentRuleIndex, currentRule)...)
 		var routeOptions *R.RuleActionRouteOptions
 		switch action := currentRule.Action().(type) {
 		case *R.RuleActionRoute:

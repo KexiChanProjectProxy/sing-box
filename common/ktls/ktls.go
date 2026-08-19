@@ -13,7 +13,6 @@ import (
 	"syscall"
 
 	"github.com/sagernet/sing-box/log"
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/common/badtls"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -97,11 +96,11 @@ func (c *Conn) SyscallConnForRead() syscall.RawConn {
 		return nil
 	}
 	if !*c.rawConn.IsClient {
-		c.logger.WarnEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: RX splice is unavailable on the server size, since it will cause an unknown failure"))
+		c.logger.WarnEventContext(c.ctx, "ktls.unavailable", "kTLS RX splice unavailable", log.String("reason", "server_rx_splice"))
 
 		return nil
 	}
-	c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: RX splice requested"))
+	c.logger.DebugEventContext(c.ctx, "ktls.rx", "RX splice requested", log.Bool("enabled", true))
 
 	return c.rawSyscallConn
 }
@@ -132,7 +131,7 @@ func (c *Conn) SyscallConnForWrite() syscall.RawConn {
 	if !c.kernelTx {
 		return nil
 	}
-	c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: TX splice requested"))
+	c.logger.DebugEventContext(c.ctx, "ktls.tx", "TX splice requested", log.Bool("enabled", true))
 
 	return c.rawSyscallConn
 }

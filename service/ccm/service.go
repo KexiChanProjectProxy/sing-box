@@ -274,7 +274,7 @@ func (s *Service) getAccessToken() (string, error) {
 
 	err = platformWriteCredentials(s.ctx, newCredentials, s.credentialPath)
 	if err != nil {
-		s.logger.Warn("persist refreshed token: ", err)
+		s.logger.WarnEvent("ccm.token.persist.error", "persist refreshed token", log.Err(err))
 	}
 
 	return newCredentials.AccessToken, nil

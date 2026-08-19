@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	boxService "github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/common/listener"
@@ -67,7 +65,7 @@ func NewRealmService(ctx context.Context, logger log.StructuredLogger, tag strin
 	chiRouter.Use(middleware.RequestSize(maxRequestBodyBytes))
 	chiRouter.Use(func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger.DebugEventContext(r.Context(), "protocol.message", F.ToString(r.Method, " ", r.RequestURI, " ", sHTTP.SourceAddress(r)))
+			logger.DebugEventContext(r.Context(), "hysteria2.realm.request", "realm request", log.Addr("source", sHTTP.SourceAddress(r)), log.String("path", r.RequestURI))
 
 			handler.ServeHTTP(w, r)
 		})
@@ -148,7 +146,7 @@ func (s *RealmService) Start(stage adapter.StartStage) error {
 	go func() {
 		err = s.httpServer.Serve(tcpListener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.ErrorEvent("protocol.message", F.ToString("serve error: ", err))
+			s.logger.ErrorEvent("hysteria2.realm.error", "serve error", log.Err(err))
 
 		}
 	}()

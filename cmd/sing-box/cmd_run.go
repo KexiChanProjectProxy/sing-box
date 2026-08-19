@@ -29,7 +29,7 @@ var commandRun = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := run()
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }
@@ -197,7 +197,7 @@ func run() error {
 			if osSignal == syscall.SIGHUP {
 				err = check()
 				if err != nil {
-					log.Error(E.Cause(err, "reload service"))
+					log.ErrorEvent("cli.error", "reload service", log.Err(err))
 					continue
 				}
 			}
@@ -208,7 +208,7 @@ func run() error {
 			closed()
 			if osSignal != syscall.SIGHUP {
 				if err != nil {
-					log.Error(E.Cause(err, "sing-box did not closed properly"))
+					log.ErrorEvent("cli.error", "sing-box did not closed properly", log.Err(err))
 				}
 				return nil
 			}
@@ -228,5 +228,5 @@ func closeMonitor(ctx context.Context) {
 		return
 	default:
 	}
-	log.Fatal("sing-box did not close!")
+	log.FatalEvent("cli.error", "sing-box did not close!")
 }

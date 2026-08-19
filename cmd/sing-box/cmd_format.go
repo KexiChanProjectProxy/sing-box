@@ -21,7 +21,7 @@ var commandFormat = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := format()
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 	Args: cobra.NoArgs,

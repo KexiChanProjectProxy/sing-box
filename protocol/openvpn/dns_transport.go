@@ -93,7 +93,7 @@ func (t *DNSTransport) Start(stage adapter.StartStage) error {
 func (t *DNSTransport) onReconfiguration(configuration ovpntransport.Configuration) {
 	err := t.updateResolvers(configuration)
 	if err != nil && !E.IsClosed(err) {
-		t.logger.Error(E.Cause(err, "update DNS resolvers"))
+		t.logger.ErrorEvent("dns.update.error", "update DNS resolvers", log.Err(err))
 	}
 }
 
@@ -175,7 +175,7 @@ func (t *DNSTransport) updateResolvers(configuration ovpntransport.Configuration
 	t.defaultResolvers = defaultResolvers
 	t.access.Unlock()
 	closeErr := closeDNSTransports(oldResolvers)
-	t.logger.Info("updated ", len(routes), " DNS routes, ", len(searchDomains), " search domains and ", len(defaultResolvers), " default resolvers")
+	t.logger.InfoEvent("dns.updated", "updated DNS configuration", log.Int("accepted", len(routes)))
 	return closeErr
 }
 

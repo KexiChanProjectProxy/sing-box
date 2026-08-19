@@ -154,7 +154,7 @@ func (i *Service) exchangePacket(buffer *buf.Buffer, oob []byte, source M.Socksa
 	ctx := log.ContextWithNewID(i.ctx)
 	err := i.exchangePacket0(ctx, buffer, oob, source)
 	if err != nil {
-		i.logger.ErrorContext(ctx, "process DNS packet: ", err)
+		i.logger.ErrorEventContext(ctx, "dns.packet.error", "process DNS packet", log.Err(err))
 	}
 }
 

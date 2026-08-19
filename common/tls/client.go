@@ -86,11 +86,11 @@ func NewClientWithOptions(options ClientOptions) (Config, error) {
 	}
 	if !options.KTLSCompatible {
 		if options.Options.KernelTx {
-			options.Logger.Warn("enabling kTLS TX in current scenarios will definitely reduce performance, please checkout https://sing-box.sagernet.org/configuration/shared/tls/#kernel_tx")
+			options.Logger.WarnEvent("ktls.unavailable", "kTLS TX reduces performance", log.String("reason", "kernel_tx"))
 		}
 	}
 	if options.Options.KernelRx {
-		options.Logger.Warn("enabling kTLS RX will definitely reduce performance, please checkout https://sing-box.sagernet.org/configuration/shared/tls/#kernel_rx")
+		options.Logger.WarnEvent("ktls.unavailable", "kTLS RX reduces performance", log.String("reason", "kernel_rx"))
 	}
 	switch options.Options.Engine {
 	case "", C.TLSEngineGo:

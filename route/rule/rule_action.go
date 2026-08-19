@@ -480,7 +480,7 @@ func (r *RuleActionReject) Error(ctx context.Context) error {
 	r.dropCounter = append(r.dropCounter, timeNow)
 	if len(r.dropCounter) > 50 {
 		if ctx != nil {
-			r.logger.DebugContext(ctx, "dropped due to flooding")
+			r.logger.DebugEventContext(ctx, "route.reject", "reject", log.String("reason", "flood"))
 		}
 		return &RejectedError{ErrDrop}
 	}

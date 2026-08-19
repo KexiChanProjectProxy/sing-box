@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -160,7 +158,7 @@ func (w *Endpoint) InterfaceUpdated() {
 	}
 	err := w.endpoint.BindUpdate()
 	if err != nil {
-		w.logger.Error(E.Cause(err, "update bind"))
+		w.logger.ErrorEvent("wireguard.bind.error", "update bind", log.Err(err))
 	}
 }
 
@@ -202,7 +200,7 @@ func (w *Endpoint) NewDNSPacket(payload []byte, source M.Socksaddr, destination 
 	metadata.Source = source
 	metadata.Destination = destination
 	metadata.Protocol = C.ProtocolDNS
-	w.logger.InfoContext(ctx, "inbound DNS packet from ", source)
+	w.logger.InfoEventContext(ctx, "inbound.dns", "inbound DNS", log.Addr("source", source), log.String("network", "udp"))
 	w.router.HijackDNSPacket(ctx, payload, writer, metadata)
 }
 
@@ -230,9 +228,7 @@ func (w *Endpoint) NewConnectionEx(ctx context.Context, conn net.Conn, source M.
 		}
 	}
 	metadata.Destination = destination
-	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", source))
-
-	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
+	adapter.LogInboundConnection(w.logger, ctx, metadata)
 
 	w.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -254,9 +250,7 @@ func (w *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 			conn = bufio.NewNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, metadata.Destination)
 		}
 	}
-	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection from ", source))
-
-	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound packet connection to ", destination))
+	adapter.LogInboundPacket(w.logger, ctx, metadata)
 
 	w.router.RoutePacketConnectionEx(ctx, conn, metadata, onClose)
 }
@@ -264,11 +258,9 @@ func (w *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 func (w *Endpoint) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	switch network {
 	case N.NetworkTCP:
-		w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound connection to ", destination))
-
+		adapter.LogOutboundConnection(w.logger, ctx, destination)
 	case N.NetworkUDP:
-		w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
-
+		adapter.LogOutboundPacket(w.logger, ctx, destination)
 	}
 	if !w.started.Load() {
 		return nil, E.New("WireGuard is not ready yet")
@@ -286,7 +278,7 @@ func (w *Endpoint) DialContext(ctx context.Context, network string, destination 
 }
 
 func (w *Endpoint) ListenPacketWithDestination(ctx context.Context, destination M.Socksaddr) (net.PacketConn, netip.Addr, error) {
-	w.logger.InfoEventContext(ctx, "protocol.message", F.ToString("outbound packet connection to ", destination))
+	adapter.LogOutboundPacket(w.logger, ctx, destination)
 
 	if !w.started.Load() {
 		return nil, netip.Addr{}, E.New("WireGuard is not ready yet")

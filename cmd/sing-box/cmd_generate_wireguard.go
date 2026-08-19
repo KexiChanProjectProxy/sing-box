@@ -22,7 +22,7 @@ var commandGenerateWireGuardKeyPair = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := generateWireGuardKey()
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }
@@ -44,7 +44,7 @@ var commandGenerateRealityKeyPair = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := generateRealityKey()
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 }

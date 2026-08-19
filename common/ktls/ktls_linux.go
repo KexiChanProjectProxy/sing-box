@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	F "github.com/sagernet/sing/common/format"
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/sing-box/common/badversion"
 	"github.com/sagernet/sing/common/control"
@@ -164,7 +164,7 @@ func (c *Conn) setupKernel(txOffload, rxOffload bool) error {
 			}
 		}
 		c.kernelTx = true
-		c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: kernel TLS TX enabled"))
+		c.logger.DebugEventContext(c.ctx, "ktls.tx", "kernel TLS TX enabled", log.Bool("enabled", true))
 
 	}
 
@@ -188,7 +188,7 @@ func (c *Conn) setupKernel(txOffload, rxOffload bool) error {
 			}
 		}
 		c.kernelRx = true
-		c.logger.DebugEventContext(c.ctx, "common.ktls.message", F.ToString("ktls: kernel TLS RX enabled"))
+		c.logger.DebugEventContext(c.ctx, "ktls.rx", "kernel TLS RX enabled", log.Bool("enabled", true))
 
 	}
 	return nil

@@ -114,7 +114,7 @@ func serviceStop() error {
 		return err
 	}
 	if !installed {
-		log.InfoEvent("cli.message", "service not installed")
+		log.InfoEvent("cli.service", "service not installed")
 		return nil
 	}
 	return runSystemctl("stop", serviceUnitName)

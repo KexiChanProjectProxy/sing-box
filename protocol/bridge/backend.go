@@ -14,7 +14,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/control"
-	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type sysctlState struct {
@@ -107,7 +106,7 @@ func (b *backendBase) registerMonitors(syncFunc func()) {
 		networkElement := networkMonitor.RegisterCallback(syncFunc)
 		unregisterFuncs = append(unregisterFuncs, func() { networkMonitor.UnregisterCallback(networkElement) })
 	} else if b.boundInterface != "" {
-		b.logger.Debug("network monitor unavailable, pinned egress will not track interface changes")
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", b.boundInterface), log.Bool("available", false), log.String("reason", "monitor_unavailable"))
 	}
 	if b.boundInterface == "" {
 		interfaceMonitor := b.networkManager.InterfaceMonitor()
@@ -139,14 +138,14 @@ func (b *backendBase) syncSessionEgress() {
 	}
 	err := b.session.SetEgress(egress)
 	if err != nil {
-		b.logger.Debug(E.Cause(err, "apply bridge egress ", egress))
+		b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "apply_egress"))
 		return
 	}
 	b.currentEgress = egress
 	if egress == "" {
-		b.logger.Debug("bridge egress unavailable, dropping forwarded traffic")
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", egress), log.Bool("available", false))
 	} else {
-		b.logger.Debug("bridge egress ", egress)
+		b.logger.DebugEvent("bridge.egress", "bridge egress", log.String("egress", egress), log.Bool("available", true))
 	}
 }
 
@@ -174,7 +173,7 @@ func (b *backendBase) readLoop() {
 			select {
 			case <-b.closed:
 			default:
-				b.logger.Debug(E.Cause(err, "bridge tun read"))
+				b.logger.DebugEvent("bridge.error", "bridge error", log.Err(err), log.String("op", "read"))
 			}
 			return
 		}

@@ -200,14 +200,14 @@ func (o *exchangeOperation) release() {
 func (c *Client) beginExchange(ctx context.Context, transport adapter.DNSTransport, message *dns.Msg, options adapter.DNSQueryOptions, responseChecker func(response *dns.Msg) bool, allowWait bool) (*exchangeOperation, *dns.Msg, exchangeStatus, error) {
 	if len(message.Question) == 0 {
 		if c.logger != nil {
-			c.logger.WarnContext(ctx, "bad question size: ", len(message.Question))
+			c.logger.WarnEventContext(ctx, "dns.query.invalid", "bad question size", log.Int("question_size", len(message.Question)))
 		}
 		return nil, FixedResponseStatus(message, dns.RcodeFormatError), exchangeDone, nil
 	}
 	question := message.Question[0]
 	if question.Qtype == dns.TypeA && options.Strategy == C.DomainStrategyIPv6Only || question.Qtype == dns.TypeAAAA && options.Strategy == C.DomainStrategyIPv4Only {
 		if c.logger != nil {
-			c.logger.DebugContext(ctx, "strategy rejected")
+			c.logger.DebugEventContext(ctx, "dns.strategy.rejected", "strategy rejected")
 		}
 		return nil, FixedResponseStatus(message, dns.RcodeSuccess), exchangeDone, nil
 	}
@@ -590,7 +590,7 @@ func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, key dnsCac
 		response, err := c.exchangeToTransport(ctx, transport, message, options.Timeout)
 		if err != nil {
 			if c.logger != nil {
-				c.logger.DebugContext(ctx, "optimistic refresh failed for ", FqdnToDomain(key.Name), ": ", err)
+				c.logger.DebugEventContext(ctx, "dns.cache.refresh.error", "optimistic refresh failed", log.String("domain", FqdnToDomain(key.Name)), log.Err(err))
 			}
 			return
 		}
@@ -603,7 +603,7 @@ func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, key dnsCac
 			}
 			if rejected {
 				if c.logger != nil {
-					c.logger.DebugContext(ctx, "optimistic refresh rejected for ", FqdnToDomain(key.Name))
+					c.logger.DebugEventContext(ctx, "dns.cache.refresh.rejected", "optimistic refresh rejected", log.String("domain", FqdnToDomain(key.Name)))
 				}
 				if c.rdrc != nil {
 					c.rdrc.SaveRDRCAsync(transport.Tag(), key.Name, key.Qtype, c.logger)

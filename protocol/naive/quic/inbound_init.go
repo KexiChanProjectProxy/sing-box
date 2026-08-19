@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	F "github.com/sagernet/sing/common/format"
-
 	"github.com/sagernet/quic-go"
 	"github.com/sagernet/quic-go/congestion"
 	"github.com/sagernet/quic-go/http3"
@@ -123,7 +121,7 @@ func init() {
 			sErr := h3Server.ServeListener(quicListener)
 			udpConn.Close()
 			if sErr != nil && !E.IsClosedOrCanceled(sErr) {
-				logger.ErrorEvent("protocol.message", F.ToString("http3 server closed: ", sErr))
+				logger.ErrorEvent("listener.closed", "listener closed", log.Err(sErr))
 
 			}
 		}()

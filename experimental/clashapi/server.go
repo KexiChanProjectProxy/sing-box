@@ -242,10 +242,10 @@ func (s *Server) SetMode(newMode string) {
 	if cacheFile != nil {
 		err := cacheFile.StoreMode(newMode)
 		if err != nil {
-			s.logger.Error(E.Cause(err, "save mode"))
+			s.logger.ErrorEvent("clash.error", "save mode", log.Err(err))
 		}
 	}
-	s.logger.Info("updated mode: ", newMode)
+	s.logger.InfoEvent("clash.mode.updated", "updated mode", log.String("mode", newMode))
 }
 
 func authentication(serverSecret string) func(next http.Handler) http.Handler {

@@ -35,7 +35,7 @@ const (
 type dashboard struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
-	logger         log.ContextLogger
+	logger         log.StructuredLogger
 	options        option.APIDashboardOptions
 	path           string
 	url            string
@@ -46,7 +46,7 @@ type dashboard struct {
 	lastUpdated    time.Time
 }
 
-func newDashboard(ctx context.Context, logger log.ContextLogger, options option.APIDashboardOptions) *dashboard {
+func newDashboard(ctx context.Context, logger log.StructuredLogger, options option.APIDashboardOptions) *dashboard {
 	ctx, cancel := context.WithCancel(ctx)
 	path := options.Path
 	if path == "" {
@@ -121,7 +121,7 @@ func (d *dashboard) serveHTTP(writer http.ResponseWriter, request *http.Request)
 func (d *dashboard) loopUpdate() {
 	status := d.loadState()
 	if status == dashboardUserProvided {
-		d.logger.Info("dashboard: serving user-provided files at ", d.path, ", auto-update disabled")
+		d.logger.InfoEvent("dashboard.serving", "serving user-provided files", log.String("path", d.path))
 		return
 	}
 	var nextUpdate time.Time
@@ -140,7 +140,7 @@ func (d *dashboard) loopUpdate() {
 		if !now.Before(nextUpdate) {
 			err := d.fetch(d.ctx)
 			if err != nil {
-				d.logger.Error(E.Cause(err, "update dashboard"))
+				d.logger.ErrorEvent("dashboard.update.error", "update dashboard", log.Err(err))
 				nextUpdate = now.Add(d.updateInterval)
 			} else {
 				nextUpdate = d.lastUpdated.Add(d.updateInterval)
@@ -172,7 +172,7 @@ func (d *dashboard) loadState() dashboardStatus {
 }
 
 func (d *dashboard) fetch(ctx context.Context) error {
-	d.logger.Info("updating dashboard from URL: ", d.url)
+	d.logger.InfoEvent("dashboard.fetch", "updating dashboard", log.String("url", d.url))
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, d.url, nil)
 	if err != nil {
 		return err
@@ -192,9 +192,9 @@ func (d *dashboard) fetch(ctx context.Context) error {
 		d.lastUpdated = time.Now()
 		err = filemanager.WriteFile(d.ctx, filepath.Join(d.path, dashboardEtagFileName), []byte(d.lastEtag), 0o644)
 		if err != nil {
-			d.logger.Warn(E.Cause(err, "save dashboard update time"))
+			d.logger.WarnEvent("dashboard.etag.error", "save dashboard update time", log.Err(err))
 		}
-		d.logger.Info("dashboard: not modified")
+		d.logger.InfoEvent("dashboard.not_modified", "dashboard not modified")
 		return nil
 	default:
 		return E.New("unexpected status: ", response.Status)
@@ -206,7 +206,7 @@ func (d *dashboard) fetch(ctx context.Context) error {
 	}
 	d.lastEtag = etag
 	d.lastUpdated = time.Now()
-	d.logger.Info("dashboard: updated")
+	d.logger.InfoEvent("dashboard.updated", "dashboard updated")
 	return nil
 }
 

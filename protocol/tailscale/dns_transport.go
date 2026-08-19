@@ -22,7 +22,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -109,7 +108,7 @@ func (t *DNSTransport) Reset() {
 func (t *DNSTransport) onReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCfg *nDNS.Config) {
 	err := t.updateDNSServers(routerCfg, dnsCfg)
 	if err != nil {
-		t.logger.ErrorEvent("protocol.message", F.ToString(E.Cause(err, "update DNS servers")))
+		t.logger.ErrorEvent("dns.update.error", "update DNS servers", log.Err(err))
 
 	}
 }

@@ -102,10 +102,10 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	networkName := N.NetworkName(network)
 	switch networkName {
 	case N.NetworkTCP:
-		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+		adapter.LogOutboundConnection(h.logger, ctx, destination)
 		return h.client.DialContext(ctx, destination)
 	case N.NetworkUDP:
-		h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+		adapter.LogOutboundPacket(h.logger, ctx, destination)
 		conn, err := h.dialer.DialContext(ctx, N.NetworkTCP, h.serverAddr)
 		if err != nil {
 			return nil, err
@@ -125,7 +125,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.Outbound = h.Tag()
 	metadata.Destination = destination
-	h.logger.InfoContext(ctx, "outbound packet connection to ", destination)
+	adapter.LogOutboundPacket(h.logger, ctx, destination)
 	conn, err := h.dialer.DialContext(ctx, N.NetworkTCP, h.serverAddr)
 	if err != nil {
 		return nil, err

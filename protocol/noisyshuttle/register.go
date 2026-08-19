@@ -19,7 +19,6 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -213,7 +212,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	tlsConn, err := tls.ServerHandshake(ctx, conn, h.tlsConfig)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source, ": TLS handshake")))
+		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 		return
 	}
 	conn = tlsConn
@@ -239,15 +238,15 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		_ = conn.SetReadDeadline(time.Time{})
 	}
 	userName := h.users[userIndex].Name
-	if userName == "" {
-		userName = F.ToString(userIndex)
+	if userName != "" {
+		metadata.User = userName
 	}
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] session accepted from ", metadata.Source))
+	h.logger.InfoEventContext(ctx, "inbound.accepted", "inbound accepted", append([]log.Field{log.Addr("source", metadata.Source)}, log.OptionalString("user", userName)...)...)
 	ctx = auth.ContextWithUser(ctx, userIndex)
 	if err := h.handleSession(ctx, conn, metadata, onClose, userIndex); err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
-		if !E.IsClosedOrCanceled(err) && err != io.EOF {
-			h.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", metadata.Source)))
+		if err != io.EOF {
+			adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 		}
 	}
 }
@@ -266,12 +265,12 @@ func (h *Inbound) handleAuthFailure(ctx context.Context, conn net.Conn, metadata
 	if h.authTimeout > 0 {
 		_ = conn.SetReadDeadline(time.Time{})
 	}
-	h.logger.WarnEventContext(ctx, "protocol.message", F.ToString("authentication failed from ", metadata.Source, ": ", reason))
+	h.logger.WarnEventContext(ctx, "connection.error", "process connection", log.Addr("source", metadata.Source), log.String("reason", reason), log.Err(cause))
 	if h.fallbackAddr.IsValid() {
 		metadata.Inbound = h.Tag()
 		metadata.InboundType = h.Type()
 		metadata.Destination = h.fallbackAddr
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("fallback connection to ", h.fallbackAddr))
+		adapter.LogInboundConnection(h.logger, ctx, metadata)
 		h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 		return
 	}
@@ -311,7 +310,7 @@ func (h *Inbound) handleSession(ctx context.Context, conn net.Conn, metadata ada
 	for {
 		if !session.checkLifecycle() {
 			if session.closeReason != "" {
-				h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("session closed: ", session.closeReason))
+				h.logger.DebugEventContext(ctx, "connection.closed", "connection closed", log.String("reason", session.closeReason))
 			}
 			return nil
 		}
@@ -380,15 +379,11 @@ func (h *Inbound) handleOpenRequest(ctx context.Context, session *inboundSession
 	metadata.Destination = destination
 	if userIndex >= 0 && userIndex < len(h.users) {
 		user := h.users[userIndex].Name
-		if user == "" {
-			user = F.ToString(userIndex)
-		} else {
+		if user != "" {
 			metadata.User = user
 		}
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", user, "] inbound connection to ", metadata.Destination))
-	} else {
-		h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", metadata.Destination))
 	}
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
 	streamConn := &streamConn{Conn: session.conn, streamID: frame.StreamID, firstPayload: nil, inbound: session}
 	h.router.RouteConnectionEx(adapter.WithContext(ctx, &metadata), streamConn, metadata, onClose)
 	return nil
@@ -420,12 +415,10 @@ func (h *Inbound) handleUDPAssociate(ctx context.Context, conn net.Conn, metadat
 	userName := ""
 	if userIndex >= 0 && userIndex < len(h.users) {
 		userName = h.users[userIndex].Name
-		if userName == "" {
-			userName = F.ToString(userIndex)
-		}
 	}
-	h.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] UDP associate stream=", frame.StreamID))
-	h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("UDP mapping created for stream=", frame.StreamID))
+	metadata.User = userName
+	metadata.Destination = defaultDest
+	adapter.LogInboundPacket(h.logger, ctx, metadata)
 	natEntry := &NATEntry{
 		StreamID:     frame.StreamID,
 		Destination:  defaultDest,
@@ -439,7 +432,7 @@ func (h *Inbound) handleUDPAssociate(ctx context.Context, conn net.Conn, metadat
 func (h *Inbound) handleUDPStream(ctx context.Context, conn net.Conn, streamID uint32, defaultDest M.Socksaddr, natEntry *NATEntry, onClose N.CloseHandlerFunc) {
 	defer func() {
 		h.natManager.Remove(streamID)
-		h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("UDP mapping expired for stream=", streamID))
+		h.logger.DebugEventContext(ctx, "connection.closed", "connection closed", log.String("reason", "udp mapping expired"))
 	}()
 	for {
 		frame, err := ReadFrame(conn, h.natManager.MaxPacketSize()+1024)
@@ -465,7 +458,7 @@ func (h *Inbound) handleUDPStream(ctx context.Context, conn net.Conn, streamID u
 			if port != 0 {
 				destination = M.ParseSocksaddrHostPort(addr.Host, port)
 			}
-			h.logger.DebugEventContext(ctx, "protocol.message", F.ToString("UDP packet to ", destination))
+			h.logger.DebugEventContext(ctx, "inbound.packet", "inbound packet connection", log.Addr("destination", destination))
 		case FrameTypeEndRequest, FrameTypeEndResponse:
 			return
 		case FrameTypeReset:

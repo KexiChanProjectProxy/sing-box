@@ -22,8 +22,7 @@ func New(logger log.StructuredLogger, timeout time.Duration) *Monitor {
 
 func (m *Monitor) Start(taskName ...any) {
 	m.timer = time.AfterFunc(m.timeout, func() {
-		m.logger.WarnEvent("common.taskmonitor.message", F.ToString(F.ToString(taskName...), " take too much time to finish!"))
-
+		m.logger.WarnEvent("lifecycle.slow", "still running", log.String("name", F.ToString(taskName...)))
 	})
 }
 

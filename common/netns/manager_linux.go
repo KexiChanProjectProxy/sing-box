@@ -106,12 +106,11 @@ func (m *Manager) startNamespace(namespace option.NetworkNamespace) error {
 		}
 	}
 	m.paths[namespace.Tag] = netnsPath(pid)
-	m.logger.Info("created network namespace[", namespace.Tag, "], holder pid: ", pid)
-	if os.Geteuid() == 0 {
-		m.logger.Info("enter network namespace[", namespace.Tag, "] with: nsenter -n -t ", pid)
-	} else {
-		m.logger.Info("enter network namespace[", namespace.Tag, "] with: nsenter -U --preserve-credentials -n -t ", pid)
+	command := "nsenter -n -t " + strconv.Itoa(pid)
+	if os.Geteuid() != 0 {
+		command = "nsenter -U --preserve-credentials -n -t " + strconv.Itoa(pid)
 	}
+	m.logger.InfoEvent("netns.created", "created network namespace", log.String("tag", namespace.Tag), log.Int("pid", pid), log.String("command", command))
 	return nil
 }
 

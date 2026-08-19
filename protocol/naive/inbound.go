@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 
-	F "github.com/sagernet/sing/common/format"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -121,7 +120,7 @@ func (n *Inbound) Start(stage adapter.StartStage) error {
 		go func() {
 			sErr := n.httpServer.Serve(listener)
 			if sErr != nil && !errors.Is(sErr, http.ErrServerClosed) {
-				n.logger.Error("http server serve error: ", sErr)
+				n.logger.ErrorEvent("listener.error", "listener error", log.Err(sErr))
 			}
 		}()
 	}
@@ -131,7 +130,7 @@ func (n *Inbound) Start(stage adapter.StartStage) error {
 		if err == nil {
 			n.h3Server = http3Server
 		} else if len(n.network) > 1 {
-			n.logger.WarnEvent("protocol.message", F.ToString(E.Cause(err, "naive http3 disabled")))
+			n.logger.WarnEvent("listener.error", "listener error", log.Err(err), log.String("reason", "naive http3 disabled"))
 
 		} else {
 			return err
@@ -202,17 +201,6 @@ func (n *Inbound) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net.Conn, userName string, source M.Socksaddr, destination M.Socksaddr) {
-	if userName != "" {
-		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection from ", source))
-
-		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("[", userName, "] inbound connection to ", destination))
-
-	} else {
-		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection from ", source))
-
-		n.logger.InfoEventContext(ctx, "protocol.message", F.ToString("inbound connection to ", destination))
-
-	}
 	var metadata adapter.InboundContext
 	metadata.Inbound = n.Tag()
 	metadata.InboundType = n.Type()
@@ -223,6 +211,7 @@ func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net
 	metadata.Destination = destination
 	metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 	metadata.User = userName
+	adapter.LogInboundConnection(n.logger, ctx, metadata)
 	if !waitForClose {
 		n.router.RouteConnectionEx(ctx, conn, metadata, nil)
 	} else {
@@ -237,7 +226,7 @@ func (n *Inbound) newConnection(ctx context.Context, waitForClose bool, conn net
 }
 
 func (n *Inbound) badRequest(ctx context.Context, request *http.Request, err error) {
-	n.logger.ErrorEventContext(ctx, "protocol.message", F.ToString(E.Cause(err, "process connection from ", request.RemoteAddr)))
+	adapter.LogConnectionError(n.logger, ctx, err, M.ParseSocksaddr(request.RemoteAddr))
 
 }
 

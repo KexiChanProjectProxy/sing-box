@@ -38,7 +38,7 @@ func newTunDeviceAdapter(tun singTun.Tun, mtu int, contextLogger log.StructuredL
 		}
 		err := com.StartRuntime(processType)
 		if err != nil {
-			contextLogger.Warn("initialize COM runtime: ", err)
+			contextLogger.WarnEvent("tailscale.com.error", "initialize COM runtime", log.Err(err))
 		}
 	})
 	winTun, ok := tun.(singTun.WinTun)

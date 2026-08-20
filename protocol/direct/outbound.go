@@ -277,7 +277,7 @@ func (h *Outbound) ListenSerialNetworkPacket(ctx context.Context, destination M.
 	metadata.Destination = destination
 	adapter.LogOutboundPacket(h.logger, ctx, destination)
 	if h.xlat464 != nil && len(destinationAddresses) > 0 {
-		destinationAddresses = h.xlat464.synthesizeIPv4Addresses(destinationAddresses)
+		destinationAddresses = h.xlat464.mapAddresses(destinationAddresses)
 		if len(destinationAddresses) == 0 {
 			return nil, netip.Addr{}, E.New("xlat464: no IPv4 destination addresses")
 		}
@@ -300,7 +300,7 @@ func (h *Outbound) normalizeTCPDestinationAddresses(destinationAddresses []netip
 	if h.xlat464 == nil || len(destinationAddresses) == 0 {
 		return destinationAddresses, nil
 	}
-	mappedAddresses := h.xlat464.synthesizeIPv4Addresses(destinationAddresses)
+	mappedAddresses := h.xlat464.mapAddresses(destinationAddresses)
 	if len(mappedAddresses) == 0 {
 		return nil, E.New("xlat464: no IPv4 destination addresses")
 	}

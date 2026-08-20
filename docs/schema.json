@@ -18210,6 +18210,9 @@
       "properties": {
         "prefix": {
           "type": "string"
+        },
+        "allow_ipv6": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

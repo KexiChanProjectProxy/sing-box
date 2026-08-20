@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.10
+
+* 默认阻止原生 IPv6 目标绕过 [`xlat464`](/zh/configuration/outbound/direct/#xlat464) 配置的 NAT64 路径，并增加显式的 `allow_ipv6` 兼容选项
+
 #### 1.14.0.9
 
 * 为 [`loadbalance` 出站](/zh/configuration/outbound/loadbalance/#tolerance) 添加 `tolerance`，默认 `10` 毫秒

@@ -19,13 +19,14 @@ type DirectInboundOptions struct {
 // Xlat464Options configures the direct-only 464XLAT/NAT64 dial path. The
 // direct outbound accepts the JSON form
 //
-//	{"xlat464":{"prefix":"64:ff9b::/96"}}
+//	{"xlat464":{"prefix":"64:ff9b::/96","allow_ipv6":false}}
 //
 // where Prefix MUST be an IPv6 /96 prefix. IPv4, IPv4-mapped, and any
 // other bit length are rejected. Prefix is a pointer so the nil
 // (absent) case is preserved as a no-op.
 type Xlat464Options struct {
-	Prefix *badoption.Prefix `json:"prefix"`
+	Prefix    *badoption.Prefix `json:"prefix"`
+	AllowIPv6 bool              `json:"allow_ipv6,omitempty"`
 }
 
 type _DirectOutboundOptions struct {

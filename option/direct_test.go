@@ -27,6 +27,17 @@ func TestDirectOutboundXLAT464Valid(t *testing.T) {
 	require.True(t, prefix.Addr().Is6())
 	require.False(t, prefix.Addr().Is4())
 	require.False(t, prefix.Addr().Is4In6())
+	require.False(t, options.Xlat464.AllowIPv6)
+}
+
+func TestDirectOutboundXLAT464AllowIPv6(t *testing.T) {
+	t.Parallel()
+
+	var options DirectOutboundOptions
+	err := json.Unmarshal([]byte(`{"xlat464":{"prefix":"64:ff9b::/96","allow_ipv6":true}}`), &options)
+	require.NoError(t, err)
+	require.NotNil(t, options.Xlat464)
+	require.True(t, options.Xlat464.AllowIPv6)
 }
 
 // TestDirectOutboundXLAT464Absent proves an absent xlat464 key is a no-op

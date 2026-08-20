@@ -21,7 +21,8 @@ icon: material/alert-decagram
   "tag": "direct-out",
 
   "xlat464": {
-    "prefix": "64:ff9b::/96"
+    "prefix": "64:ff9b::/96",
+    "allow_ipv6": false
   },
   
   "override_address": "1.0.0.1",
@@ -58,7 +59,8 @@ XLAT464 (NAT64) address translation for the direct outbound. When configured, IP
 ```json
 {
   "xlat464": {
-    "prefix": "64:ff9b::/96"
+    "prefix": "64:ff9b::/96",
+    "allow_ipv6": false
   }
 }
 ```
@@ -69,7 +71,7 @@ XLAT464 (NAT64) address translation for the direct outbound. When configured, IP
     - IPv4 literal destinations and A-record answers are embedded into the prefix (e.g. `192.0.2.1` becomes `64:ff9b::c000:201`).
     - Domain resolution for direct-owned destinations is forced to A-only (IPv4). AAAA answers supplied by a preceding route `resolve` action are dropped.
     - TCP and UDP protocols are supported.
-    - Native IPv6 literal destinations (non-mapped) pass through unchanged.
+    - Native IPv6 literal destinations outside the configured prefix are rejected by default, preventing them from bypassing the NAT64 path. Set `allow_ipv6` to `true` to explicitly allow direct native IPv6 connections.
     - ICMP, DNS64, automatic prefix discovery, and non-`/96` prefix lengths are not supported.
     - This option is exclusive to the direct outbound and does not apply to other outbound types.
 

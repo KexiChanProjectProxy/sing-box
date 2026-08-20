@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.10
+
+* Prevent native IPv6 destinations from bypassing the configured [`xlat464`](/configuration/outbound/direct/#xlat464) NAT64 path by default; add an explicit `allow_ipv6` compatibility option
+
 #### 1.14.0.9
 
 * Add `tolerance` to [`loadbalance` outbound](/configuration/outbound/loadbalance/#tolerance); default `10` ms

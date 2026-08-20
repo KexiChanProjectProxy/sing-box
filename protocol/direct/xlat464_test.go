@@ -95,11 +95,37 @@ func TestXLAT464DialerMapsDestinations(t *testing.T) {
 	}
 
 	nativeIPv6 := M.SocksaddrFrom(netip.MustParseAddr("2001:db8::1"), 443)
-	if _, err = dialer.DialContext(ctx, N.NetworkTCP, nativeIPv6); err != nil {
-		t.Fatal(err)
+	if _, err = dialer.DialContext(ctx, N.NetworkTCP, nativeIPv6); err == nil {
+		t.Fatal("expected native IPv6 destination rejection")
 	}
-	if got := base.lastDestination(); got != nativeIPv6 {
-		t.Fatalf("native IPv6 destination: got %v, want %v", got, nativeIPv6)
+	if len(base.destinations) != 4 {
+		t.Fatal("native IPv6 destination reached the socket dialer")
+	}
+}
+
+func TestXLAT464AllowIPv6(t *testing.T) {
+	base := &xlat464TestDialer{}
+	options := xlat464TestOptions("64:ff9b::/96")
+	options.AllowIPv6 = true
+	dialer, err := newXLAT464Dialer(base, options)
+	xlat464NoError(t, err)
+	destination := M.SocksaddrFrom(netip.MustParseAddr("2001:db8::1"), 443)
+	_, err = dialer.DialContext(context.Background(), N.NetworkTCP, destination)
+	xlat464NoError(t, err)
+	if got := base.lastDestination(); got != destination {
+		t.Fatalf("native IPv6 destination: got %v, want %v", got, destination)
+	}
+}
+
+func TestXLAT464KeepsConfiguredPrefix(t *testing.T) {
+	base := &xlat464TestDialer{}
+	dialer, err := newXLAT464Dialer(base, xlat464TestOptions("64:ff9b::/96"))
+	xlat464NoError(t, err)
+	destination := M.SocksaddrFrom(netip.MustParseAddr("64:ff9b::c000:201"), 443)
+	_, err = dialer.DialContext(context.Background(), N.NetworkTCP, destination)
+	xlat464NoError(t, err)
+	if got := base.lastDestination(); got != destination {
+		t.Fatalf("configured-prefix destination: got %v, want %v", got, destination)
 	}
 }
 
@@ -148,6 +174,9 @@ func TestXLAT464PacketConn(t *testing.T) {
 	if got := basePacketConn.writeToAddr.(*net.UDPAddr).AddrPort(); got != prefixed.AddrPort() {
 		t.Fatalf("WriteTo address: got %v, want %v", got, prefixed.AddrPort())
 	}
+	if _, err = conn.WriteTo([]byte("request"), net.UDPAddrFromAddrPort(netip.MustParseAddrPort("[2001:db8::1]:53"))); err == nil {
+		t.Fatal("expected native IPv6 WriteTo rejection")
+	}
 	basePacketConn.readFromAddr = prefixed
 	if _, source, err := conn.ReadFrom(make([]byte, 64)); err != nil {
 		t.Fatal(err)
@@ -170,6 +199,9 @@ func TestXLAT464PacketConn(t *testing.T) {
 	}
 	if got := basePacketConn.writePacketDestination; got != M.SocksaddrFrom(netip.MustParseAddr("64:ff9b::c000:201"), 53) {
 		t.Fatalf("WritePacket destination: got %v", got)
+	}
+	if err = netPacketConn.WritePacket(buffer, M.SocksaddrFrom(netip.MustParseAddr("2001:db8::1"), 53)); err == nil {
+		t.Fatal("expected native IPv6 WritePacket rejection")
 	}
 	basePacketConn.readPacketDestination = M.SocksaddrFrom(netip.MustParseAddr("64:ff9b::c000:201"), 53)
 	if got, err := netPacketConn.ReadPacket(buffer); err != nil {

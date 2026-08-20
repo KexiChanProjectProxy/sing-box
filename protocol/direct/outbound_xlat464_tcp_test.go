@@ -117,7 +117,7 @@ func TestXLAT464DropsAAAA(t *testing.T) {
 	xlat464OutboundExpectDestinations(t, base, nil)
 }
 
-func TestXLAT464LeavesIPv6Native(t *testing.T) {
+func TestXLAT464RejectsIPv6Native(t *testing.T) {
 	// Given
 	base := &xlat464OutboundCaptureDialer{}
 	outbound := newXLAT464TCPTestOutbound(t, base, true)
@@ -127,10 +127,10 @@ func TestXLAT464LeavesIPv6Native(t *testing.T) {
 	_, err := outbound.DialContext(context.Background(), N.NetworkTCP, destination)
 
 	// Then
-	if !errors.Is(err, errXLAT464OutboundTestDial) {
-		t.Fatalf("DialContext error: got %v, want %v", err, errXLAT464OutboundTestDial)
+	if err == nil {
+		t.Fatal("expected native IPv6 destination rejection")
 	}
-	xlat464OutboundExpectDestinations(t, base, []M.Socksaddr{destination})
+	xlat464OutboundExpectDestinations(t, base, nil)
 }
 
 func TestXLAT464DisabledTCP(t *testing.T) {

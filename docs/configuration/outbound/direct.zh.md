@@ -21,7 +21,8 @@ icon: material/alert-decagram
   "tag": "direct-out",
 
   "xlat464": {
-    "prefix": "64:ff9b::/96"
+    "prefix": "64:ff9b::/96",
+    "allow_ipv6": false
   },
 
   "override_address": "1.0.0.1",
@@ -56,7 +57,8 @@ XLAT464（NAT64）地址转换，用于 direct 出站。配置后，IPv4 字面�
 ```json
 {
   "xlat464": {
-    "prefix": "64:ff9b::/96"
+    "prefix": "64:ff9b::/96",
+    "allow_ipv6": false
   }
 }
 ```
@@ -67,7 +69,7 @@ XLAT464（NAT64）地址转换，用于 direct 出站。配置后，IPv4 字面�
     - IPv4 字面目标地址和 A 记录应答会被嵌入前缀（例如 `192.0.2.1` 变为 `64:ff9b::c000:201`）。
     - direct 出站的域名解析强制仅查询 A 记录（IPv4）。由前置路由 `resolve` 动作提供的 AAAA 应答会被丢弃。
     - 支持 TCP 和 UDP 协议。
-    - 原生 IPv6 字面目标地址（非映射地址）保持不变。
+    - 默认拒绝配置前缀之外的原生 IPv6 字面目标地址，防止其绕过 NAT64 路径。仅当显式设置 `allow_ipv6` 为 `true` 时才允许原生 IPv6 直连。
     - 不支持 ICMP、DNS64、自动前缀发现和非 `/96` 前缀长度。
     - 此选项仅适用于 direct 出站，不适用于其他出站类型。
 

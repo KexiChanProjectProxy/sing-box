@@ -70,7 +70,11 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		dialerOptions.DialerWrapper = func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
 			return &xlat464Dialer{dialer: base, mapper: *xlat464}
 		}
-		dialerOptions.ForceDomainStrategyIPv4Only = true
+		// Strict XLAT464 must resolve only A records so a native AAAA cannot
+		// bypass the configured translator. When allow_ipv6 is explicitly
+		// enabled, keep the configured resolver strategy so dual-stack peers
+		// can receive both families through their pinned route.
+		dialerOptions.ForceDomainStrategyIPv4Only = !options.Xlat464.AllowIPv6
 	}
 	outboundDialer, err := dialer.NewWithOptions(dialerOptions)
 	if err != nil {

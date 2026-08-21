@@ -54,6 +54,29 @@ func TestXLAT464Resolver(t *testing.T) {
 	}
 }
 
+func TestXLAT464DualStackResolver(t *testing.T) {
+	options := xlat464OutboundTestOptions(C.DomainStrategyPreferIPv6)
+	options.Xlat464.AllowIPv6 = true
+	dnsRouter := &xlat464OutboundTestDNSRouter{addresses: []netip.Addr{
+		netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("192.0.2.1"),
+	}}
+	rawOutbound, err := NewOutbound(xlat464OutboundTestContext(dnsRouter), nil, log.NewNOPFactory().Logger(), "direct", options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outbound := rawOutbound.(*Outbound)
+	resolver := outbound.dialer.(dialer.ParallelInterfaceResolveDialer)
+	if got := resolver.QueryOptions().Strategy; got != C.DomainStrategyPreferIPv6 {
+		t.Fatalf("DNS strategy: got %v, want %v", got, C.DomainStrategyPreferIPv6)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = outbound.dialer.DialContext(ctx, N.NetworkTCP, M.ParseSocksaddrHostPort("example.com", 443))
+	if got := dnsRouter.options.Strategy; got != C.DomainStrategyPreferIPv6 {
+		t.Fatalf("observed DNS strategy: got %v, want %v", got, C.DomainStrategyPreferIPv6)
+	}
+}
+
 func TestXLAT464Disabled(t *testing.T) {
 	// Given
 	options := xlat464OutboundTestOptions(C.DomainStrategyPreferIPv4)

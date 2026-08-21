@@ -107,6 +107,7 @@ type AbstractDialerOptions struct {
 	FallbackNetworkType        badoption.Listable[InterfaceType] `json:"fallback_network_type,omitempty"`
 	FallbackDelay              badoption.Duration                `json:"fallback_delay,omitempty"`
 	PreferDomain               bool                              `json:"prefer_domain,omitempty"`
+	OverrideIP                 *OverrideIPOptions                `json:"override_ip,omitempty"`
 
 	// Deprecated: migrated to domain resolver
 	DomainStrategy DomainStrategy `json:"domain_strategy,omitempty" schema:"omit"`

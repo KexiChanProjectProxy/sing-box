@@ -7,10 +7,11 @@ import (
 )
 
 type SelectorOutboundOptions struct {
-	Outbounds                 []string `json:"outbounds" reference:"outbound"`
-	Default                   string   `json:"default,omitempty" reference:"outbound"`
-	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
-	PreferDomain              bool     `json:"prefer_domain,omitempty"`
+	Outbounds                 []string           `json:"outbounds" reference:"outbound"`
+	Default                   string             `json:"default,omitempty" reference:"outbound"`
+	InterruptExistConnections bool               `json:"interrupt_exist_connections,omitempty"`
+	PreferDomain              bool               `json:"prefer_domain,omitempty"`
+	OverrideIP                *OverrideIPOptions `json:"override_ip,omitempty"`
 }
 
 type URLTestOutboundOptions struct {
@@ -21,6 +22,7 @@ type URLTestOutboundOptions struct {
 	IdleTimeout               badoption.Duration `json:"idle_timeout,omitempty"`
 	InterruptExistConnections bool               `json:"interrupt_exist_connections,omitempty"`
 	PreferDomain              bool               `json:"prefer_domain,omitempty"`
+	OverrideIP                *OverrideIPOptions `json:"override_ip,omitempty"`
 }
 
 type LoadBalanceOutboundOptions struct {
@@ -37,6 +39,7 @@ type LoadBalanceOutboundOptions struct {
 	EmptyPoolAction           string                  `json:"empty_pool_action,omitempty"`
 	InterruptExistConnections bool                    `json:"interrupt_exist_connections,omitempty"`
 	PreferDomain              bool                    `json:"prefer_domain,omitempty"`
+	OverrideIP                *OverrideIPOptions      `json:"override_ip,omitempty"`
 }
 
 type LoadBalanceTopNOptions struct {
@@ -52,6 +55,9 @@ type LoadBalanceHashOptions struct {
 }
 
 func (o LoadBalanceOutboundOptions) Check() error {
+	if err := CheckDestinationOverride(o.PreferDomain, o.OverrideIP); err != nil {
+		return err
+	}
 	if len(o.PrimaryOutbounds) == 0 {
 		return E.New("missing primary_outbounds")
 	}

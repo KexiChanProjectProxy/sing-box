@@ -76,7 +76,8 @@ type LogOptions struct {
 }
 
 type StubOptions struct {
-	PreferDomain bool `json:"prefer_domain,omitempty"`
+	PreferDomain bool               `json:"prefer_domain,omitempty"`
+	OverrideIP   *OverrideIPOptions `json:"override_ip,omitempty"`
 }
 
 func checkOptions(options *Options) error {

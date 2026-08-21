@@ -102,6 +102,29 @@ func TestLoadBalanceOutboundOptionsPreferDomain(t *testing.T) {
 	require.True(t, options.PreferDomain)
 }
 
+func TestLoadBalanceOutboundOptionsOverrideIP(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a"], "override_ip": "ipv4_only"}`), &options)
+	require.NoError(t, err)
+	require.NotNil(t, options.OverrideIP)
+	require.Equal(t, "ipv4_only", options.OverrideIP.Strategy.String())
+}
+
+func TestLoadBalanceCheckPreferDomainOverrideIPConflict(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		PreferDomain:     true,
+		OverrideIP:       &OverrideIPOptions{Strategy: DomainStrategy(1)},
+	}
+	err := options.Check()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "mutually exclusive")
+}
+
 func TestLoadBalanceCheckInvalidStrategy(t *testing.T) {
 	t.Parallel()
 

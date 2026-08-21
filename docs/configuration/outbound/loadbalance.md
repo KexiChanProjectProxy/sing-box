@@ -29,7 +29,8 @@
   },
   "empty_pool_action": "error",
   "interrupt_exist_connections": false,
-  "prefer_domain": false
+  "prefer_domain": false,
+  "override_ip": ""
 }
 ```
 
@@ -146,6 +147,12 @@ Only inbound connections are affected by this setting, internal connections will
 ==Optional==
 
 Prefer domain resolution through the selected outbound. Default: `false`.
+
+#### override_ip
+
+==Optional==
+
+See [Dial Fields](/configuration/shared/dial/#override_ip).
 
 ### Startup Behavior
 

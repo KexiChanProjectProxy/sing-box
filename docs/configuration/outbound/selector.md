@@ -11,7 +11,9 @@
     "proxy-c"
   ],
   "default": "proxy-c",
-  "interrupt_exist_connections": false
+  "interrupt_exist_connections": false,
+  "prefer_domain": false,
+  "override_ip": ""
 }
 ```
 
@@ -36,3 +38,15 @@ The default outbound tag. The first outbound will be used if empty.
 Interrupt existing connections when the selected outbound has changed.
 
 Only inbound connections are affected by this setting, internal connections will always be interrupted.
+
+#### prefer_domain
+
+==Optional==
+
+See [Dial Fields](/configuration/shared/dial/#prefer_domain).
+
+#### override_ip
+
+==Optional==
+
+See [Dial Fields](/configuration/shared/dial/#override_ip).

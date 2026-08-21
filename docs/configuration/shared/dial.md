@@ -5,6 +5,7 @@ icon: material/new-box
 !!! quote "Changes in sing-box 1.14.0"
 
 	:material-plus: [prefer_domain](#prefer_domain)  
+	:material-plus: [override_ip](#override_ip)  
 	:material-alert: [domain_resolver](#domain_resolver)  
 	:material-alert: [netns](#netns)
 
@@ -48,6 +49,7 @@ icon: material/new-box
   "tcp_keep_alive_interval": "",
   "udp_fragment": false,
   "prefer_domain": false,
+  "override_ip": "", // or {}
 
   "domain_resolver": "", // or {}
   "network_strategy": "",
@@ -192,6 +194,63 @@ Only applies to already-sniffed HTTP, TLS, and QUIC traffic.
 Other protocols (DNS, STUN, BitTorrent, DTLS, SSH, RDP, NTP) are not affected.
 
 When used in a group outbound (such as `selector` or `urltest`), the group's `prefer_domain` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the domain rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `prefer_domain` setting applies as usual.
+
+#### override_ip
+
+!!! info ""
+
+    Only effective when the traffic has been sniffed.
+
+Resolve the sniffed domain to IP addresses and use those IPs as the connection destination.
+
+This is the IP counterpart of [`prefer_domain`](#prefer_domain): `prefer_domain` rewrites the destination to the sniffed domain, while `override_ip` rewrites it to locally resolved IPs. The original port is always preserved.
+
+Requires sniffing to have already occurred via route rule actions.
+This option does not enable sniffing automatically.
+
+Only applies to already-sniffed HTTP, TLS, and QUIC traffic.
+Other protocols (DNS, STUN, BitTorrent, DTLS, SSH, RDP, NTP) are not affected.
+
+`prefer_domain` and `override_ip` are mutually exclusive.
+
+Unlike [`domain_resolver`](#domain_resolver), this option rewrites the **request destination** for every outbound type, including proxies. Proxy protocols receive an IP destination instead of a domain.
+
+Setting this option directly to a string is equivalent to setting `strategy` of this option.
+
+When `server` is omitted, the domain is resolved through [DNS routing](/configuration/dns/rule/).
+When `server` is set, that DNS server is used directly.
+
+Available `strategy` values:
+
+- `prefer_ipv4`
+- `prefer_ipv6`
+- `ipv4_only`
+- `ipv6_only`
+
+Resolved addresses are tried in strategy order. DNS lookup failure fails the connection; the original destination is not used as a fallback.
+
+When used in a group outbound (such as `selector` or `urltest`), the group's `override_ip` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the IP rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `override_ip` setting applies as usual.
+
+```json
+{
+  "override_ip": "ipv4_only"
+}
+```
+
+```json
+{
+  "override_ip": {
+    "strategy": "prefer_ipv6",
+    "server": "local",
+    "disable_cache": false,
+    "disable_optimistic_cache": false,
+    "rewrite_ttl": null,
+    "client_subnet": null
+  }
+}
+```
+
+Object fields match [`domain_resolver`](#domain_resolver), except `strategy` is required and `server` is optional.
 
 #### domain_resolver
 

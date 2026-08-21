@@ -5,6 +5,7 @@ icon: material/new-box
 !!! quote "sing-box 1.14.0 中的更改"
 
 	:material-plus: [prefer_domain](#prefer_domain)  
+	:material-plus: [override_ip](#override_ip)  
 	:material-alert: [domain_resolver](#domain_resolver)  
 	:material-alert: [netns](#netns)
 
@@ -48,6 +49,7 @@ icon: material/new-box
   "tcp_keep_alive_interval": "",
   "udp_fragment": false,
   "prefer_domain": false,
+  "override_ip": "", // 或 {}
 
   "domain_resolver": "", // 或 {}
   "network_strategy": "",
@@ -190,6 +192,63 @@ TCP keep alive 间隔。
 其他协议（DNS、STUN、BitTorrent、DTLS、SSH、RDP、NTP）不受影响。
 
 当在组出站（如 `selector` 或 `urltest`）中使用时，组的 `prefer_domain` 设置会在连接被委托给子出站之前应用。如果组级别设置已启用，域名重写发生在组级别，不受所选子出站自身设置的影响。当子出站被直接使用时，其自己的 `prefer_domain` 设置按常规应用。
+
+#### override_ip
+
+!!! info ""
+
+    仅在流量已被嗅探时有效。
+
+将嗅探到的域名解析为 IP，并以这些 IP 作为连接目标。
+
+这是 [`prefer_domain`](#prefer_domain) 的 IP 对应项：`prefer_domain` 把目标改写为嗅探到的域名，`override_ip` 则改写为本机解析得到的 IP。原始端口始终保留。
+
+需要通过路由规则操作已经进行了嗅探。
+此选项不会自动启用嗅探。
+
+仅适用于已嗅探的 HTTP、TLS 和 QUIC 流量。
+其他协议（DNS、STUN、BitTorrent、DTLS、SSH、RDP、NTP）不受影响。
+
+`prefer_domain` 与 `override_ip` 互斥。
+
+与 [`domain_resolver`](#domain_resolver) 不同，此选项改写的是**请求目标**，对所有出站类型（包括代理）生效。代理协议收到的是 IP 目标而不是域名。
+
+将此选项直接设为字符串等价于只设置 `strategy`。
+
+省略 `server` 时，域名通过 [DNS 路由](/zh/configuration/dns/rule/) 解析。
+指定 `server` 时，直接使用该 DNS 服务器。
+
+可用的 `strategy` 值：
+
+- `prefer_ipv4`
+- `prefer_ipv6`
+- `ipv4_only`
+- `ipv6_only`
+
+解析得到的地址按策略顺序尝试。DNS 查询失败会使连接失败，不会回落到原始目标。
+
+当在组出站（如 `selector` 或 `urltest`）中使用时，组的 `override_ip` 设置会在连接被委托给子出站之前应用。如果组级别设置已启用，IP 重写发生在组级别，不受所选子出站自身设置的影响。当子出站被直接使用时，其自己的 `override_ip` 设置按常规应用。
+
+```json
+{
+  "override_ip": "ipv4_only"
+}
+```
+
+```json
+{
+  "override_ip": {
+    "strategy": "prefer_ipv6",
+    "server": "local",
+    "disable_cache": false,
+    "disable_optimistic_cache": false,
+    "rewrite_ttl": null,
+    "client_subnet": null
+  }
+}
+```
+
+对象字段与 [`domain_resolver`](#domain_resolver) 相同，但 `strategy` 必填，`server` 可选。
 
 #### domain_resolver
 

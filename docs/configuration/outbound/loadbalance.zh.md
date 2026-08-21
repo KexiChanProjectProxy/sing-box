@@ -29,7 +29,8 @@
   },
   "empty_pool_action": "error",
   "interrupt_exist_connections": false,
-  "prefer_domain": false
+  "prefer_domain": false,
+  "override_ip": ""
 }
 ```
 
@@ -146,6 +147,12 @@ Top N 候选选择选项。
 ==可选==
 
 通过选定的出站优先进行域名解析。默认：`false`。
+
+#### override_ip
+
+==可选==
+
+参见 [Dial 字段](/zh/configuration/shared/dial/#override_ip)。
 
 ### 启动行为
 

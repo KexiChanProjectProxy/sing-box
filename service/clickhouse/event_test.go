@@ -135,18 +135,35 @@ func TestDestinationUsesResolvedAddress(t *testing.T) {
 }
 
 func TestParseServerAndInsertQuery(t *testing.T) {
-	server, err := parseServer("clickhouse.example.com")
+	server, err := parseServer("clickhouse.example.com", protocolNative, false)
 	require.NoError(t, err)
 	require.Equal(t, "clickhouse.example.com:9000", server)
 
-	server, err = parseServer("127.0.0.1:9440")
+	server, err = parseServer("clickhouse.example.com", protocolNative, true)
+	require.NoError(t, err)
+	require.Equal(t, "clickhouse.example.com:9440", server)
+
+	server, err = parseServer("clickhouse.example.com", protocolHTTP, false)
+	require.NoError(t, err)
+	require.Equal(t, "clickhouse.example.com:8123", server)
+
+	server, err = parseServer("clickhouse.example.com", protocolHTTP, true)
+	require.NoError(t, err)
+	require.Equal(t, "clickhouse.example.com:8443", server)
+
+	server, err = parseServer("127.0.0.1:9440", protocolNative, true)
 	require.NoError(t, err)
 	require.Equal(t, "127.0.0.1:9440", server)
 
-	_, err = parseServer("https://clickhouse.example.com")
+	_, err = parseServer("https://clickhouse.example.com", protocolHTTP, true)
 	require.Error(t, err)
-	_, err = parseServer("")
+	_, err = parseServer("", protocolNative, false)
 	require.Error(t, err)
+	_, err = parseProtocol("grpc")
+	require.Error(t, err)
+	protocol, err := parseProtocol("")
+	require.NoError(t, err)
+	require.Equal(t, protocolNative, protocol)
 
 	query, err := buildInsertQuery("logs", "sessions")
 	require.NoError(t, err)

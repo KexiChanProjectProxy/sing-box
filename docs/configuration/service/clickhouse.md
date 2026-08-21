@@ -10,7 +10,7 @@ ClickHouse service inserts one row per TCP/UDP/TUN session into a ClickHouse tab
 
 Rows are queued off the data path and flushed with `PrepareBatch` + `Append` + `Send`. Delivery is unreliable: a failed insert drops that batch, and a full queue drops new events. DNS hijack sessions are not recorded. Process logs from the `log` block are not forwarded.
 
-Native protocol (`host:9000`) is used.
+Native protocol (`host:9000`) is the default. HTTP (`host:8123`) is optional.
 
 ### Structure
 
@@ -23,7 +23,8 @@ Native protocol (`host:9000`) is used.
   "table": "sessions",
   "username": "default",
   "password": "",
-  "secure": false,
+  "protocol": "native",
+  "tls": {},
   "detour": "",
   "batch": {
     "max_entries": 100,
@@ -42,7 +43,14 @@ Node name written to the `node` column. Identifies this instance.
 
 ==Required==
 
-ClickHouse native address, `host:port`. Port `9000` is used if omitted.
+ClickHouse address, `host:port`.
+
+Default ports:
+
+* native: `9000`
+* native + TLS: `9440`
+* http: `8123`
+* http + TLS: `8443`
 
 #### database
 
@@ -58,9 +66,20 @@ Destination table. Must already exist; sing-box does not create it.
 
 ClickHouse authentication.
 
-#### secure
+#### protocol
 
-Enable TLS for the native connection (typical port `9440`).
+ClickHouse transport.
+
+Values:
+
+* `native` (default)
+* `http`
+
+#### tls
+
+TLS configuration, see [TLS](/configuration/shared/tls/#outbound).
+
+Required for HTTPS (`protocol: http` with `tls.enabled`).
 
 #### detour
 

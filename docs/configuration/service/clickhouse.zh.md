@@ -10,7 +10,7 @@ ClickHouse 服务把每条 TCP/UDP/TUN 会话写成一行插入 ClickHouse 表�
 
 转发路径只入队，后台用 `PrepareBatch` + `Append` + `Send` 批量写入。送达不可靠：插入失败丢该批，队列满丢新事件。DNS hijack 不记录。`log` 块里的进程日志不会写入。
 
-使用 native 协议（`host:9000`）。
+默认 native 协议（`host:9000`）。可选 HTTP（`host:8123`）。
 
 ### 结构
 
@@ -23,7 +23,8 @@ ClickHouse 服务把每条 TCP/UDP/TUN 会话写成一行插入 ClickHouse 表�
   "table": "sessions",
   "username": "default",
   "password": "",
-  "secure": false,
+  "protocol": "native",
+  "tls": {},
   "detour": "",
   "batch": {
     "max_entries": 100,
@@ -42,7 +43,14 @@ ClickHouse 服务把每条 TCP/UDP/TUN 会话写成一行插入 ClickHouse 表�
 
 ==必填==
 
-ClickHouse native 地址，`host:port`。省略端口时用 `9000`。
+ClickHouse 地址，`host:port`。
+
+默认端口：
+
+* native: `9000`
+* native + TLS: `9440`
+* http: `8123`
+* http + TLS: `8443`
 
 #### database
 
@@ -58,9 +66,20 @@ ClickHouse native 地址，`host:port`。省略端口时用 `9000`。
 
 ClickHouse 认证。
 
-#### secure
+#### protocol
 
-native 连接启用 TLS（常见端口 `9440`）。
+传输协议。
+
+取值：
+
+* `native`（默认）
+* `http`
+
+#### tls
+
+TLS 配置，见 [TLS](/zh/configuration/shared/tls/#outbound)。
+
+HTTPS（`protocol: http` 且 `tls.enabled`）时需要。
 
 #### detour
 

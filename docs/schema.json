@@ -16493,8 +16493,15 @@
             "password": {
               "type": "string"
             },
-            "secure": {
-              "type": "boolean"
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "native",
+                "http"
+              ]
+            },
+            "tls": {
+              "$ref": "#/$defs/OutboundTLSOptions"
             },
             "detour": {
               "type": "string",

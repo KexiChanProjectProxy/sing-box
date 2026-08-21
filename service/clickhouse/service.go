@@ -4,6 +4,7 @@ import (
 	"context"
 	stdTLS "crypto/tls"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,9 +14,11 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	boxService "github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/common/dialer"
+	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
@@ -41,6 +44,7 @@ type Service struct {
 	outbound    adapter.OutboundManager
 	node        string
 	server      string
+	protocol    string
 	insertQuery string
 	maxEntries  int
 	maxWait     time.Duration
@@ -51,7 +55,12 @@ type Service struct {
 }
 
 func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.ClickHouseServiceOptions) (adapter.Service, error) {
-	server, err := parseServer(options.Server)
+	protocol, err := parseProtocol(options.Protocol)
+	if err != nil {
+		return nil, err
+	}
+	tlsEnabled := options.TLS != nil && options.TLS.Enabled
+	server, err := parseServer(options.Server, protocol, tlsEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +103,7 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 		outbound:    outbound,
 		node:        node,
 		server:      server,
+		protocol:    protocol,
 		insertQuery: insertQuery,
 		maxEntries:  maxEntries,
 		maxWait:     maxWait,
@@ -119,6 +129,7 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	}()
 	s.logger.InfoEvent("clickhouse.started", "clickhouse access log started",
 		log.String("server", s.server),
+		log.String("protocol", s.protocol),
 		log.String("table", s.options.Table),
 		log.String("node", s.node),
 	)
@@ -134,6 +145,21 @@ func (s *Service) openConn() (batchConn, error) {
 	if err != nil {
 		return nil, E.Cause(err, "create clickhouse dialer")
 	}
+	tlsOptions := common.PtrValueOrDefault(s.options.TLS)
+	var tlsConfig tls.Config
+	if tlsOptions.Enabled {
+		serverName, _, splitErr := net.SplitHostPort(s.server)
+		if splitErr != nil {
+			serverName = s.server
+		}
+		tlsConfig, err = tls.NewClient(s.ctx, s.logger, serverName, tlsOptions)
+		if err != nil {
+			return nil, E.Cause(err, "create clickhouse tls")
+		}
+	}
+	dialPlain := func(ctx context.Context, addr string) (net.Conn, error) {
+		return serviceDialer.DialContext(ctx, N.NetworkTCP, M.ParseSocksaddr(addr))
+	}
 	chOptions := &ch.Options{
 		Addr: []string{s.server},
 		Auth: ch.Auth{
@@ -141,21 +167,48 @@ func (s *Service) openConn() (batchConn, error) {
 			Username: s.options.Username,
 			Password: s.options.Password,
 		},
-		DialContext: func(ctx context.Context, addr string) (net.Conn, error) {
-			return serviceDialer.DialContext(ctx, N.NetworkTCP, M.ParseSocksaddr(addr))
-		},
+		DialContext:     dialPlain,
 		DialTimeout:     5 * time.Second,
 		ReadTimeout:     pushTimeout,
 		MaxOpenConns:    2,
 		MaxIdleConns:    1,
 		ConnMaxLifetime: time.Hour,
-		Compression: &ch.Compression{
-			Method: ch.CompressionLZ4,
-		},
 	}
-	if s.options.Secure {
-		chOptions.TLS = &stdTLS.Config{
-			RootCAs: adapter.RootPoolFromContext(s.ctx),
+	if s.protocol == protocolHTTP {
+		chOptions.Protocol = ch.HTTP
+		if tlsConfig != nil {
+			chOptions.TLS = &stdTLS.Config{}
+			chOptions.TransportFunc = func(transport *http.Transport) (http.RoundTripper, error) {
+				transport.DialTLSContext = func(ctx context.Context, network string, addr string) (net.Conn, error) {
+					conn, dialErr := dialPlain(ctx, addr)
+					if dialErr != nil {
+						return nil, dialErr
+					}
+					tlsConn, handshakeErr := tls.ClientHandshake(ctx, conn, tlsConfig)
+					if handshakeErr != nil {
+						conn.Close()
+						return nil, handshakeErr
+					}
+					return tlsConn, nil
+				}
+				return transport, nil
+			}
+		}
+	} else {
+		chOptions.Compression = &ch.Compression{Method: ch.CompressionLZ4}
+		if tlsConfig != nil {
+			chOptions.DialContext = func(ctx context.Context, addr string) (net.Conn, error) {
+				conn, dialErr := dialPlain(ctx, addr)
+				if dialErr != nil {
+					return nil, dialErr
+				}
+				tlsConn, handshakeErr := tls.ClientHandshake(ctx, conn, tlsConfig)
+				if handshakeErr != nil {
+					conn.Close()
+					return nil, handshakeErr
+				}
+				return tlsConn, nil
+			}
 		}
 	}
 	conn, err := ch.Open(chOptions)

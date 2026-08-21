@@ -12,11 +12,16 @@ import (
 )
 
 const (
-	defaultMaxWait    = time.Second
-	defaultMaxEntries = 100
-	defaultQueueSize  = 4096
-	defaultNativePort = "9000"
-	pushTimeout       = 10 * time.Second
+	defaultMaxWait     = time.Second
+	defaultMaxEntries  = 100
+	defaultQueueSize   = 4096
+	defaultNativePort  = "9000"
+	defaultNativeTLS   = "9440"
+	defaultHTTPPort    = "8123"
+	defaultHTTPTLSPort = "8443"
+	protocolNative     = "native"
+	protocolHTTP       = "http"
+	pushTimeout        = 10 * time.Second
 )
 
 const insertColumns = "node, id, start, end, duration_ms, action, network, protocol, user, source_ip, source_port, source_mac, destination_domain, destination_ip, destination_port, inbound, inbound_type, outbound, outbound_type, chain, rule, upload, download, close, process"
@@ -34,7 +39,31 @@ type batchConn interface {
 	Close() error
 }
 
-func parseServer(server string) (string, error) {
+func parseProtocol(protocol string) (string, error) {
+	switch protocol {
+	case "", protocolNative:
+		return protocolNative, nil
+	case protocolHTTP:
+		return protocolHTTP, nil
+	default:
+		return "", E.New("unknown protocol: ", protocol)
+	}
+}
+
+func defaultPort(protocol string, tlsEnabled bool) string {
+	if protocol == protocolHTTP {
+		if tlsEnabled {
+			return defaultHTTPTLSPort
+		}
+		return defaultHTTPPort
+	}
+	if tlsEnabled {
+		return defaultNativeTLS
+	}
+	return defaultNativePort
+}
+
+func parseServer(server string, protocol string, tlsEnabled bool) (string, error) {
 	server = strings.TrimSpace(server)
 	if server == "" {
 		return "", E.New("missing server")
@@ -46,7 +75,7 @@ func parseServer(server string) (string, error) {
 		if strings.Contains(server, ":") {
 			return "", E.Cause(err, "parse server")
 		}
-		return net.JoinHostPort(server, defaultNativePort), nil
+		return net.JoinHostPort(server, defaultPort(protocol, tlsEnabled)), nil
 	}
 	return server, nil
 }

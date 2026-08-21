@@ -10,6 +10,7 @@ type Adapter struct {
 	network      []string
 	dependencies []string
 	preferDomain bool
+	overrideIP   *option.OverrideIPOptions
 }
 
 func NewAdapter(outboundType string, outboundTag string, network []string, dependencies []string) Adapter {
@@ -32,6 +33,7 @@ func NewAdapterWithDialerOptions(outboundType string, outboundTag string, networ
 		network:      network,
 		dependencies: dependencies,
 		preferDomain: dialOptions.PreferDomain,
+		overrideIP:   dialOptions.OverrideIP,
 	}
 }
 
@@ -53,4 +55,8 @@ func (a *Adapter) Dependencies() []string {
 
 func (a *Adapter) PreferDomain() bool {
 	return a.preferDomain
+}
+
+func (a *Adapter) OverrideIP() *option.OverrideIPOptions {
+	return a.overrideIP
 }

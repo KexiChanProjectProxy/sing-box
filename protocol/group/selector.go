@@ -44,9 +44,13 @@ type Selector struct {
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
 	preferDomain                 bool
+	overrideIP                   *option.OverrideIPOptions
 }
 
 func NewSelector(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.SelectorOutboundOptions) (adapter.Outbound, error) {
+	if err := option.CheckDestinationOverride(options.PreferDomain, options.OverrideIP); err != nil {
+		return nil, err
+	}
 	outbound := &Selector{
 		Adapter:                      outbound.NewAdapter(C.TypeSelector, tag, nil, options.Outbounds),
 		ctx:                          ctx,
@@ -60,6 +64,7 @@ func NewSelector(ctx context.Context, router adapter.Router, logger log.Structur
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: options.InterruptExistConnections,
 		preferDomain:                 options.PreferDomain,
+		overrideIP:                   options.OverrideIP,
 	}
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
@@ -77,6 +82,10 @@ func (s *Selector) Network() []string {
 
 func (s *Selector) PreferDomain() bool {
 	return s.preferDomain
+}
+
+func (s *Selector) OverrideIP() *option.OverrideIPOptions {
+	return s.overrideIP
 }
 
 func (s *Selector) Start() error {
@@ -156,6 +165,7 @@ func (s *Selector) DialContext(ctx context.Context, network string, destination 
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
+	ctx = withOverrideIPContext(ctx, s.overrideIP)
 	conn, err := s.selected.Load().DialContext(ctx, network, destination)
 	if err != nil {
 		return nil, err
@@ -167,6 +177,7 @@ func (s *Selector) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
+	ctx = withOverrideIPContext(ctx, s.overrideIP)
 	conn, err := s.selected.Load().ListenPacket(ctx, destination)
 	if err != nil {
 		return nil, err
@@ -180,6 +191,13 @@ func (s *Selector) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = route.ApplyPreferDomain(ctx, &metadata, selected)
 	}
+	var err error
+	ctx, err = applyGroupOverrideIP(ctx, &metadata, selected, s.overrideIP, s.ctx)
+	if err != nil {
+		N.CloseOnHandshakeFailure(conn, onClose, err)
+		s.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
+		return
+	}
 	if outboundHandler, isHandler := selected.(adapter.ConnectionHandler); isHandler {
 		outboundHandler.NewConnection(ctx, conn, metadata, onClose)
 	} else {
@@ -192,6 +210,16 @@ func (s *Selector) NewPacketConnection(ctx context.Context, conn N.PacketConn, m
 	selected := s.selected.Load()
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = route.ApplyPreferDomain(ctx, &metadata, selected)
+	}
+	var err error
+	ctx, err = applyGroupOverrideIP(ctx, &metadata, selected, s.overrideIP, s.ctx)
+	if err != nil {
+		_ = conn.Close()
+		if onClose != nil {
+			onClose(err)
+		}
+		s.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
+		return
 	}
 	if outboundHandler, isHandler := selected.(adapter.PacketConnectionHandler); isHandler {
 		outboundHandler.NewPacketConnection(ctx, conn, metadata, onClose)

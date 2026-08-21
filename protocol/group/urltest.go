@@ -49,9 +49,13 @@ type URLTest struct {
 	group                        *URLTestGroup
 	interruptExternalConnections bool
 	preferDomain                 bool
+	overrideIP                   *option.OverrideIPOptions
 }
 
 func NewURLTest(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.URLTestOutboundOptions) (adapter.Outbound, error) {
+	if err := option.CheckDestinationOverride(options.PreferDomain, options.OverrideIP); err != nil {
+		return nil, err
+	}
 	outbound := &URLTest{
 		Adapter:                      outbound.NewAdapter(C.TypeURLTest, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.Outbounds),
 		ctx:                          ctx,
@@ -65,6 +69,7 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.Structure
 		idleTimeout:                  time.Duration(options.IdleTimeout),
 		interruptExternalConnections: options.InterruptExistConnections,
 		preferDomain:                 options.PreferDomain,
+		overrideIP:                   options.OverrideIP,
 	}
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
@@ -74,6 +79,10 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.Structure
 
 func (s *URLTest) PreferDomain() bool {
 	return s.preferDomain
+}
+
+func (s *URLTest) OverrideIP() *option.OverrideIPOptions {
+	return s.overrideIP
 }
 
 func (s *URLTest) Start() error {
@@ -141,6 +150,7 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
+	ctx = withOverrideIPContext(ctx, s.overrideIP)
 	var outbound adapter.Outbound
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
@@ -171,6 +181,7 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
+	ctx = withOverrideIPContext(ctx, s.overrideIP)
 	outbound := s.group.selectedOutboundUDP
 	if outbound == nil {
 		outbound, _ = s.group.Select(N.NetworkUDP)
@@ -193,6 +204,13 @@ func (s *URLTest) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = route.ApplyPreferDomain(ctx, &metadata, s)
 	}
+	var err error
+	ctx, err = applyGroupOverrideIP(ctx, &metadata, s, s.overrideIP, s.ctx)
+	if err != nil {
+		N.CloseOnHandshakeFailure(conn, onClose, err)
+		s.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
+		return
+	}
 	s.connection.NewConnection(ctx, s, conn, metadata, onClose)
 }
 
@@ -200,6 +218,16 @@ func (s *URLTest) NewPacketConnection(ctx context.Context, conn N.PacketConn, me
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = route.ApplyPreferDomain(ctx, &metadata, s)
+	}
+	var err error
+	ctx, err = applyGroupOverrideIP(ctx, &metadata, s, s.overrideIP, s.ctx)
+	if err != nil {
+		_ = conn.Close()
+		if onClose != nil {
+			onClose(err)
+		}
+		s.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
+		return
 	}
 	s.connection.NewPacketConnection(ctx, s, conn, metadata, onClose)
 }

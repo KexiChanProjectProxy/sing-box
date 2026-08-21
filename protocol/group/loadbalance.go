@@ -51,6 +51,7 @@ type LoadBalance struct {
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
 	preferDomain                 bool
+	overrideIP                   *option.OverrideIPOptions
 	history                      *urltest.HistoryStorage
 	group                        *URLTestGroup
 	snapshot                     atomic.Pointer[CandidateSnapshot]
@@ -87,6 +88,7 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: options.InterruptExistConnections,
 		preferDomain:                 options.PreferDomain,
+		overrideIP:                   options.OverrideIP,
 	}
 	if lb.timeout == 0 {
 		lb.timeout = C.TCPTimeout
@@ -164,6 +166,10 @@ func (l *LoadBalance) PreferDomain() bool {
 	return l.preferDomain
 }
 
+func (l *LoadBalance) OverrideIP() *option.OverrideIPOptions {
+	return l.overrideIP
+}
+
 func (l *LoadBalance) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	if networkName := N.NetworkName(network); networkName != N.NetworkTCP && networkName != N.NetworkUDP {
 		return nil, E.Extend(N.ErrUnknownNetwork, network)
@@ -179,6 +185,7 @@ func (l *LoadBalance) DialContext(ctx context.Context, network string, destinati
 	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
+	ctx = withOverrideIPContext(ctx, l.overrideIP)
 	conn, err := candidate.Outbound.DialContext(ctx, network, destination)
 	if err != nil {
 		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
@@ -201,6 +208,7 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
+	ctx = withOverrideIPContext(ctx, l.overrideIP)
 	conn, err := candidate.Outbound.ListenPacket(ctx, destination)
 	if err != nil {
 		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
@@ -216,6 +224,13 @@ func (l *LoadBalance) NewConnection(ctx context.Context, conn net.Conn, metadata
 	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = route.ApplyPreferDomain(ctx, &metadata, l)
 	}
+	var err error
+	ctx, err = applyGroupOverrideIP(ctx, &metadata, l, l.overrideIP, l.ctx)
+	if err != nil {
+		N.CloseOnHandshakeFailure(conn, onClose, err)
+		l.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
+		return
+	}
 	l.connection.NewConnection(ctx, l, conn, metadata, onClose)
 }
 
@@ -223,6 +238,16 @@ func (l *LoadBalance) NewPacketConnection(ctx context.Context, conn N.PacketConn
 	ctx = interrupt.ContextWithIsExternalConnection(ctx)
 	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
 		ctx = route.ApplyPreferDomain(ctx, &metadata, l)
+	}
+	var err error
+	ctx, err = applyGroupOverrideIP(ctx, &metadata, l, l.overrideIP, l.ctx)
+	if err != nil {
+		_ = conn.Close()
+		if onClose != nil {
+			onClose(err)
+		}
+		l.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
+		return
 	}
 	l.connection.NewPacketConnection(ctx, l, conn, metadata, onClose)
 }

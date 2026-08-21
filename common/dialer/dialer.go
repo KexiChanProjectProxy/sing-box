@@ -41,6 +41,9 @@ func New(ctx context.Context, options option.DialerOptions, remoteIsDomain bool)
 
 func NewWithOptions(options Options) (N.Dialer, error) {
 	dialOptions := options.Options
+	if err := option.CheckDestinationOverride(dialOptions.PreferDomain, dialOptions.OverrideIP); err != nil {
+		return nil, err
+	}
 	var dialer N.Dialer
 	hasDetour := dialOptions.Detour != "" || options.DefaultOutbound
 	if dialOptions.Detour != "" {

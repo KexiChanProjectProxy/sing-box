@@ -24,6 +24,33 @@ func PreferDomainFromContext(ctx context.Context) bool {
 	return value.(bool)
 }
 
+type overrideIPContextKey struct{}
+type overrideIPAppliedContextKey struct{}
+
+func ContextWithOverrideIP(ctx context.Context, options *option.OverrideIPOptions) context.Context {
+	return context.WithValue(ctx, (*overrideIPContextKey)(nil), options)
+}
+
+func OverrideIPFromContext(ctx context.Context) *option.OverrideIPOptions {
+	value := ctx.Value((*overrideIPContextKey)(nil))
+	if value == nil {
+		return nil
+	}
+	return value.(*option.OverrideIPOptions)
+}
+
+func ContextWithOverrideIPApplied(ctx context.Context) context.Context {
+	return context.WithValue(ctx, (*overrideIPAppliedContextKey)(nil), true)
+}
+
+func OverrideIPAppliedFromContext(ctx context.Context) bool {
+	value := ctx.Value((*overrideIPAppliedContextKey)(nil))
+	if value == nil {
+		return false
+	}
+	return value.(bool)
+}
+
 // Note: for proxy protocols, outbound creates early connections by default.
 
 type Outbound interface {
@@ -43,6 +70,11 @@ type OutboundWithPreferredRoutes interface {
 type OutboundWithPreferDomain interface {
 	Outbound
 	PreferDomain() bool
+}
+
+type OutboundWithOverrideIP interface {
+	Outbound
+	OverrideIP() *option.OverrideIPOptions
 }
 
 type OutboundWithMultiplex interface {

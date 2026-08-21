@@ -162,7 +162,11 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 	}
 
 	ctx = ApplyPreferDomain(ctx, &metadata, selectedOutbound)
-
+	ctx, err = ApplyOverrideIP(ctx, &metadata, selectedOutbound, r.dns, r.dnsTransport)
+	if err != nil {
+		buf.ReleaseMulti(buffers)
+		return err
+	}
 	for _, buffer := range buffers {
 		conn = bufio.NewCachedConn(conn, buffer)
 	}
@@ -293,7 +297,11 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	}
 
 	ctx = ApplyPreferDomain(ctx, &metadata, selectedOutbound)
-
+	ctx, err = ApplyOverrideIP(ctx, &metadata, selectedOutbound, r.dns, r.dnsTransport)
+	if err != nil {
+		N.ReleaseMultiPacketBuffer(packetBuffers)
+		return err
+	}
 	for _, buffer := range packetBuffers {
 		conn = bufio.NewCachedPacketConn(conn, buffer.Buffer, buffer.Destination)
 		N.PutPacketBuffer(buffer)

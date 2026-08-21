@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,21 +64,36 @@ func defaultPort(protocol string, tlsEnabled bool) string {
 	return defaultNativePort
 }
 
-func parseServer(server string, protocol string, tlsEnabled bool) (string, error) {
+func parseServer(server string, port uint16, protocol string, tlsEnabled bool) (string, error) {
 	server = strings.TrimSpace(server)
 	if server == "" {
 		return "", E.New("missing server")
 	}
 	if strings.Contains(server, "://") {
-		return "", E.New("server must be host:port")
+		return "", E.New("server must be a host")
 	}
-	if _, _, err := net.SplitHostPort(server); err != nil {
-		if strings.Contains(server, ":") {
-			return "", E.Cause(err, "parse server")
+	host, embeddedPort, hasEmbeddedPort := splitHostPort(server)
+	if port != 0 {
+		if hasEmbeddedPort {
+			return "", E.New("server_port conflicts with port in server")
 		}
-		return net.JoinHostPort(server, defaultPort(protocol, tlsEnabled)), nil
+		return net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10)), nil
 	}
-	return server, nil
+	if hasEmbeddedPort {
+		return net.JoinHostPort(host, embeddedPort), nil
+	}
+	return net.JoinHostPort(host, defaultPort(protocol, tlsEnabled)), nil
+}
+
+func splitHostPort(server string) (host string, port string, ok bool) {
+	host, port, err := net.SplitHostPort(server)
+	if err != nil {
+		return server, "", false
+	}
+	if host == "" || port == "" {
+		return server, "", false
+	}
+	return host, port, true
 }
 
 func quoteIdent(name string) (string, error) {

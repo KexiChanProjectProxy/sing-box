@@ -60,7 +60,7 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 		return nil, err
 	}
 	tlsEnabled := options.TLS != nil && options.TLS.Enabled
-	server, err := parseServer(options.Server, protocol, tlsEnabled)
+	server, err := parseServer(options.Server, options.ServerPort, protocol, tlsEnabled)
 	if err != nil {
 		return nil, err
 	}

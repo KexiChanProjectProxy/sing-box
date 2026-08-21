@@ -18,7 +18,8 @@ ClickHouse 服务把每条 TCP/UDP/TUN 会话写成一行插入 ClickHouse 表�
 {
   "type": "clickhouse",
   "tag": "gw-01",
-  "server": "127.0.0.1:9000",
+  "server": "127.0.0.1",
+  "server_port": 9000,
   "database": "logs",
   "table": "sessions",
   "username": "default",
@@ -43,14 +44,20 @@ ClickHouse 服务把每条 TCP/UDP/TUN 会话写成一行插入 ClickHouse 表�
 
 ==必填==
 
-ClickHouse 地址，`host:port`。
+ClickHouse 主机。未设 `server_port` 时也可以写 `host:port`。
 
-默认端口：
+#### server_port
+
+ClickHouse 端口。
+
+默认：
 
 * native: `9000`
 * native + TLS: `9440`
 * http: `8123`
 * http + TLS: `8443`
+
+不要和 `server` 里的端口同时写。
 
 #### database
 

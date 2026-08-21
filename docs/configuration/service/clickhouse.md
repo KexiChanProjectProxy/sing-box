@@ -18,7 +18,8 @@ Native protocol (`host:9000`) is the default. HTTP (`host:8123`) is optional.
 {
   "type": "clickhouse",
   "tag": "gw-01",
-  "server": "127.0.0.1:9000",
+  "server": "127.0.0.1",
+  "server_port": 9000,
   "database": "logs",
   "table": "sessions",
   "username": "default",
@@ -43,14 +44,20 @@ Node name written to the `node` column. Identifies this instance.
 
 ==Required==
 
-ClickHouse address, `host:port`.
+ClickHouse host. `host:port` is also accepted when `server_port` is omitted.
 
-Default ports:
+#### server_port
+
+ClickHouse port.
+
+Defaults:
 
 * native: `9000`
 * native + TLS: `9440`
 * http: `8123`
 * http + TLS: `8443`
+
+Must not be set together with a port in `server`.
 
 #### database
 

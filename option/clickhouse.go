@@ -3,7 +3,7 @@ package option
 import "github.com/sagernet/sing/common/json/badoption"
 
 type ClickHouseServiceOptions struct {
-	Server   string `json:"server"`
+	ServerOptions
 	Database string `json:"database,omitempty"`
 	Table    string `json:"table"`
 	Username string `json:"username,omitempty"`

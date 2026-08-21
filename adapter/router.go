@@ -107,6 +107,10 @@ type ConnectionTracker interface {
 	RoutedFlow(ctx context.Context, metadata InboundContext, matchedRule Rule, matchOutbound Outbound) tun.FlowTracker
 }
 
+type ConnectionRejectHandler interface {
+	RejectedConnection(ctx context.Context, metadata InboundContext, matchedRule Rule)
+}
+
 // Deprecated: Use ConnectionRouterEx instead.
 type ConnectionRouter interface {
 	RouteConnection(ctx context.Context, conn net.Conn, metadata InboundContext) error

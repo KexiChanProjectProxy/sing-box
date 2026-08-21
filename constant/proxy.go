@@ -41,6 +41,7 @@ const (
 	TypeOOMKiller          = "oom-killer"
 	TypeUSBIPServer        = "usbip-server"
 	TypeUSBIPClient        = "usbip-client"
+	TypeClickHouse         = "clickhouse"
 	TypeHysteriaRealm      = "hysteria-realm"
 	TypeACME               = "acme"
 	TypeCloudflareOriginCA = "cloudflare-origin-ca"

@@ -713,6 +713,18 @@
       },
       "additionalProperties": false
     },
+    "ClickHouseBatchOptions": {
+      "type": "object",
+      "properties": {
+        "max_entries": {
+          "type": "integer"
+        },
+        "max_wait": {
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "additionalProperties": false
+    },
     "DERPMeshOptions": {
       "type": "object",
       "properties": {
@@ -16450,6 +16462,46 @@
             },
             "usages_path": {
               "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "clickhouse"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "server": {
+              "type": "string"
+            },
+            "database": {
+              "type": "string"
+            },
+            "table": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "secure": {
+              "type": "boolean"
+            },
+            "detour": {
+              "type": "string",
+              "x-tag-reference": "outbound"
+            },
+            "batch": {
+              "$ref": "#/$defs/ClickHouseBatchOptions"
             }
           },
           "required": [

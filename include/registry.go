@@ -41,6 +41,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/vless"
 	"github.com/sagernet/sing-box/protocol/vmess"
 	"github.com/sagernet/sing-box/service/api"
+	"github.com/sagernet/sing-box/service/clickhouse"
 	originca "github.com/sagernet/sing-box/service/origin_ca"
 	"github.com/sagernet/sing-box/service/resolved"
 	"github.com/sagernet/sing-box/service/ssmapi"
@@ -152,6 +153,7 @@ func ServiceRegistry() *service.Registry {
 	api.RegisterService(registry)
 	resolved.RegisterService(registry)
 	ssmapi.RegisterService(registry)
+	clickhouse.RegisterService(registry)
 
 	registerQUICServices(registry)
 	registerDERPService(registry)

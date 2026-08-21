@@ -5,6 +5,7 @@ icon: material/alert-decagram
 #### 1.14.0.10
 
 * 默认阻止原生 IPv6 目标绕过 [`xlat464`](/zh/configuration/outbound/direct/#xlat464) 配置的 NAT64 路径，并增加显式的 `allow_ipv6` 兼容选项
+* 新增 [`clickhouse` 服务](/zh/configuration/service/clickhouse/)，将会话访问日志批量写入 ClickHouse
 
 #### 1.14.0.9
 

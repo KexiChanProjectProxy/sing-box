@@ -211,6 +211,7 @@ nav:
           - sing-box API: configuration/service/api.md
           - DERP: configuration/service/derp.md
           - Resolved: configuration/service/resolved.md
+          - ClickHouse: configuration/service/clickhouse.md
           - SSM API: configuration/service/ssm-api.md
           - CCM: configuration/service/ccm.md
           - OCM: configuration/service/ocm.md

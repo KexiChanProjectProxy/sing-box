@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/experimental/locale"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/tailscale/atomicfile"
 
@@ -86,6 +87,7 @@ func (s *desktopService) StartService(ctx context.Context, request *StartService
 		mergedOptions.OOMKillerEnabled = request.Options.OomKillerEnabled
 		mergedOptions.OOMKillerDisabled = request.Options.OomKillerDisabled
 		mergedOptions.OOMMemoryLimit = request.Options.OomMemoryLimit
+		mergedOptions.PowerReportEnabled = request.Options.PowerReportEnabled
 	}
 	err = s.daemon.startServiceLocked(ctx, identity.UserID, request.ConfigContent, mergedOptions)
 	if err != nil {
@@ -258,7 +260,9 @@ func (s *desktopService) SetInsecureModeEnabled(ctx context.Context, request *Se
 		return nil, err
 	}
 	wasEnabled := s.daemon.insecureModeEnabled()
-	err = saveSecuritySettings(workingDirectory, securitySettings{InsecureModeEnabled: false})
+	err = updateDaemonSettings(workingDirectory, func(settings *daemonSettings) {
+		settings.InsecureModeEnabled = false
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +276,23 @@ func (s *desktopService) SetInsecureModeEnabled(ctx context.Context, request *Se
 		if err != nil {
 			return nil, err
 		}
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *desktopService) SetLocale(ctx context.Context, request *SetLocaleRequest) (*emptypb.Empty, error) {
+	_, err := peerIdentityFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !locale.Set(request.Locale) {
+		return nil, status.Error(codes.InvalidArgument, "unsupported locale: "+request.Locale)
+	}
+	err = updateDaemonSettings(workingDirectory, func(settings *daemonSettings) {
+		settings.Locale = request.Locale
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &emptypb.Empty{}, nil
 }

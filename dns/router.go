@@ -16,6 +16,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	R "github.com/sagernet/sing-box/route/rule"
+	"github.com/sagernet/sing-box/service/powerreport"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
@@ -38,6 +39,7 @@ type Router struct {
 	logger                log.StructuredLogger
 	transport             adapter.DNSTransportManager
 	outbound              adapter.OutboundManager
+	powerManager          *powerreport.Manager
 	client                adapter.DNSClient
 	rawRules              []option.DNSRule
 	rules                 []adapter.DNSRule
@@ -56,6 +58,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.DNSOp
 		logger:                logFactory.NewLogger("dns"),
 		transport:             service.FromContext[adapter.DNSTransportManager](ctx),
 		outbound:              service.FromContext[adapter.OutboundManager](ctx),
+		powerManager:          service.FromContext[*powerreport.Manager](ctx),
 		rawRules:              make([]option.DNSRule, 0, len(options.Rules)),
 		rules:                 make([]adapter.DNSRule, 0, len(options.Rules)),
 		defaultDomainStrategy: C.DomainStrategy(options.Strategy),
@@ -325,6 +328,11 @@ func (r *Router) matchDNS(ctx context.Context, rules []adapter.DNSRule, allowFak
 				}
 				if action.ClientSubnet.IsValid() {
 					options.ClientSubnet = action.ClientSubnet
+					options.RemoveClientSubnet = false
+				}
+				if action.RemoveClientSubnet {
+					options.ClientSubnet = netip.Prefix{}
+					options.RemoveClientSubnet = true
 				}
 				return transport, currentRule, currentRuleIndex
 			case *R.RuleActionDNSRouteOptions:
@@ -342,6 +350,11 @@ func (r *Router) matchDNS(ctx context.Context, rules []adapter.DNSRule, allowFak
 				}
 				if action.ClientSubnet.IsValid() {
 					options.ClientSubnet = action.ClientSubnet
+					options.RemoveClientSubnet = false
+				}
+				if action.RemoveClientSubnet {
+					options.ClientSubnet = netip.Prefix{}
+					options.RemoveClientSubnet = true
 				}
 			case *R.RuleActionReject:
 				return nil, currentRule, currentRuleIndex
@@ -372,6 +385,11 @@ func (r *Router) applyDNSRouteOptions(options *adapter.DNSQueryOptions, routeOpt
 	}
 	if routeOptions.ClientSubnet.IsValid() {
 		options.ClientSubnet = routeOptions.ClientSubnet
+		options.RemoveClientSubnet = false
+	}
+	if routeOptions.RemoveClientSubnet {
+		options.ClientSubnet = netip.Prefix{}
+		options.RemoveClientSubnet = true
 	}
 }
 
@@ -944,6 +962,8 @@ func (r *Router) resolveLookupStrategy(options adapter.DNSQueryOptions) C.Domain
 func withLookupQueryMetadata(ctx context.Context, qType uint16) context.Context {
 	ctx, metadata := adapter.ExtendContext(ctx)
 	metadata.QueryType = qType
+	metadata.QueryClientSubnet = netip.Prefix{}
+	metadata.QueryDNSSEC = false
 	metadata.IPVersion = 0
 	switch qType {
 	case mDNS.TypeA:
@@ -1035,6 +1055,12 @@ type dnsExchangeContext struct {
 }
 
 func (r *Router) prepareExchange(ctx context.Context, message *mDNS.Msg) (*dnsExchangeContext, *mDNS.Msg, error) {
+	if r.powerManager != nil {
+		recorder := r.powerManager.Recorder()
+		if recorder != nil {
+			recorder.CountDNSQuery()
+		}
+	}
 	if len(message.Question) != 1 {
 		r.logger.WarnEventContext(ctx, "dns.query.invalid", "bad question size", log.Int("question_size", len(message.Question)))
 		return nil, &mDNS.Msg{
@@ -1068,6 +1094,9 @@ func (r *Router) prepareExchange(ctx context.Context, message *mDNS.Msg) (*dnsEx
 		metadata.IPVersion = 6
 	}
 	metadata.Domain = FqdnToDomain(message.Question[0].Name)
+	metadata.QueryClientSubnet = clientSubnetFromMessage(message)
+	edns0Option := message.IsEdns0()
+	metadata.QueryDNSSEC = edns0Option != nil && edns0Option.Do()
 	return &dnsExchangeContext{
 		ctx:           ctx,
 		rules:         rules,

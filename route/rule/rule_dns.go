@@ -73,6 +73,18 @@ func validateDNSRuleAction(action option.DNSRuleAction) error {
 	if action.Action == C.RuleActionTypeReject && action.RejectOptions.Method == C.RuleActionRejectMethodReply {
 		return E.New("reject method `reply` is not supported for DNS rules")
 	}
+	var routeOptions option.AbstractDNSRouteActionOptions
+	switch action.Action {
+	case "", C.RuleActionTypeRoute:
+		routeOptions = action.RouteOptions.AbstractDNSRouteActionOptions
+	case C.RuleActionTypeEvaluate:
+		routeOptions = action.EvaluateOptions.AbstractDNSRouteActionOptions
+	case C.RuleActionTypeRouteOptions:
+		routeOptions = option.AbstractDNSRouteActionOptions(action.RouteOptionsOptions)
+	}
+	if routeOptions.RemoveClientSubnet && routeOptions.ClientSubnet != nil {
+		return E.New("`client_subnet` and `remove_client_subnet` are mutually exclusive")
+	}
 	if action.Race {
 		switch action.Action {
 		case "", C.RuleActionTypeRoute, C.RuleActionTypeRespond, C.RuleActionTypeReject, C.RuleActionTypePredefined:
@@ -124,6 +136,16 @@ func NewDefaultDNSRule(ctx context.Context, logger log.ContextLogger, options op
 	}
 	if len(options.QueryType) > 0 {
 		item := NewQueryTypeItem(options.QueryType)
+		rule.items = append(rule.items, item)
+		rule.allItems = append(rule.allItems, item)
+	}
+	if len(options.QueryClientSubnet) > 0 {
+		item := NewQueryClientSubnetItem(options.QueryClientSubnet)
+		rule.items = append(rule.items, item)
+		rule.allItems = append(rule.allItems, item)
+	}
+	if options.QueryDNSSEC {
+		item := NewQueryDNSSECItem()
 		rule.items = append(rule.items, item)
 		rule.allItems = append(rule.allItems, item)
 	}
@@ -440,6 +462,7 @@ func (r *DefaultDNSRule) matchForMatch(metadata *adapter.InboundContext) bool {
 
 func (r *DefaultDNSRule) MatchAddressLimit(metadata *adapter.InboundContext, response *dns.Msg) bool {
 	matchMetadata := *metadata
+	matchMetadata.ResetRuleCache()
 	matchMetadata.DNSResponse = response
 	matchMetadata.DestinationAddressMatchFromResponse = true
 	return r.abstractDefaultRule.Match(&matchMetadata)
@@ -468,34 +491,6 @@ func (r *LogicalDNSRule) MatchResponseAnonymous() bool {
 
 func (r *LogicalDNSRule) Race() bool {
 	return r.race
-}
-
-func (r *LogicalDNSRule) matchForMatch(metadata *adapter.InboundContext) bool {
-	var matched bool
-	if r.mode == C.LogicalTypeAnd {
-		matched = true
-		for _, rule := range r.rules {
-			nestedMetadata := *metadata
-			nestedMetadata.ResetRuleCache()
-			if !rule.Match(&nestedMetadata) {
-				matched = false
-				break
-			}
-		}
-	} else {
-		for _, rule := range r.rules {
-			nestedMetadata := *metadata
-			nestedMetadata.ResetRuleCache()
-			if rule.Match(&nestedMetadata) {
-				matched = true
-				break
-			}
-		}
-	}
-	if r.invert {
-		return !matched
-	}
-	return matched
 }
 
 func NewLogicalDNSRule(ctx context.Context, logger log.ContextLogger, options option.LogicalDNSRule, legacyDNSMode bool) (*LogicalDNSRule, error) {
@@ -552,10 +547,6 @@ func (r *LogicalDNSRule) WithAddressLimit() bool {
 	return false
 }
 
-func (r *LogicalDNSRule) Match(metadata *adapter.InboundContext) bool {
-	return r.matchForMatch(metadata)
-}
-
 func (r *LogicalDNSRule) LegacyPreMatch(metadata *adapter.InboundContext) bool {
 	metadata.IgnoreDestinationIPCIDRMatch = true
 	defer func() { metadata.IgnoreDestinationIPCIDRMatch = false }()
@@ -564,6 +555,7 @@ func (r *LogicalDNSRule) LegacyPreMatch(metadata *adapter.InboundContext) bool {
 
 func (r *LogicalDNSRule) MatchAddressLimit(metadata *adapter.InboundContext, response *dns.Msg) bool {
 	matchMetadata := *metadata
+	matchMetadata.ResetRuleCache()
 	matchMetadata.DNSResponse = response
 	matchMetadata.DestinationAddressMatchFromResponse = true
 	return r.abstractLogicalRule.Match(&matchMetadata)

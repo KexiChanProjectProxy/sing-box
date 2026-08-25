@@ -257,7 +257,7 @@ func (l *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 }
 
 func (l *LoadBalance) CheckOutbounds() {
-	l.group.CheckOutbounds(true)
+	l.group.CheckOutbounds(l.ctx, true)
 }
 
 func (l *LoadBalance) selectCandidate(metadata adapter.InboundContext) (Candidate, error) {

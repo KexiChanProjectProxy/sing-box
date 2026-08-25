@@ -78,7 +78,7 @@ func (i *Inbound) Start(stage adapter.StartStage) error {
 	return i.listener.Start()
 }
 
-func (i *Inbound) InterfaceUpdated() {
+func (i *Inbound) InterfaceUpdated(ctx context.Context) {
 	i.udpNat.Purge()
 }
 

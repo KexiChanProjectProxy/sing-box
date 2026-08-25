@@ -1097,6 +1097,22 @@
                     }
                   ]
                 },
+                "query_client_subnet": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
+                },
+                "query_dnssec": {
+                  "type": "boolean"
+                },
                 "network": {
                   "anyOf": [
                     {
@@ -1695,6 +1711,9 @@
             },
             "client_subnet": {
               "type": "string"
+            },
+            "remove_client_subnet": {
+              "type": "boolean"
             }
           }
         },
@@ -1733,6 +1752,9 @@
             },
             "client_subnet": {
               "type": "string"
+            },
+            "remove_client_subnet": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -1778,6 +1800,9 @@
             },
             "client_subnet": {
               "type": "string"
+            },
+            "remove_client_subnet": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -4563,6 +4588,11 @@
                 }
               ]
             },
+            "listen_port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
             "relay_server_port": {
               "type": "integer",
               "minimum": 0,
@@ -4612,6 +4642,9 @@
                   "additionalProperties": false
                 }
               ]
+            },
+            "taildrop_directory": {
+              "type": "string"
             }
           },
           "required": [
@@ -8914,6 +8947,22 @@
                   }
                 }
               ]
+            },
+            "query_client_subnet": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "query_dnssec": {
+              "type": "boolean"
             },
             "network": {
               "anyOf": [

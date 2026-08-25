@@ -2,13 +2,14 @@ package log
 
 import (
 	"context"
+	"github.com/sagernet/sing/common"
 	"os"
 )
 
 var std StructuredLogger
 
 func init() {
-	std = NewDefaultFactory(
+	factory := NewDefaultFactory(
 		context.Background(),
 		Formatter{},
 		os.Stderr,
@@ -16,7 +17,9 @@ func init() {
 		nil,
 		false,
 		"json",
-	).Logger()
+	)
+	common.Must(factory.Start())
+	std = factory.Logger()
 }
 
 // StdLogger returns the standard logger.

@@ -15,6 +15,7 @@ import (
 	"github.com/sagernet/sing-box/include"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/service/oomkiller"
+	"github.com/sagernet/sing-box/service/powerreport"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
 
@@ -30,6 +31,7 @@ type Daemon struct {
 	ctx                     context.Context
 	logger                  log.ContextLogger
 	startedService          *daemon.StartedService
+	powerManager            *powerreport.Manager
 	server                  *grpc.Server
 	runtimeWorkingDirectory string
 	lifecycleAccess         sync.Mutex
@@ -40,6 +42,7 @@ type Daemon struct {
 }
 
 func newDaemon() (*Daemon, error) {
+	restoreLocale()
 	ctx := include.Context(context.Background())
 	d := &Daemon{
 		ctx:                     ctx,
@@ -61,6 +64,8 @@ func newDaemon() (*Daemon, error) {
 	})
 	reporter := libbox.NewOOMReporter(d.startedService)
 	service.MustRegister[oomkiller.OOMReporter](ctx, reporter)
+	d.powerManager = powerreport.NewManager()
+	service.MustRegister[*powerreport.Manager](ctx, d.powerManager)
 	managedService := daemon.NewManagedService(daemon.ManagedServiceOptions{
 		Handler:     &managedHandler{d},
 		Debug:       debugEnabled,
@@ -93,7 +98,7 @@ func newDaemon() (*Daemon, error) {
 
 func (d *Daemon) listen() (net.Listener, error) {
 	if listenAddress != "" {
-		d.logger.WarnEvent("daemon.listen", "listening on TCP", log.String("listen", listenAddress), log.String("reason", "development only, no access control"))
+		d.logger.Warn("listening on TCP address ", listenAddress, ": development only, no access control")
 		return net.Listen("tcp", listenAddress)
 	}
 	return listenEndpoint()
@@ -104,11 +109,11 @@ func (d *Daemon) Start() error {
 	if err != nil {
 		return err
 	}
-	d.logger.InfoEvent("daemon.listen", "daemon listening", log.String("listen", listener.Addr().String()))
+	d.logger.Info("daemon listening at ", listener.Addr())
 	go func() {
 		serveError := d.server.Serve(listener)
 		if serveError != nil && !errors.Is(serveError, grpc.ErrServerStopped) {
-			d.logger.ErrorEvent("daemon.error", "serve error", log.Err(serveError), log.String("op", "serve"))
+			d.logger.Error("serve: ", serveError)
 		}
 	}()
 	go d.restore()
@@ -124,7 +129,7 @@ func (d *Daemon) restore() {
 	ownerState, err := loadOwnerState()
 	if err != nil {
 		if !os.IsNotExist(err) {
-			d.logger.WarnEvent("daemon.error", "load owner", log.Err(err), log.String("op", "load_owner"))
+			d.logger.Warn("load owner: ", err)
 		}
 		return
 	}
@@ -132,23 +137,23 @@ func (d *Daemon) restore() {
 	ownerWorkingDirectory := userWorkingDirectory(ownerUserID)
 	err = d.configureWorkingDirectoryLocked(ownerWorkingDirectory)
 	if err != nil {
-		d.logger.WarnEvent("daemon.error", "configure working directory", log.Err(err), log.String("op", "configure"))
+		d.logger.Warn("configure working directory: ", err)
 		return
 	}
 	options, err := loadStartOptions(ownerUserID)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			d.logger.WarnEvent("daemon.error", "load start options", log.Err(err), log.String("op", "load"))
+			d.logger.Warn("load start options: ", err)
 		}
 		return
 	}
 	err = tagUnownedReports(filepath.Join(ownerWorkingDirectory, crashReportsDirectoryName), ownerUserID)
 	if err != nil {
-		d.logger.WarnEvent("daemon.error", "tag crash reports", log.Err(err), log.String("op", "tag_crash"))
+		d.logger.Warn("tag crash reports: ", err)
 	}
 	err = tagUnownedReports(filepath.Join(ownerWorkingDirectory, oomReportsDirectoryName), ownerUserID)
 	if err != nil {
-		d.logger.WarnEvent("daemon.error", "tag OOM reports", log.Err(err), log.String("op", "tag_oom"))
+		d.logger.Warn("tag OOM reports: ", err)
 	}
 	if !options.WasRunning {
 		return
@@ -157,18 +162,18 @@ func (d *Daemon) restore() {
 		d.platform.SetSystemProxyPreference(options.systemProxyEnabled())
 		err = d.platform.RestoreOwner(ownerState)
 		if err != nil {
-			d.logger.WarnEvent("daemon.restore", "restore owner session", log.Err(err), log.String("op", "session"))
+			d.logger.Warn("restore owner session: ", err)
 		}
 	}
 	configContent, err := loadServiceConfig(ownerUserID)
 	if err != nil {
-		d.logger.ErrorEvent("daemon.restore", "restore service", log.Err(err))
+		d.logger.Error("restore service: ", err)
 		return
 	}
-	d.logger.InfoEvent("daemon.restore", "restoring service")
+	d.logger.Info("restoring service")
 	err = d.startServiceLocked(d.ctx, ownerUserID, configContent, options)
 	if err != nil {
-		d.logger.ErrorEvent("daemon.restore", "restore service", log.Err(err))
+		d.logger.Error("restore service: ", err)
 	}
 }
 
@@ -194,6 +199,7 @@ func (d *Daemon) configureWorkingDirectoryLocked(directory string) error {
 		return err
 	}
 	libbox.PromoteOOMDraft()
+	libbox.PromotePowerReportDraft()
 	d.runtimeWorkingDirectory = directory
 	return nil
 }
@@ -206,11 +212,20 @@ func (d *Daemon) startServiceLocked(ctx context.Context, ownerUserID string, con
 	}
 	_ = os.WriteFile(filepath.Join(directory, configSnapshotFileName), []byte(configContent), 0o600)
 	libbox.ReloadSetupOptions(&libbox.SetupOptions{
-		OomKillerEnabled:  options.OOMKillerEnabled,
-		OomKillerDisabled: options.OOMKillerDisabled,
-		OomMemoryLimit:    options.OOMMemoryLimit,
+		OomKillerEnabled:   options.OOMKillerEnabled,
+		OomKillerDisabled:  options.OOMKillerDisabled,
+		OomMemoryLimit:     options.OOMMemoryLimit,
+		PowerReportEnabled: options.PowerReportEnabled,
 	})
 	d.startedService.SetOOMKillerOptions(options.OOMKillerEnabled, options.OOMKillerDisabled, uint64(options.OOMMemoryLimit))
+	if options.PowerReportEnabled {
+		err = d.powerManager.Start(libbox.PowerReportOptions(d.startedService))
+		if err != nil {
+			d.logger.Warn("start power report recorder: ", err)
+		}
+	} else {
+		d.powerManager.Close()
+	}
 	if d.platform != nil {
 		d.platform.SetSystemProxyPreference(options.systemProxyEnabled())
 		err = d.platform.ResetPlatformOptions()
@@ -242,6 +257,8 @@ func (d *Daemon) stopServiceLocked(ownerUserID string) error {
 			return err
 		}
 	}
+	d.powerManager.Close()
+	libbox.PromotePowerReportDraft()
 	directory := userWorkingDirectory(ownerUserID)
 	crashReportError := tagUnownedReports(filepath.Join(directory, crashReportsDirectoryName), ownerUserID)
 	if crashReportError != nil {
@@ -250,6 +267,10 @@ func (d *Daemon) stopServiceLocked(ownerUserID string) error {
 	oomReportError := tagUnownedReports(filepath.Join(directory, oomReportsDirectoryName), ownerUserID)
 	if oomReportError != nil {
 		return oomReportError
+	}
+	powerReportError := tagUnownedReports(filepath.Join(directory, powerReportsDirectoryName), ownerUserID)
+	if powerReportError != nil {
+		return powerReportError
 	}
 	options.WasRunning = false
 	return saveStartOptions(ownerUserID, options)

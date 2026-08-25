@@ -1,6 +1,7 @@
 package oomkiller
 
 import (
+	"context"
 	runtimeDebug "runtime/debug"
 	"sync"
 	"time"
@@ -203,14 +204,14 @@ func (t *adaptiveTimer) poll() {
 			t.logger.WarnEvent("oom.rate.critical", "memory growth rate critical", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)), log.Bool("report_only", true))
 		} else {
 			t.logger.ErrorEvent("oom.rate.critical", "memory growth rate critical", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)))
-			t.network.ResetNetwork()
+			t.network.ResetNetwork(context.Background())
 		}
 	} else {
 		if t.killerDisabled {
 			t.logger.WarnEvent("oom.threshold", "memory threshold reached", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)), log.Bool("report_only", true))
 		} else {
 			t.logger.ErrorEvent("oom.threshold", "memory threshold reached", log.Uint64("usage", sample.usage), log.String("detail", t.logDetails(sample)))
-			t.network.ResetNetwork()
+			t.network.ResetNetwork(context.Background())
 		}
 	}
 	badCleanup()

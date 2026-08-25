@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"net/netip"
 
 	"github.com/sagernet/sing-box/log"
@@ -30,7 +31,7 @@ type PlatformInterface interface {
 
 	ClearDNSCache()
 	RequestPermissionForWIFIState() error
-	ReadWIFIState() WIFIState
+	ReadWIFIState(ctx context.Context) WIFIState
 
 	UsePlatformConnectionOwnerFinder() bool
 	FindConnectionOwner(request *FindConnectionOwnerRequest) (*ConnectionOwner, error)
@@ -39,6 +40,7 @@ type PlatformInterface interface {
 
 	UsePlatformNotification() bool
 	SendNotification(notification *Notification) error
+	CancelNotification(identifier string, typeID int32) error
 
 	MyInterfaceAddress() []netip.Addr
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,6 +29,17 @@ type defaultFactory struct {
 	level             Level
 	subscriber        *observable.Subscriber[Entry]
 	observer          *observable.Observer[Entry]
+	startAccess       sync.Mutex
+	started           atomic.Bool
+	pendingEntries    []pendingEntry
+}
+
+type pendingEntry struct {
+	ctx       context.Context
+	level     Level
+	tag       string
+	message   string
+	timestamp time.Time
 }
 
 // NewDefaultFactory creates a new default factory for structured logging.
@@ -58,22 +70,41 @@ func NewDefaultFactory(
 	if needObservable {
 		factory.observer = observable.NewObserver[Entry](factory.subscriber, 64)
 	}
+	if filePath == "" {
+		factory.started.Store(true)
+	}
 	return factory
 }
 
 func (f *defaultFactory) Start() error {
+	var err error
 	if f.filePath != "" {
-		logFile, err := filemanager.OpenFile(f.ctx, f.filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			return err
+		logFile, openErr := filemanager.OpenFile(f.ctx, f.filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if openErr != nil {
+			err = openErr
+		} else {
+			f.writer = logFile
+			f.file = logFile
 		}
-		f.writer = logFile
-		f.file = logFile
 	}
-	return nil
+	if f.needObservable && f.observer == nil {
+		f.observer = observable.NewObserver[Entry](f.subscriber, 64)
+	}
+	f.startAccess.Lock()
+	pendingEntries := f.pendingEntries
+	f.pendingEntries = nil
+	f.started.Store(true)
+	f.startAccess.Unlock()
+	for _, entry := range pendingEntries {
+		f.output(entry.ctx, entry.level, entry.tag, entry.message, entry.timestamp)
+	}
+	return err
 }
 
 func (f *defaultFactory) Close() error {
+	f.startAccess.Lock()
+	f.pendingEntries = nil
+	f.startAccess.Unlock()
 	return common.Close(
 		common.PtrOrNil(f.file),
 		f.subscriber,
@@ -117,6 +148,10 @@ func (f *defaultFactory) UnSubscribe(sub observable.Subscription[Entry]) {
 	f.observer.UnSubscribe(sub)
 }
 
+func (f *defaultFactory) output(ctx context.Context, level Level, tag string, message string, timestamp time.Time) {
+	(&observableLogger{f, tag}).writeRecord(ctx, level, "", message, timestamp, nil)
+}
+
 var _ StructuredLogger = (*observableLogger)(nil)
 
 type observableLogger struct {
@@ -131,8 +166,22 @@ func (l *observableLogger) Log(ctx context.Context, level Level, args []any) {
 		return
 	}
 	nowTime := time.Now()
-	messageRaw := F.ToString(args...)
-	rec := l.recordFromContext(ctx, level, "", messageRaw, nowTime, nil)
+	message := F.ToString(args...)
+	if !l.started.Load() && level != LevelFatal && level != LevelPanic {
+		l.startAccess.Lock()
+		if !l.started.Load() {
+			l.pendingEntries = append(l.pendingEntries, pendingEntry{ctx, level, l.tag, message, nowTime})
+			l.startAccess.Unlock()
+			return
+		}
+		l.startAccess.Unlock()
+	}
+	l.writeRecord(ctx, level, "", message, nowTime, nil)
+}
+
+func (l *observableLogger) writeRecord(ctx context.Context, level Level, event string, message string, timestamp time.Time, fields []Field) {
+	platformWriters := l.loadPlatformWriters()
+	rec := l.recordFromContext(ctx, level, event, message, timestamp, fields)
 	formatted := l.formatter.FormatRecordJSON(rec)
 	if level <= l.level {
 		l.writer.Write([]byte(formatted))
@@ -273,26 +322,16 @@ func (l *observableLogger) logEvent(ctx context.Context, level Level, event stri
 		return
 	}
 	nowTime := time.Now()
-	rec := l.recordFromContext(ctx, level, event, message, nowTime, fields)
-	formatted := l.formatter.FormatRecordJSON(rec)
-	if level <= l.level {
-		l.writer.Write([]byte(formatted))
-		if l.needObservable {
-			l.subscriber.Emit(Entry{level, strings.TrimRight(formatted, "\n")})
+	if !l.started.Load() && level != LevelFatal && level != LevelPanic {
+		l.startAccess.Lock()
+		if !l.started.Load() {
+			l.pendingEntries = append(l.pendingEntries, pendingEntry{ctx, level, l.tag, message, nowTime})
+			l.startAccess.Unlock()
+			return
 		}
-		if level == LevelPanic {
-			panic(formatted)
-		}
-		if level == LevelFatal {
-			os.Exit(1)
-		}
+		l.startAccess.Unlock()
 	}
-	if len(platformWriters) > 0 {
-		platformFormatted := l.platformFormatter.FormatRecordJSON(rec)
-		for _, platformWriter := range platformWriters {
-			platformWriter.WriteMessage(level, platformFormatted)
-		}
-	}
+	l.writeRecord(ctx, level, event, message, nowTime, fields)
 }
 
 func (l *observableLogger) recordFromContext(ctx context.Context, level Level, event string, message string, timestamp time.Time, fields []Field) Record {

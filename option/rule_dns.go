@@ -32,7 +32,7 @@ func (r DNSRule) MarshalJSON() ([]byte, error) {
 	default:
 		return nil, E.New("unknown rule type: " + r.Type)
 	}
-	return badjson.MarshallObjects((_DNSRule)(r), v)
+	return badjson.MarshallObjects(_DNSRule(r), v)
 }
 
 func (r *DNSRule) UnmarshalJSONContext(ctx context.Context, bytes []byte) error {
@@ -138,6 +138,8 @@ type RawDefaultDNSRule struct {
 	Inbound                  badoption.Listable[string]                                                  `json:"inbound,omitempty" reference:"inbound"`
 	IPVersion                int                                                                         `json:"ip_version,omitempty" enum:"4,6"`
 	QueryType                badoption.Listable[DNSQueryType]                                            `json:"query_type,omitempty"`
+	QueryClientSubnet        badoption.Listable[*badoption.Prefixable]                                   `json:"query_client_subnet,omitempty"`
+	QueryDNSSEC              bool                                                                        `json:"query_dnssec,omitempty"`
 	Network                  badoption.Listable[string]                                                  `json:"network,omitempty" enum:"tcp,udp"`
 	AuthUser                 badoption.Listable[string]                                                  `json:"auth_user,omitempty"`
 	Protocol                 badoption.Listable[string]                                                  `json:"protocol,omitempty" enum:"tls,http,quic,dns,stun,bittorrent,dtls,ssh,rdp,ntp"`

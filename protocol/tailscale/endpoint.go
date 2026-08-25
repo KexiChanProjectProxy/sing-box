@@ -26,6 +26,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/common/dialer"
+	"github.com/sagernet/sing-box/common/iponly"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/log"
@@ -46,6 +47,7 @@ import (
 	tailscaleroot "github.com/sagernet/tailscale"
 	_ "github.com/sagernet/tailscale/feature/relayserver"
 	"github.com/sagernet/tailscale/ipn"
+	"github.com/sagernet/tailscale/ipn/ipnlocal"
 	tsDNS "github.com/sagernet/tailscale/net/dns"
 	"github.com/sagernet/tailscale/net/netmon"
 	"github.com/sagernet/tailscale/net/netns"
@@ -54,7 +56,6 @@ import (
 	"github.com/sagernet/tailscale/tailcfg"
 	"github.com/sagernet/tailscale/tsnet"
 	"github.com/sagernet/tailscale/types/nettype"
-	"github.com/sagernet/tailscale/util/dnsname"
 	"github.com/sagernet/tailscale/version"
 	"github.com/sagernet/tailscale/wgengine"
 	"github.com/sagernet/tailscale/wgengine/router"
@@ -96,12 +97,12 @@ type Endpoint struct {
 	onReconfigHook    wgengine.ReconfigListener
 	sshReconfigHook   wgengine.ReconfigListener
 
-	cfg                *wgcfg.Config
-	routerCfg          *router.Config
-	dnsCfg             *tsDNS.Config
-	routeDomains       common.TypedValue[map[string]bool]
-	searchDomains      atomic.Bool
-	magicHostsUnrouted atomic.Bool
+	cfg           *wgcfg.Config
+	routerCfg     *router.Config
+	dnsCfg        *tsDNS.Config
+	routeDomains  common.TypedValue[map[string]bool]
+	routeSuffixes common.TypedValue[[]string]
+	searchDomains atomic.Bool
 
 	acceptRoutes               bool
 	exitNode                   string
@@ -117,6 +118,8 @@ type Endpoint struct {
 
 	sshServerInstance *tailssh.Server
 	sshServerOptions  *option.TailscaleSSHServerOptions
+	taildrop          *taildropManager
+	localBackend      *ipnlocal.LocalBackend
 
 	systemInterface     bool
 	systemInterfaceName string
@@ -181,6 +184,12 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 	}
 	dialerQueryOptions := outboundDialer.(dialer.ResolveDialer).QueryOptions()
 	dnsRouter := service.FromContext[adapter.DNSRouter](ctx)
+	taildropDirectory := options.TaildropDirectory
+	if taildropDirectory == "" {
+		taildropDirectory = "Taildrop"
+	}
+	taildropDirectory = filemanager.BasePath(ctx, os.ExpandEnv(taildropDirectory))
+	taildropDirectory, _ = filepath.Abs(taildropDirectory)
 	return &Endpoint{
 		Adapter:           endpoint.NewAdapter(C.TypeTailscale, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, nil),
 		ctx:               ctx,
@@ -202,6 +211,7 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 			Ephemeral:     options.Ephemeral,
 			AuthKey:       options.AuthKey,
 			ControlURL:    options.ControlURL,
+			Port:          options.ListenPort,
 			AdvertiseTags: options.AdvertiseTags,
 			Dialer:        &endpointDialer{Dialer: outboundDialer, logger: logger},
 			LookupHook: func(ctx context.Context, host string) ([]netip.Addr, error) {
@@ -230,6 +240,7 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 		relayServerPort:            options.RelayServerPort,
 		relayServerStaticEndpoints: options.RelayServerStaticEndpoints,
 		sshServerOptions:           options.SSHServer,
+		taildrop:                   newTaildropManager(ctx, logger, tag, taildropDirectory, platformInterface),
 		udpTimeout:                 udpTimeout,
 		icmpTimeout:                C.ICMPTimeout,
 		systemInterface:            options.SystemInterface,
@@ -245,6 +256,12 @@ func (t *Endpoint) Start(stage adapter.StartStage) error {
 		mkdirErr := filemanager.MkdirAll(t.ctx, t.server.Dir, 0o700)
 		if mkdirErr != nil {
 			return E.Cause(mkdirErr, "create state directory")
+		}
+		if !version.IsAppleTV() {
+			mkdirErr = filemanager.MkdirAll(t.ctx, t.taildrop.directory, 0o700)
+			if mkdirErr != nil {
+				return E.Cause(mkdirErr, "create taildrop directory")
+			}
 		}
 		t.server.PeerDNSQueryHandler = (*peerDNSQueryHandler)(t)
 	case adapter.StartStateStart:
@@ -399,7 +416,13 @@ func (t *Endpoint) postStart() error {
 			}, true
 		})
 	}
-	wgEngine := t.server.ExportLocalBackend().ExportEngine().(wgengine.ExportedUserspaceEngine)
+	localBackend := t.server.ExportLocalBackend()
+	t.localBackend = localBackend
+	if !version.IsAppleTV() {
+		registerTaildropEndpoint(localBackend, t)
+		go t.taildrop.start()
+	}
+	wgEngine := localBackend.ExportEngine().(wgengine.ExportedUserspaceEngine)
 	wgEngine.SetOnReconfigListener(t.onReconfig)
 	t.wgEngine = wgEngine
 
@@ -688,6 +711,11 @@ func (t *Endpoint) Logout(ctx context.Context) error {
 func (t *Endpoint) Close() error {
 	var err error
 	t.started.Store(false)
+	if t.localBackend != nil {
+		unregisterTaildropEndpoint(t.localBackend)
+		t.localBackend = nil
+	}
+	t.taildrop.close()
 	if t.icmpForwarder != nil {
 		t.icmpForwarder.Close()
 		t.icmpForwarder = nil
@@ -712,7 +740,7 @@ func (t *Endpoint) Close() error {
 	return err
 }
 
-func (t *Endpoint) InterfaceUpdated() {
+func (t *Endpoint) InterfaceUpdated(ctx context.Context) {
 	if !t.started.Load() {
 		return
 	}
@@ -831,7 +859,7 @@ func (t *Endpoint) ListenPacketWithDestination(ctx context.Context, destination 
 		for _, address := range destinationAddresses {
 			packetConn, packetErr := t.listenPacketWithAddress(ctx, M.SocksaddrFrom(address, destination.Port))
 			if packetErr == nil {
-				return packetConn, address, nil
+				return iponly.NewPacketConn(t.logger, packetConn), address, nil
 			}
 			errors = append(errors, packetErr)
 		}
@@ -842,9 +870,9 @@ func (t *Endpoint) ListenPacketWithDestination(ctx context.Context, destination 
 		return nil, netip.Addr{}, err
 	}
 	if destination.IsIP() {
-		return packetConn, destination.Addr, nil
+		return iponly.NewPacketConn(t.logger, packetConn), destination.Addr, nil
 	}
-	return packetConn, netip.Addr{}, nil
+	return iponly.NewPacketConn(t.logger, packetConn), netip.Addr{}, nil
 }
 
 func (t *Endpoint) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
@@ -916,13 +944,15 @@ func (t *Endpoint) PreferredDomain(metadata *adapter.InboundContext, domain stri
 	if routeDomains[domain] {
 		return true
 	}
-	if t.magicHostsUnrouted.Load() && t.started.Load() {
-		fqdn, err := dnsname.ToFQDN(domain)
-		if err == nil {
-			_, found := t.server.ExportLocalBackend().ExportMagicDNSHosts().LookupHost(fqdn)
-			if found {
-				return true
-			}
+	if t.started.Load() {
+		magicHosts := t.server.ExportLocalBackend().ExportMagicDNSHosts()
+		if _, found := lookupHosts(nil, magicHosts, domain); found {
+			return true
+		}
+	}
+	for _, suffix := range t.routeSuffixes.Load() {
+		if mDNS.IsSubDomain(suffix, domain) {
+			return true
 		}
 	}
 	return !strings.Contains(domain, ".") && t.searchDomains.Load()
@@ -960,15 +990,19 @@ func (t *Endpoint) onReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCf
 	t.dnsCfg = dnsCfg
 
 	routeDomains := make(map[string]bool)
-	for fqdn := range dnsCfg.Routes {
+	for fqdn := range dnsCfg.Hosts {
 		routeDomains[fqdn.WithoutTrailingDot()] = true
 	}
 	for _, fqdn := range dnsCfg.SearchDomains {
 		routeDomains[fqdn.WithoutTrailingDot()] = true
 	}
+	routeSuffixes := make([]string, 0, len(dnsCfg.Routes))
+	for fqdn := range dnsCfg.Routes {
+		routeSuffixes = append(routeSuffixes, fqdn.WithoutTrailingDot())
+	}
 	t.routeDomains.Store(routeDomains)
+	t.routeSuffixes.Store(routeSuffixes)
 	t.searchDomains.Store(len(dnsCfg.SearchDomains) > 0)
-	t.magicHostsUnrouted.Store(dnsCfg.MagicDNSHostsUnrouted)
 
 	if t.onReconfigHook != nil {
 		t.onReconfigHook(cfg, routerCfg, dnsCfg)

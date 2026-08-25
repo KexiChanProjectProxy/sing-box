@@ -41,6 +41,7 @@ type DNSQueryOptions struct {
 	RewriteTTL             *uint32
 	Timeout                time.Duration
 	ClientSubnet           netip.Prefix
+	RemoveClientSubnet     bool
 }
 
 func DNSQueryOptionsFrom(ctx context.Context, options *option.DomainResolveOptions) (DNSQueryOptions, error) {
@@ -91,6 +92,11 @@ type DNSTransport interface {
 type DNSTransportWithPreferredDomain interface {
 	DNSTransport
 	PreferredDomain(domain string) bool
+}
+
+type DNSTransportWithEnvironment interface {
+	DNSTransport
+	Environment() []string
 }
 
 type DNSTransportRegistry interface {

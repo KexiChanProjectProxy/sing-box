@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"time"
@@ -73,11 +74,15 @@ func getServiceName(service any) string {
 	return strings.ToLower(t.Name())
 }
 
-func Start(logger log.StructuredLogger, stage StartStage, services ...Lifecycle) error {
+func Start(ctx context.Context, logger log.StructuredLogger, stage StartStage, services ...Lifecycle) error {
 	for _, service := range services {
+		err := ctx.Err()
+		if err != nil {
+			return err
+		}
 		name := getServiceName(service)
 		done := LogElapsed(logger, stage.String()+" "+name)
-		err := service.Start(stage)
+		err = service.Start(stage)
 		done()
 		if err != nil {
 			return err
@@ -86,10 +91,14 @@ func Start(logger log.StructuredLogger, stage StartStage, services ...Lifecycle)
 	return nil
 }
 
-func StartNamed(logger log.StructuredLogger, stage StartStage, services []LifecycleService) error {
+func StartNamed(ctx context.Context, logger log.StructuredLogger, stage StartStage, services []LifecycleService) error {
 	for _, service := range services {
+		err := ctx.Err()
+		if err != nil {
+			return err
+		}
 		done := LogElapsed(logger, stage.String()+" "+service.Name())
-		err := service.Start(stage)
+		err = service.Start(stage)
 		done()
 		if err != nil {
 			return E.Cause(err, stage.String(), " ", service.Name())

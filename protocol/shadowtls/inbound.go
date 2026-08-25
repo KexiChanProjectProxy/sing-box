@@ -70,7 +70,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		Version:  options.Version,
 		Password: options.Password,
 		Users: common.Map(options.Users, func(it option.ShadowTLSUser) shadowtls.User {
-			return (shadowtls.User)(it)
+			return shadowtls.User(it)
 		}),
 		Handshake: shadowtls.HandshakeConfig{
 			Server: options.Handshake.ServerOptions.Build(),

@@ -136,7 +136,7 @@ func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 		o.ClientSubnet == nil {
 		return json.Marshal(o.Server)
 	} else {
-		return json.Marshal((_DomainResolveOptions)(o))
+		return json.Marshal(_DomainResolveOptions(o))
 	}
 }
 

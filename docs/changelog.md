@@ -7,6 +7,7 @@ icon: material/alert-decagram
 * Prevent native IPv6 destinations from bypassing the configured [`xlat464`](/configuration/outbound/direct/#xlat464) NAT64 path by default; add an explicit `allow_ipv6` compatibility option
 * Add [`clickhouse` service](/configuration/service/clickhouse/) to batch-insert session access logs into ClickHouse over native or HTTP, with outbound TLS
 * Add [`override_ip`](/configuration/shared/dial/#override_ip) Dial Field to resolve a sniffed domain to IP with an IPv4/IPv6 strategy on any outbound
+* Integrate upstream [v1.14.0-rc.1](https://github.com/SagerNet/sing-box/releases/tag/v1.14.0-rc.1)
 
 #### 1.14.0.9
 

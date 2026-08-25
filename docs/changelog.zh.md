@@ -2,12 +2,19 @@
 icon: material/alert-decagram
 ---
 
-#### 1.14.0.10
+#### 1.14.0.12
 
-* 默认阻止原生 IPv6 目标绕过 [`xlat464`](/zh/configuration/outbound/direct/#xlat464) 配置的 NAT64 路径，并增加显式的 `allow_ipv6` 兼容选项
 * 新增 [`clickhouse` 服务](/zh/configuration/service/clickhouse/)，通过 native 或 HTTP 将会话访问日志批量写入 ClickHouse，并支持出站 TLS
 * 新增 [`override_ip`](/zh/configuration/shared/dial/#override_ip) Dial 字段，可在任意出站上将已嗅探域名按 IPv4/IPv6 策略解析为 IP
 * 合入上游 [v1.14.0-rc.1](https://github.com/SagerNet/sing-box/releases/tag/v1.14.0-rc.1)
+
+#### 1.14.0.11
+
+* 启用 [`xlat464`](/zh/configuration/outbound/direct/#xlat464) 时保留双栈 DNS
+
+#### 1.14.0.10
+
+* 默认阻止原生 IPv6 目标绕过 [`xlat464`](/zh/configuration/outbound/direct/#xlat464) 配置的 NAT64 路径，并增加显式的 `allow_ipv6` 兼容选项
 
 #### 1.14.0.9
 

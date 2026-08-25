@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
 )
 
@@ -89,7 +90,7 @@ func (r *NetworkManager) updateNetworkEnvironment() {
 	if !changed || len(options) == 0 {
 		return
 	}
-	r.logger.Info("updated network environment: ", strings.Join(options, ", "))
+	r.logger.InfoEvent("route.network.environment_updated", "updated network environment", log.String("options", strings.Join(options, ", ")))
 }
 
 func formatEnvironmentValues(values []string) string {

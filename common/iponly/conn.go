@@ -4,19 +4,19 @@ import (
 	"net"
 	"os"
 
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
 
 type PacketConn struct {
 	N.NetPacketConn
-	logger logger.Logger
+	logger log.StructuredLogger
 }
 
-func NewPacketConn(logger logger.Logger, conn net.PacketConn) *PacketConn {
+func NewPacketConn(logger log.StructuredLogger, conn net.PacketConn) *PacketConn {
 	return &PacketConn{
 		NetPacketConn: bufio.NewPacketConn(conn),
 		logger:        logger,
@@ -26,7 +26,7 @@ func NewPacketConn(logger logger.Logger, conn net.PacketConn) *PacketConn {
 func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	destination := M.SocksaddrFromNet(addr)
 	if !destination.IsIP() {
-		c.logger.Debug("dropped packet to non-IP destination ", destination)
+		c.logger.DebugEvent("iponly.drop", "dropped packet to non-IP destination", log.Addr("destination", destination))
 		return len(p), nil
 	}
 	return c.NetPacketConn.WriteTo(p, addr)
@@ -35,7 +35,7 @@ func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 func (c *PacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
 	if !destination.IsIP() {
 		buffer.Release()
-		c.logger.Debug("dropped packet to non-IP destination ", destination)
+		c.logger.DebugEvent("iponly.drop", "dropped packet to non-IP destination", log.Addr("destination", destination))
 		return nil
 	}
 	return c.NetPacketConn.WritePacket(buffer, destination)
@@ -75,7 +75,7 @@ func (w *packetBatchWriter) WritePacketBatch(buffers []*buf.Buffer, destinations
 	for index, destination := range destinations {
 		if !destination.IsIP() {
 			buffers[index].Release()
-			w.logger.Debug("dropped packet to non-IP destination ", destination)
+			w.logger.DebugEvent("iponly.drop", "dropped packet to non-IP destination", log.Addr("destination", destination))
 			continue
 		}
 		buffers[writeIndex] = buffers[index]

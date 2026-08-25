@@ -27,8 +27,8 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/experimental/locale"
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service/filemanager"
 	"github.com/sagernet/tailscale/ipn/ipnlocal"
 	"github.com/sagernet/tailscale/tailcfg"
@@ -126,7 +126,7 @@ func (f *taildropIncomingFile) Write(content []byte) (int, error) {
 
 type taildropManager struct {
 	ctx               context.Context
-	logger            logger.ContextLogger
+	logger            log.StructuredLogger
 	tag               string
 	directory         string
 	platformInterface adapter.PlatformInterface
@@ -146,7 +146,7 @@ type taildropManager struct {
 	fileWatchers  map[chan struct{}]bool
 }
 
-func newTaildropManager(ctx context.Context, logger logger.ContextLogger, tag string, directory string, platformInterface adapter.PlatformInterface) *taildropManager {
+func newTaildropManager(ctx context.Context, logger log.StructuredLogger, tag string, directory string, platformInterface adapter.PlatformInterface) *taildropManager {
 	manager := &taildropManager{
 		ctx:               ctx,
 		logger:            logger,
@@ -488,7 +488,7 @@ func (m *taildropManager) putFile(senderID string, senderName string, baseName s
 	m.unreadFiles[finalName] = true
 	m.access.Unlock()
 	m.totalReceived.Add(1)
-	m.logger.Info("taildrop: received ", finalName, " (", offset+copied, " bytes) from ", senderName)
+	m.logger.InfoEvent("taildrop.received", "received file", log.String("name", finalName), log.Int64("bytes", offset+copied), log.String("from", senderName))
 	m.notifyFilesChanged()
 	m.sendNotification(finalName, fmt.Sprintf(locale.FromContext(m.ctx).TaildropReceived, finalName, senderName))
 	return nil
@@ -580,7 +580,7 @@ func (m *taildropManager) sendNotification(name string, body string) {
 		OpenURL:    "sing-box:taildrop?endpoint=" + percentEscape(m.tag),
 	})
 	if err != nil {
-		m.logger.Error("taildrop: send notification: ", err)
+		m.logger.ErrorEvent("taildrop.notification.error", "send notification", log.Err(err))
 	}
 }
 
@@ -590,7 +590,7 @@ func (m *taildropManager) cancelNotification(name string) {
 	}
 	err := m.platformInterface.CancelNotification("taildrop/"+m.tag+"/"+name, taildropNotificationTypeID)
 	if err != nil {
-		m.logger.Error("taildrop: cancel notification: ", err)
+		m.logger.ErrorEvent("taildrop.notification.error", "cancel notification", log.Err(err))
 	}
 }
 
@@ -798,7 +798,7 @@ func (m *taildropManager) deleteFile(baseName string) error {
 		if time.Since(startedAt) < taildropDeleteRetryDelay {
 			if removeBackoff == nil {
 				removeBackoff = backoff.NewBackoff("taildrop-delete", func(format string, args ...any) {
-					m.logger.Debug(fmt.Sprintf(format, args...))
+					m.logger.DebugEvent("taildrop.delete.backoff", "retry", log.String("detail", fmt.Sprintf(format, args...)))
 				}, time.Second)
 			}
 			removeBackoff.BackOff(m.ctx, err)
@@ -859,7 +859,7 @@ func (m *taildropManager) handlePeerRequest(handler ipnlocal.PeerAPIHandler, w h
 		if escapedName == "" {
 			err = json.NewEncoder(w).Encode(m.partialFileNames(senderID))
 			if err != nil {
-				m.logger.Error("taildrop: write partial file list: ", err)
+				m.logger.ErrorEvent("taildrop.partial_list.error", "write partial file list", log.Err(err))
 			}
 		} else {
 			m.writePartialChecksums(w, senderID, baseName)
@@ -895,11 +895,11 @@ func (m *taildropManager) handlePeerRequest(handler ipnlocal.PeerAPIHandler, w h
 			statusCode = http.StatusConflict
 			message = err.Error()
 		case errors.Is(err, errTaildropCanceled):
-			m.logger.Debug("taildrop: receive ", baseName, ": ", err)
+			m.logger.DebugEvent("taildrop.receive.canceled", "receive canceled", log.String("name", baseName), log.Err(err))
 			statusCode = http.StatusForbidden
 			message = err.Error()
 		default:
-			m.logger.Error("taildrop: receive ", baseName, ": ", err)
+			m.logger.ErrorEvent("taildrop.receive.error", "receive failed", log.String("name", baseName), log.Err(err))
 			statusCode = http.StatusInternalServerError
 			message = "taildrop: receive failed"
 		}
@@ -946,7 +946,7 @@ func (m *taildropManager) writePartialChecksums(w http.ResponseWriter, senderID 
 	for {
 		n, readErr := io.ReadFull(file, block)
 		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
-			m.logger.Error("taildrop: read partial file: ", readErr)
+			m.logger.ErrorEvent("taildrop.partial.read.error", "read partial file", log.Err(readErr))
 			return
 		}
 		if n == 0 {

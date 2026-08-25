@@ -28,7 +28,7 @@ var commandAPI = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := runAPI(args)
 		if err != nil {
-			log.Fatal(err)
+			log.FatalEvent("cli.error", err.Error(), log.Err(err))
 		}
 	},
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

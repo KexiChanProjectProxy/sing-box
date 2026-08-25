@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 )
 
 const (
@@ -37,7 +37,7 @@ const (
 
 type Options struct {
 	BasePath         string
-	Logger           logger.Logger
+	Logger           log.StructuredLogger
 	Metadata         any
 	OwnerCallback    func(path string)
 	LogCallback      func() []byte
@@ -49,7 +49,7 @@ type Options struct {
 
 type Recorder struct {
 	draftPath        string
-	logger           logger.Logger
+	logger           log.StructuredLogger
 	metadata         any
 	ownerCallback    func(path string)
 	logCallback      func() []byte
@@ -106,7 +106,7 @@ type previousSample struct {
 func NewRecorder(options Options) *Recorder {
 	recorderLogger := options.Logger
 	if recorderLogger == nil {
-		recorderLogger = logger.NOP()
+		recorderLogger = log.NewNOPFactory().Logger()
 	}
 	gateInterval := options.GateInterval
 	if gateInterval == 0 {
@@ -423,7 +423,7 @@ func (r *Recorder) flushLocked(now time.Time) {
 	if err == nil {
 		r.rows = r.rows[:0]
 	} else {
-		r.logger.Error(E.Cause(err, "power report: write timeline"))
+		r.logger.ErrorEvent("powerreport.timeline.error", "write timeline", log.Err(err))
 		if len(r.rows) >= rowCapacity {
 			r.rows = r.rows[len(r.rows)-rowCapacity/2:]
 		}
@@ -432,7 +432,7 @@ func (r *Recorder) flushLocked(now time.Time) {
 	if err == nil {
 		r.events = r.events[:0]
 	} else {
-		r.logger.Error(E.Cause(err, "power report: write events"))
+		r.logger.ErrorEvent("powerreport.events.error", "write events", log.Err(err))
 		if len(r.events) >= eventCapacity {
 			r.events = r.events[len(r.events)-eventCapacity/2:]
 		}

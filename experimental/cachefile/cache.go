@@ -3,11 +3,14 @@ package cachefile
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sagernet/sing-box/log"
 
 	"github.com/sagernet/bbolt"
 	bboltErrors "github.com/sagernet/bbolt/errors"
@@ -16,7 +19,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service/filemanager"
 )
 
@@ -42,7 +44,7 @@ var _ adapter.CacheFile = (*CacheFile)(nil)
 
 type CacheFile struct {
 	ctx                context.Context
-	logger             logger.Logger
+	logger             log.StructuredLogger
 	path               string
 	cacheID            []byte
 	cacheIDText        string
@@ -80,7 +82,7 @@ type saveDNSCacheEntry struct {
 	saving     bool
 }
 
-func New(ctx context.Context, logger logger.Logger, options option.CacheFileOptions) *CacheFile {
+func New(ctx context.Context, logger log.StructuredLogger, options option.CacheFileOptions) *CacheFile {
 	var path string
 	if options.Path != "" {
 		path = options.Path
@@ -197,7 +199,7 @@ func (c *CacheFile) start() error {
 		if err == nil {
 			break
 		}
-		c.logger.Error("database corrupted: ", err, ": resetting")
+		c.logger.ErrorEvent("cache.corrupted", "database corrupted, resetting", log.Err(err))
 		db.Close()
 		rmErr := filemanager.Remove(c.ctx, c.path)
 		if rmErr != nil {
@@ -315,7 +317,7 @@ func (c *CacheFile) resetDB(failedDB *bbolt.DB, reason any) {
 	if c.DB != failedDB {
 		return
 	}
-	c.logger.Error("database corrupted: ", reason, ": resetting")
+	c.logger.ErrorEvent("cache.corrupted", "database corrupted, resetting", log.String("reason", fmt.Sprint(reason)))
 	failedDB.Close()
 	filemanager.Remove(c.ctx, c.path)
 	db, err := bbolt.Open(c.path, 0o666, &bbolt.Options{Timeout: time.Second})

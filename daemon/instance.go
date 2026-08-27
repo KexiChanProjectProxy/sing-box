@@ -179,7 +179,7 @@ func (i *Instance) TrafficManager() *trafficcontrol.Manager {
 }
 
 func parseConfig(ctx context.Context, configContent string) (option.Options, error) {
-	options, err := json.UnmarshalExtendedContext[option.Options](ctx, []byte(configContent))
+	options, err := option.UnmarshalContext(ctx, []byte(configContent))
 	if err != nil {
 		return option.Options{}, E.Cause(err, "decode config")
 	}

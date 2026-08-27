@@ -5,6 +5,7 @@ icon: material/alert-decagram
 #### 1.14.0.13
 
 * 对齐 hysteria 的 Hysteria2 realm：优先 IPv6/IPv4 与 fallback 超时、补充性 IPv6 HTTP 查询、以及 `listen_ports`
+* 将 YAML 配置接入 CLI（`format`/`merge`/`-C`）、daemon 和 libbox
 
 #### 1.14.0.12
 

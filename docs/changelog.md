@@ -5,6 +5,7 @@ icon: material/alert-decagram
 #### 1.14.0.13
 
 * Align Hysteria2 realm with hysteria: prefer IPv6/IPv4 with fallback timeout, supplementary IPv6 HTTP lookup, and `listen_ports`
+* Wire YAML configuration through CLI (`format`/`merge`/`-C`), daemon, and libbox
 
 #### 1.14.0.12
 

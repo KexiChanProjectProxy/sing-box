@@ -10,8 +10,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
-	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/rw"
 
 	"github.com/spf13/cobra"
@@ -42,23 +40,18 @@ func merge(outputPath string) error {
 	if err != nil {
 		return err
 	}
-	buffer := new(bytes.Buffer)
-	encoder := json.NewEncoder(buffer)
-	encoder.SetIndent("", "  ")
-	err = encoder.Encode(mergedOptions)
+	encoded, err := encodeConfig(mergedOptions, isYAMLConfigPath(outputPath))
 	if err != nil {
-		return E.Cause(err, "encode config")
+		return err
 	}
-	if existsContent, err := os.ReadFile(outputPath); err != nil {
-		if string(existsContent) == buffer.String() {
-			return nil
-		}
+	if existsContent, readErr := os.ReadFile(outputPath); readErr == nil && bytes.Equal(existsContent, encoded) {
+		return nil
 	}
 	err = rw.MkdirParent(outputPath)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(outputPath, buffer.Bytes(), 0o644)
+	err = os.WriteFile(outputPath, encoded, 0o644)
 	if err != nil {
 		return err
 	}

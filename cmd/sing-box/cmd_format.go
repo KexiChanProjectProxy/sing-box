@@ -7,7 +7,6 @@ import (
 
 	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
 
 	"github.com/spf13/cobra"
@@ -44,29 +43,26 @@ func format() error {
 			return err
 		}
 		optionsEntry.options.SetComments(comments)
-		buffer := new(bytes.Buffer)
-		encoder := json.NewEncoder(buffer)
-		encoder.SetIndent("", "  ")
-		err = encoder.Encode(optionsEntry.options)
+		encoded, err := encodeConfig(optionsEntry.options, optionsEntry.writeYAML())
 		if err != nil {
-			return E.Cause(err, "encode config")
+			return err
 		}
 		outputPath, _ := filepath.Abs(optionsEntry.path)
 		if !commandFormatFlagWrite {
 			if len(optionsList) > 1 {
 				os.Stdout.WriteString(outputPath + "\n")
 			}
-			os.Stdout.WriteString(buffer.String() + "\n")
+			os.Stdout.WriteString(string(encoded) + "\n")
 			continue
 		}
-		if bytes.Equal(optionsEntry.content, buffer.Bytes()) {
+		if bytes.Equal(optionsEntry.content, encoded) {
 			continue
 		}
 		output, err := os.Create(optionsEntry.path)
 		if err != nil {
 			return E.Cause(err, "open output")
 		}
-		_, err = output.Write(buffer.Bytes())
+		_, err = output.Write(encoded)
 		output.Close()
 		if err != nil {
 			return E.Cause(err, "write output")

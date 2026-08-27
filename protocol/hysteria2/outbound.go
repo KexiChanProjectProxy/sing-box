@@ -113,6 +113,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 			Logger:    logger,
 			IPVersion: options.Realm.IPVersion,
 		}
+		if err := applyHysteria2RealmExtras(realmOptions, *options.Realm); err != nil {
+			return nil, err
+		}
 		if options.Realm.PortMapping != nil && options.Realm.PortMapping.Enabled {
 			realmOptions.PortMapping = &realm.PortMappingOptions{
 				Timeout:  time.Duration(options.Realm.PortMapping.Timeout),

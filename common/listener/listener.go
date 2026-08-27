@@ -148,6 +148,10 @@ func (l *Listener) ListenOptions() option.ListenOptions {
 	return l.listenOptions
 }
 
+func (l *Listener) SetListenPort(port uint16) {
+	l.listenOptions.ListenPort = port
+}
+
 func ListenNetworkNamespace[T any](ctx context.Context, nameOrPath string, block func() (T, error)) (T, error) {
 	if nameOrPath == "" {
 		return block()

@@ -2,10 +2,15 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.13
+
+* 对齐 hysteria 的 Hysteria2 realm：优先 IPv6/IPv4 与 fallback 超时、补充性 IPv6 HTTP 查询、以及 `listen_ports`
+
 #### 1.14.0.12
 
 * 新增 [`clickhouse` 服务](/zh/configuration/service/clickhouse/)，通过 native 或 HTTP 将会话访问日志批量写入 ClickHouse，并支持出站 TLS
 * 新增 [`override_ip`](/zh/configuration/shared/dial/#override_ip) Dial 字段，可在任意出站上将已嗅探域名按 IPv4/IPv6 策略解析为 IP
+* 新增 YAML 配置文件支持（`.yaml`/`.yml`，含 `-C` 目录）
 * 合入上游 [v1.14.0-rc.1](https://github.com/SagerNet/sing-box/releases/tag/v1.14.0-rc.1)
 
 #### 1.14.0.11

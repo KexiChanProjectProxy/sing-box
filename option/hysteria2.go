@@ -28,13 +28,17 @@ type Hysteria2InboundOptions struct {
 }
 
 type Hysteria2Realm struct {
-	ServerURL   string                     `json:"server_url"`
-	Token       string                     `json:"token,omitempty"`
-	RealmID     string                     `json:"realm_id"`
-	STUNServers badoption.Listable[string] `json:"stun_servers"`
-	IPVersion   int                        `json:"ip_version,omitempty" enum:"0,4,6"`
-	PortMapping *Hysteria2RealmPortMapping `json:"port_mapping,omitempty"`
-	HTTPClient  *HTTPClientOptions         `json:"http_client,omitempty"`
+	ServerURL       string                     `json:"server_url"`
+	Token           string                     `json:"token,omitempty"`
+	RealmID         string                     `json:"realm_id"`
+	STUNServers     badoption.Listable[string] `json:"stun_servers"`
+	IPVersion       int                        `json:"ip_version,omitempty" enum:"0,4,6"`
+	PreferIPVersion string                     `json:"prefer_ip_version,omitempty" enum:"v4,v6,dual"`
+	FallbackTimeout badoption.Duration         `json:"fallback_timeout,omitempty"`
+	IPv6API         string                     `json:"ipv6_api,omitempty"`
+	ListenPorts     badoption.Listable[string] `json:"listen_ports,omitempty"`
+	PortMapping     *Hysteria2RealmPortMapping `json:"port_mapping,omitempty"`
+	HTTPClient      *HTTPClientOptions         `json:"http_client,omitempty"`
 }
 
 type Hysteria2RealmPortMapping struct {

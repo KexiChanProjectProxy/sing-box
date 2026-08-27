@@ -8,6 +8,13 @@ icon: material/alert-decagram
     :material-plus: [realm](#realm)  
     :material-alert: [obfs](#obfstype)
 
+!!! quote "Changes in sing-box 1.14.0.13"
+
+    :material-plus: [realm.prefer_ip_version](#realmprefer_ip_version)  
+    :material-plus: [realm.fallback_timeout](#realmfallback_timeout)  
+    :material-plus: [realm.ipv6_api](#realmipv6_api)  
+    :material-plus: [realm.listen_ports](#realmlisten_ports)
+
 !!! quote "Changes in sing-box 1.11.0"
 
     :material-alert: [masquerade](#masquerade)  
@@ -49,6 +56,12 @@ icon: material/alert-decagram
     "stun_servers": [],
     "stun_domain_resolver": "", // or {}
     "ip_version": 0,
+    "prefer_ip_version": "v6",
+    "fallback_timeout": "2s",
+    "ipv6_api": "",
+    "listen_ports": [
+      "60000:61000"
+    ],
     "port_mapping": {
       "enabled": false,
       "timeout": "",
@@ -272,6 +285,40 @@ Restrict realm connections (STUN, hole punching, and the resulting QUIC path) to
 `4` or `6`. Both are used if empty.
 
 The `listen` address must be compatible with the selected version.
+
+#### realm.prefer_ip_version
+
+!!! question "Since sing-box 1.14.0.13"
+
+Which IP family to punch first: `v6` (default), `v4`, or `dual`.
+
+`v6` / `v4` send only the preferred family until `fallback_timeout`, then add the other. `dual` sends both immediately.
+
+This is independent of `ip_version`, which hard-restricts the socket family.
+
+#### realm.fallback_timeout
+
+!!! question "Since sing-box 1.14.0.13"
+
+How long to punch only the preferred family before adding the other.
+
+`2s` is used by default. If this is `>= 10s`, the punch timeout is extended to `fallback_timeout + 10s`.
+
+#### realm.ipv6_api
+
+!!! question "Since sing-box 1.14.0.13"
+
+Optional HTTP/HTTPS URL used to **supplement** STUN with extra IPv6 addresses.
+
+STUN remains required; HTTP failure is logged and ignored. The reported port is always the local UDP listen port, never the port from the API response. The lookup client dials `tcp6`.
+
+#### realm.listen_ports
+
+!!! question "Since sing-box 1.14.0.13"
+
+UDP listen ports or ranges (`443`, `60000:61000`, `60000-61000`). Occupied ports are skipped.
+
+Takes precedence over `listen_port` when set.
 
 #### realm.port_mapping
 

@@ -3,9 +3,11 @@ package option
 import (
 	"strings"
 	"testing"
+	"time"
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing/common/json"
+	"github.com/sagernet/sing/common/json/badoption"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,4 +85,24 @@ func TestHysteria2MasqueradeProxyXObjectFormMarshalOmitempty(t *testing.T) {
 	data, err := json.Marshal(m)
 	require.NoError(t, err)
 	require.False(t, strings.Contains(string(data), "x_forwarded"))
+}
+
+func TestHysteria2RealmAlignmentFields(t *testing.T) {
+	t.Parallel()
+	input := `{
+		"server_url":"https://realm.example.com",
+		"realm_id":"slot",
+		"stun_servers":["stun.example.com"],
+		"prefer_ip_version":"v6",
+		"fallback_timeout":"10s",
+		"ipv6_api":"https://api6.ipify.org",
+		"listen_ports":["60000-61000"]
+	}`
+	var r Hysteria2Realm
+	err := json.Unmarshal([]byte(input), &r)
+	require.NoError(t, err)
+	require.Equal(t, "v6", r.PreferIPVersion)
+	require.Equal(t, badoption.Duration(10*time.Second), r.FallbackTimeout)
+	require.Equal(t, "https://api6.ipify.org", r.IPv6API)
+	require.Equal(t, badoption.Listable[string]{"60000-61000"}, r.ListenPorts)
 }

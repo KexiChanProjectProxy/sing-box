@@ -6,6 +6,13 @@
     :material-plus: [realm](#realm)  
     :material-alert: [obfs](#obfstype)
 
+!!! quote "sing-box 1.14.0.13 中的更改"
+
+    :material-plus: [realm.prefer_ip_version](#realmprefer_ip_version)  
+    :material-plus: [realm.fallback_timeout](#realmfallback_timeout)  
+    :material-plus: [realm.ipv6_api](#realmipv6_api)  
+    :material-plus: [realm.listen_ports](#realmlisten_ports)
+
 !!! quote "sing-box 1.11.0 中的更改"
 
     :material-plus: [server_ports](#server_ports)  
@@ -46,6 +53,12 @@
     "realm_id": "",
     "stun_servers": [],
     "ip_version": 0,
+    "prefer_ip_version": "v6",
+    "fallback_timeout": "2s",
+    "ipv6_api": "",
+    "listen_ports": [
+      "60000:61000"
+    ],
     "port_mapping": {
       "enabled": false,
       "timeout": "",
@@ -238,6 +251,40 @@ Realm 的 Bearer 令牌，需与 realm 上配置的 `users[].token` 之一匹配
 将 realm 连接（STUN、打洞与最终的 QUIC 路径）限制为单一 IP 版本。
 
 `4` 或 `6`。默认使用两者。
+
+#### realm.prefer_ip_version
+
+!!! question "自 sing-box 1.14.0.13 起"
+
+打洞时优先使用的 IP 族：`v6`（默认）、`v4` 或 `dual`。
+
+`v6` / `v4` 在 `fallback_timeout` 内只发送优先族，超时后再加入另一族。`dual` 立即双发。
+
+与 `ip_version` 独立：后者硬限制套接字族。
+
+#### realm.fallback_timeout
+
+!!! question "自 sing-box 1.14.0.13 起"
+
+仅打优先族的时长，超时后再尝试另一族。
+
+默认 `2s`。若 `>= 10s`，打洞总超时延长为 `fallback_timeout + 10s`。
+
+#### realm.ipv6_api
+
+!!! question "自 sing-box 1.14.0.13 起"
+
+可选 HTTP/HTTPS URL，用于在 STUN 之外**补充** IPv6 地址。
+
+STUN 仍为必经路径；HTTP 失败只记日志并忽略。上报端口始终是本地 UDP listen 端口，不用 API 响应里的端口。查找客户端使用 `tcp6`。
+
+#### realm.listen_ports
+
+!!! question "自 sing-box 1.14.0.13 起"
+
+STUN/打洞使用的 UDP 绑定端口或范围（`443`、`60000:61000`、`60000-61000`）。被占用的端口会跳过。
+
+为空时使用临时端口。
 
 #### realm.port_mapping
 

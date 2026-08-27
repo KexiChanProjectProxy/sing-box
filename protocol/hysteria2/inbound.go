@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/common/listener"
@@ -37,12 +36,13 @@ func RegisterInbound(registry *inbound.Registry) {
 
 type Inbound struct {
 	inbound.Adapter
-	router       adapter.Router
-	logger       log.StructuredLogger
-	listener     *listener.Listener
-	tlsConfig    tls.ServerConfig
-	service      *hysteria2.Service[int]
-	userNameList []string
+	router           adapter.Router
+	logger           log.StructuredLogger
+	listener         *listener.Listener
+	tlsConfig        tls.ServerConfig
+	service          *hysteria2.Service[int]
+	userNameList     []string
+	realmListenPorts []uint16
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.Hysteria2InboundOptions) (adapter.Inbound, error) {
@@ -158,6 +158,10 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 			Logger:    logger,
 			IPVersion: options.Realm.IPVersion,
 		}
+		if err := applyHysteria2RealmExtras(realmOptions, options.Realm.Hysteria2Realm); err != nil {
+			return nil, err
+		}
+		inbound.realmListenPorts = realmOptions.ListenPorts
 		if options.Realm.PortMapping != nil && options.Realm.PortMapping.Enabled {
 			realmOptions.PortMapping = &realm.PortMappingOptions{
 				Timeout:  time.Duration(options.Realm.PortMapping.Timeout),
@@ -270,7 +274,7 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 			return err
 		}
 	}
-	packetConn, err := h.listener.ListenUDP()
+	packetConn, err := h.listenRealmUDP()
 	if err != nil {
 		return err
 	}
@@ -287,4 +291,22 @@ func (h *Inbound) Close() error {
 		h.tlsConfig,
 		common.PtrOrNil(h.service),
 	)
+}
+
+func (h *Inbound) listenRealmUDP() (net.PacketConn, error) {
+	if len(h.realmListenPorts) == 0 {
+		return h.listener.ListenUDP()
+	}
+	var firstErr error
+	for _, port := range realm.ShuffleListenPorts(h.realmListenPorts) {
+		h.listener.SetListenPort(port)
+		conn, err := h.listener.ListenUDP()
+		if err == nil {
+			return conn, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return nil, E.Cause(firstErr, "bind realm.listen_ports")
 }

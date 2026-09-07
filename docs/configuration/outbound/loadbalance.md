@@ -1,3 +1,5 @@
+`loadbalance` outbound is a group that health-checks member outbounds, prefers healthy primaries over backups, and selects a member per connection with consistent hashing or random.
+
 ### Structure
 
 ```json
@@ -14,7 +16,7 @@
   ],
   "url": "https://www.gstatic.com/generate_204",
   "interval": "3m",
-  "timeout": "5s",
+  "timeout": "15s",
   "idle_timeout": "30m",
   "tolerance": 10,
   "top_n": {
@@ -34,19 +36,27 @@
 }
 ```
 
+!!! quote ""
+
+    The group is visible in the [Clash API](/configuration/experimental/clash-api/) (`now` / `all`). `now` is the lowest-latency candidate, or the first primary before the first health result. Members cannot be selected through the API.
+
 ### Fields
 
 #### primary_outbounds
 
 ==Required==
 
-List of primary outbound tags. Healthy primary outbounds are always preferred over backup outbounds.
+List of primary outbound tags. At least one tag is required. Healthy primary outbounds are always preferred over backup outbounds.
+
+The group's own tag cannot appear here. Tags cannot overlap with `backup_outbounds`. Nested groups (`selector`, `urltest`, `loadbalance`) are allowed.
 
 #### backup_outbounds
 
 ==Optional==
 
-List of backup outbound tags. Backup outbounds are only used when no primary candidate is healthy.
+List of backup outbound tags. Backup outbounds are only used when no primary candidate is healthy. All healthy backups enter the pool; `top_n` does not apply.
+
+The group's own tag cannot appear here. Tags cannot overlap with `primary_outbounds`.
 
 #### url
 
@@ -60,23 +70,27 @@ URL for health check testing. `https://www.gstatic.com/generate_204` will be use
 
 Health check interval. `3m` will be used if empty.
 
+Must be less than or equal to `idle_timeout`.
+
 #### timeout
 
 ==Optional==
 
-Health check timeout. A candidate is considered unhealthy if its latency exceeds this value. `5s` will be used if empty.
+Unhealthy latency threshold. A candidate is unhealthy when it has no stored latency, a zero latency, or a latency greater than or equal to this value. `15s` will be used if empty.
+
+The HTTP probe itself always uses a 15s deadline, independent of this field.
 
 #### idle_timeout
 
 ==Optional==
 
-Idle timeout for periodic health checking. Health checks stop when no traffic is detected for this duration. `30m` will be used if empty.
+Idle timeout for periodic health checking. Health checks stop when no traffic is detected for this duration, and resume on the next connection. `30m` will be used if empty.
 
 #### top_n
 
 ==Optional==
 
-Top N candidate selection options.
+Top N candidate selection options. Only `primary` is used.
 
 #### top_n.primary
 
@@ -84,12 +98,18 @@ Top N candidate selection options.
 
 Select top N healthy primary outbounds by latency. `0` means all healthy primary outbounds are used. Default: `0`.
 
+#### top_n.backup
+
+Not supported. Must be omitted or `0`.
+
 #### tolerance
 
 ==Optional==
 
 Latency tolerance in milliseconds when choosing the top-N candidate set.
-A faster outbound replaces a current candidate only if it is better by more than this value.
+
+On the first snapshot, the N lowest-latency healthy primaries are taken as-is.
+Afterwards, a faster outbound replaces an incumbent only if it is better by more than this value. An equal delta keeps the incumbent.
 `10` will be used if empty.
 
 #### strategy
@@ -98,17 +118,28 @@ A faster outbound replaces a current candidate only if it is better by more than
 
 Selection strategy. Supported values: `consistent_hash`, `random`. Default: `consistent_hash`.
 
+`hash` is ignored when `strategy` is `random`.
+
+When `strategy` is `consistent_hash` (the default) but `hash.key_parts` is empty, the hash key is empty and selection follows `hash.on_empty_key` (default `random`). Set `hash.key_parts` to get session affinity.
+
 #### hash
 
 ==Optional==
 
-Consistent hash options.
+Consistent hash options. Ignored when `strategy` is `random`.
 
 #### hash.key_parts
 
 ==Optional==
 
-Parts used to construct the hash key. Supported values: `src_ip`, `matched_ruleset_or_etld`. Default: `["src_ip", "matched_ruleset_or_etld"]`.
+Parts used to construct the hash key, joined with `|`. Empty parts are skipped.
+
+Supported values:
+
+* `src_ip`: client source IP
+* `matched_ruleset_or_etld`: the first matched [rule set](/configuration/rule-set/) tag, or the eTLD+1 of the sniffed domain / destination FQDN if no rule set matched
+
+No default. An empty list (including when `hash` is omitted) produces an empty key.
 
 #### hash.virtual_nodes
 
@@ -126,7 +157,7 @@ Behavior when the hash key is empty. `random` selects a random candidate; `error
 
 ==Optional==
 
-Salt prepended to hash key input for additional randomization. Default: `""`.
+Salt prepended to the hash key and to virtual-node names. Default: `""`.
 
 #### empty_pool_action
 
@@ -138,7 +169,7 @@ Action when no healthy candidate exists. Supported values: `error`, `random`. `e
 
 ==Optional==
 
-Interrupt existing connections when the selected outbound has changed.
+Interrupt existing connections when the healthy candidate **set** changes (membership), not when a later connection hashes to a different member of the same set.
 
 Only inbound connections are affected by this setting, internal connections will always be interrupted.
 
@@ -146,7 +177,9 @@ Only inbound connections are affected by this setting, internal connections will
 
 ==Optional==
 
-Prefer domain resolution through the selected outbound. Default: `false`.
+See [Dial Fields](/configuration/shared/dial/#prefer_domain).
+
+Applied at this group before the connection is delegated to the selected member.
 
 #### override_ip
 
@@ -154,17 +187,33 @@ Prefer domain resolution through the selected outbound. Default: `false`.
 
 See [Dial Fields](/configuration/shared/dial/#override_ip).
 
+`prefer_domain` and `override_ip` are mutually exclusive.
+
 ### Startup Behavior
 
 The outbound starts immediately and seeds the candidate pool with all primary outbounds. A background health check then replaces that seed with the healthy top-N set. `empty_pool_action` applies only after health results exist and no candidate remains healthy.
+
+### Health Check
+
+Members are probed in the background with the same URL-test machinery as [`urltest`](/configuration/outbound/urltest/). A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`.
+
+Failed probes and failed dials delete that member's stored latency. The candidate pool is rebuilt after each health-check round.
+
+When a member is a group outbound, the probe unwraps one level through that group's current selection (`Now()`) and tests the leaf, not the nested group itself.
 
 ### Primary/Backup Semantics
 
 Healthy primary outbounds are always preferred over backup outbounds. Backup outbounds are only used when no primary candidate is healthy.
 
+When `top_n.primary` is `0` or at least as large as the healthy primary set, every healthy primary is used. Otherwise the pool is the N lowest-latency healthy primaries, with `tolerance` hysteresis after the first snapshot.
+
+Backup outbounds skip top-N: if no primary is healthy, every healthy backup is used.
+
 ### Consistent Hash
 
 With the `consistent_hash` strategy, the same hash key consistently selects the same candidate as long as the candidate set does not change. When a candidate is removed, only keys that mapped to that candidate are remapped.
+
+Without `hash.key_parts`, this degenerates to `hash.on_empty_key` (default random).
 
 ### Random Strategy
 

@@ -191,7 +191,7 @@ TCP keep alive 间隔。
 仅适用于已嗅探的 HTTP、TLS 和 QUIC 流量。
 其他协议（DNS、STUN、BitTorrent、DTLS、SSH、RDP、NTP）不受影响。
 
-当在组出站（如 `selector` 或 `urltest`）中使用时，组的 `prefer_domain` 设置会在连接被委托给子出站之前应用。如果组级别设置已启用，域名重写发生在组级别，不受所选子出站自身设置的影响。当子出站被直接使用时，其自己的 `prefer_domain` 设置按常规应用。
+当在组出站（如 `selector`、`urltest` 或 `loadbalance`）中使用时，组的 `prefer_domain` 设置会在连接被委托给子出站之前应用。如果组级别设置已启用，域名重写发生在组级别，不受所选子出站自身设置的影响。当子出站被直接使用时，其自己的 `prefer_domain` 设置按常规应用。
 
 #### override_ip
 
@@ -227,7 +227,7 @@ TCP keep alive 间隔。
 
 解析得到的地址按策略顺序尝试。DNS 查询失败会使连接失败，不会回落到原始目标。
 
-当在组出站（如 `selector` 或 `urltest`）中使用时，组的 `override_ip` 设置会在连接被委托给子出站之前应用。如果组级别设置已启用，IP 重写发生在组级别，不受所选子出站自身设置的影响。当子出站被直接使用时，其自己的 `override_ip` 设置按常规应用。
+当在组出站（如 `selector`、`urltest` 或 `loadbalance`）中使用时，组的 `override_ip` 设置会在连接被委托给子出站之前应用。如果组级别设置已启用，IP 重写发生在组级别，不受所选子出站自身设置的影响。当子出站被直接使用时，其自己的 `override_ip` 设置按常规应用。
 
 ```json
 {

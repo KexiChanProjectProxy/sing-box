@@ -193,7 +193,7 @@ This option does not enable sniffing automatically.
 Only applies to already-sniffed HTTP, TLS, and QUIC traffic.
 Other protocols (DNS, STUN, BitTorrent, DTLS, SSH, RDP, NTP) are not affected.
 
-When used in a group outbound (such as `selector` or `urltest`), the group's `prefer_domain` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the domain rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `prefer_domain` setting applies as usual.
+When used in a group outbound (such as `selector`, `urltest`, or `loadbalance`), the group's `prefer_domain` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the domain rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `prefer_domain` setting applies as usual.
 
 #### override_ip
 
@@ -229,7 +229,7 @@ Available `strategy` values:
 
 Resolved addresses are tried in strategy order. DNS lookup failure fails the connection; the original destination is not used as a fallback.
 
-When used in a group outbound (such as `selector` or `urltest`), the group's `override_ip` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the IP rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `override_ip` setting applies as usual.
+When used in a group outbound (such as `selector`, `urltest`, or `loadbalance`), the group's `override_ip` setting is applied before the connection is delegated to a child outbound. If the group-level setting is enabled, the IP rewrite happens at the group level, regardless of the selected child outbound's own setting. When a child outbound is used directly, its own `override_ip` setting applies as usual.
 
 ```json
 {

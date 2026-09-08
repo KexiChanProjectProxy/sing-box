@@ -2,11 +2,14 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.14
+
+* [`loadbalance`](/zh/configuration/outbound/loadbalance/#健康检查) 健康检查改为握手完成后的 HTTP RTT，复用嵌套/urltest 结果，并新增可选 [`weighted_delay`](/zh/configuration/outbound/loadbalance/#weighted_delay)
+
 #### 1.14.0.13
 
 * 对齐 hysteria 的 Hysteria2 realm：优先 IPv6/IPv4 与 fallback 超时、补充性 IPv6 HTTP 查询、以及 `listen_ports`
 * 将 YAML 配置接入 CLI（`format`/`merge`/`-C`）、daemon 和 libbox
-* [`loadbalance`](/zh/configuration/outbound/loadbalance/#健康检查) 健康检查改为握手完成后的 HTTP RTT，复用嵌套/urltest 结果，并新增可选 [`weighted_delay`](/zh/configuration/outbound/loadbalance/#weighted_delay)
 
 #### 1.14.0.12
 

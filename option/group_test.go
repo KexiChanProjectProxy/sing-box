@@ -249,3 +249,66 @@ func TestLoadBalanceCheckValid(t *testing.T) {
 	err = options.Check()
 	require.NoError(t, err)
 }
+
+func TestLoadBalanceWeightedDelayJSON(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{
+		"primary_outbounds": ["a"],
+		"weighted_delay": {"window": 10, "window_weight": 7, "last_weight": 3}
+	}`), &options)
+	require.NoError(t, err)
+	require.NotNil(t, options.WeightedDelay)
+	require.Equal(t, 10, options.WeightedDelay.Window)
+	require.Equal(t, uint16(7), options.WeightedDelay.WindowWeight)
+	require.Equal(t, uint16(3), options.WeightedDelay.LastWeight)
+	require.NoError(t, options.Check())
+	require.Equal(t, 10, options.WeightedDelay.Window)
+	require.Equal(t, uint16(7), options.WeightedDelay.WindowWeight)
+	require.Equal(t, uint16(3), options.WeightedDelay.LastWeight)
+
+	encoded, err := json.Marshal(&options)
+	require.NoError(t, err)
+	var roundTrip LoadBalanceOutboundOptions
+	require.NoError(t, json.Unmarshal(encoded, &roundTrip))
+	require.NotNil(t, roundTrip.WeightedDelay)
+	require.Equal(t, 10, roundTrip.WeightedDelay.Window)
+	require.Equal(t, uint16(7), roundTrip.WeightedDelay.WindowWeight)
+	require.Equal(t, uint16(3), roundTrip.WeightedDelay.LastWeight)
+}
+
+func TestLoadBalanceWeightedDelayDefaults(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a"],"weighted_delay":{}}`), &options)
+	require.NoError(t, err)
+	require.NotNil(t, options.WeightedDelay)
+	require.NoError(t, options.Check())
+	require.Equal(t, 5, options.WeightedDelay.Window)
+	require.Equal(t, uint16(1), options.WeightedDelay.WindowWeight)
+	require.Equal(t, uint16(1), options.WeightedDelay.LastWeight)
+}
+
+func TestLoadBalanceWeightedDelayNegativeWindow(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a"],"weighted_delay":{"window":-1}}`), &options)
+	require.NoError(t, err)
+	err = options.Check()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "negative")
+}
+
+func TestLoadBalanceWeightedDelayWindowTooLarge(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a"],"weighted_delay":{"window":65}}`), &options)
+	require.NoError(t, err)
+	err = options.Check()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "greater than 64")
+}

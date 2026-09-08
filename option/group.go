@@ -25,21 +25,28 @@ type URLTestOutboundOptions struct {
 	OverrideIP                *OverrideIPOptions `json:"override_ip,omitempty"`
 }
 
+type LoadBalanceWeightedDelayOptions struct {
+	Window       int    `json:"window,omitempty"`
+	WindowWeight uint16 `json:"window_weight,omitempty"`
+	LastWeight   uint16 `json:"last_weight,omitempty"`
+}
+
 type LoadBalanceOutboundOptions struct {
-	PrimaryOutbounds          []string                `json:"primary_outbounds"`
-	BackupOutbounds           []string                `json:"backup_outbounds,omitempty"`
-	URL                       string                  `json:"url,omitempty"`
-	Interval                  badoption.Duration      `json:"interval,omitempty"`
-	Timeout                   badoption.Duration      `json:"timeout,omitempty"`
-	IdleTimeout               badoption.Duration      `json:"idle_timeout,omitempty"`
-	Tolerance                 uint16                  `json:"tolerance,omitempty"`
-	TopN                      *LoadBalanceTopNOptions `json:"top_n,omitempty"`
-	Strategy                  string                  `json:"strategy,omitempty"`
-	Hash                      *LoadBalanceHashOptions `json:"hash,omitempty"`
-	EmptyPoolAction           string                  `json:"empty_pool_action,omitempty"`
-	InterruptExistConnections bool                    `json:"interrupt_exist_connections,omitempty"`
-	PreferDomain              bool                    `json:"prefer_domain,omitempty"`
-	OverrideIP                *OverrideIPOptions      `json:"override_ip,omitempty"`
+	PrimaryOutbounds          []string                         `json:"primary_outbounds"`
+	BackupOutbounds           []string                         `json:"backup_outbounds,omitempty"`
+	URL                       string                           `json:"url,omitempty"`
+	Interval                  badoption.Duration               `json:"interval,omitempty"`
+	Timeout                   badoption.Duration               `json:"timeout,omitempty"`
+	IdleTimeout               badoption.Duration               `json:"idle_timeout,omitempty"`
+	Tolerance                 uint16                           `json:"tolerance,omitempty"`
+	WeightedDelay             *LoadBalanceWeightedDelayOptions `json:"weighted_delay,omitempty"`
+	TopN                      *LoadBalanceTopNOptions          `json:"top_n,omitempty"`
+	Strategy                  string                           `json:"strategy,omitempty"`
+	Hash                      *LoadBalanceHashOptions          `json:"hash,omitempty"`
+	EmptyPoolAction           string                           `json:"empty_pool_action,omitempty"`
+	InterruptExistConnections bool                             `json:"interrupt_exist_connections,omitempty"`
+	PreferDomain              bool                             `json:"prefer_domain,omitempty"`
+	OverrideIP                *OverrideIPOptions               `json:"override_ip,omitempty"`
 }
 
 type LoadBalanceTopNOptions struct {
@@ -92,6 +99,23 @@ func (o LoadBalanceOutboundOptions) Check() error {
 	}
 	if o.TopN != nil && o.TopN.Backup != 0 {
 		return E.New("top_n.backup is not supported")
+	}
+	if o.WeightedDelay != nil {
+		if o.WeightedDelay.Window < 0 {
+			return E.New("weighted_delay.window is negative")
+		}
+		if o.WeightedDelay.Window == 0 {
+			o.WeightedDelay.Window = 5
+		}
+		if o.WeightedDelay.WindowWeight == 0 {
+			o.WeightedDelay.WindowWeight = 1
+		}
+		if o.WeightedDelay.LastWeight == 0 {
+			o.WeightedDelay.LastWeight = 1
+		}
+		if o.WeightedDelay.Window > 64 {
+			return E.New("weighted_delay.window is greater than 64")
+		}
 	}
 	return nil
 }

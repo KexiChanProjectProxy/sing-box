@@ -145,3 +145,85 @@ func urlTest(ctx context.Context, link string, detour N.Dialer) (t uint16, err e
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }
+
+func URLTestDataPath(ctx context.Context, link string, detour N.Dialer) (uint16, error) {
+	if link == "" {
+		link = "https://www.gstatic.com/generate_204"
+	}
+	linkURL, err := url.Parse(link)
+	if err != nil {
+		return 0, err
+	}
+	hostname := linkURL.Hostname()
+	port := linkURL.Port()
+	if port == "" {
+		switch linkURL.Scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+
+	instance, err := detour.DialContext(ctx, "tcp", M.ParseSocksaddrHostPortStr(hostname, port))
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_ = instance.Close()
+	}()
+	if N.NeedHandshakeForWrite(instance) {
+		deadline := time.Now().Add(C.TCPTimeout)
+		if ctxDeadline, ok := ctx.Deadline(); ok {
+			deadline = ctxDeadline
+		}
+		_ = instance.SetWriteDeadline(deadline)
+		_, err = instance.Write(nil)
+		_ = instance.SetWriteDeadline(time.Time{})
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	tlsConfig := &tls.Config{
+		Time:       ntp.TimeFuncFromContext(ctx),
+		RootCAs:    adapter.RootPoolFromContext(ctx),
+		ServerName: hostname,
+	}
+	if linkURL.Scheme == "https" {
+		tlsConn := tls.Client(instance, tlsConfig)
+		err = tlsConn.HandshakeContext(ctx)
+		if err != nil {
+			return 0, err
+		}
+		instance = tlsConn
+	}
+
+	start := time.Now()
+	req, err := http.NewRequest(http.MethodHead, link, nil)
+	if err != nil {
+		return 0, err
+	}
+	client := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return instance, nil
+			},
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return instance, nil
+			},
+			TLSClientConfig: tlsConfig,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Timeout: C.TCPTimeout,
+	}
+	defer client.CloseIdleConnections()
+	resp, err := client.Do(req.WithContext(ctx))
+	if err != nil {
+		return 0, err
+	}
+	resp.Body.Close()
+	return uint16(time.Since(start) / time.Millisecond), nil
+}

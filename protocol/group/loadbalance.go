@@ -6,6 +6,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -27,6 +28,12 @@ import (
 func RegisterLoadBalance(registry *outbound.Registry) {
 	outbound.Register(registry, C.TypeLoadBalance, NewLoadBalance)
 }
+
+var (
+	_ adapter.OutboundGroup            = (*LoadBalance)(nil)
+	_ adapter.URLTestGroup             = (*LoadBalance)(nil)
+	_ adapter.OutboundWithPreferDomain = (*LoadBalance)(nil)
+)
 
 type LoadBalance struct {
 	outbound.Adapter
@@ -55,6 +62,11 @@ type LoadBalance struct {
 	history                      *urltest.HistoryStorage
 	group                        *URLTestGroup
 	snapshot                     atomic.Pointer[CandidateSnapshot]
+	delayWindow                  int
+	windowWeight                 uint16
+	lastWeight                   uint16
+	windows                      map[string]*delayWindow
+	windowsMu                    sync.Mutex
 }
 
 func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
@@ -101,6 +113,12 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 	if options.TopN != nil {
 		lb.topNPrimary = options.TopN.Primary
 	}
+	if options.WeightedDelay != nil {
+		lb.delayWindow = options.WeightedDelay.Window
+		lb.windowWeight = options.WeightedDelay.WindowWeight
+		lb.lastWeight = options.WeightedDelay.LastWeight
+		lb.windows = make(map[string]*delayWindow)
+	}
 	return lb, nil
 }
 
@@ -127,6 +145,15 @@ func (l *LoadBalance) Start() error {
 		return err
 	}
 	group.updateCallback = l.rebuildSnapshot
+	group.dataPathLatency = true
+	group.memberProbe = l.memberProbe
+	group.afterProbe = func(tag string, delay uint16, ok bool) {
+		if !ok {
+			l.resetWindow(tag)
+			return
+		}
+		l.observeDelay(tag, delay)
+	}
 	l.group = group
 	l.history = group.history
 	l.seedInitialSnapshot()
@@ -191,6 +218,7 @@ func (l *LoadBalance) DialContext(ctx context.Context, network string, destinati
 		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
 
 		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
+		l.resetWindow(candidate.Tag)
 		return nil, err
 	}
 	return l.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
@@ -214,6 +242,7 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
 
 		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
+		l.resetWindow(candidate.Tag)
 		return nil, err
 	}
 	return l.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
@@ -258,6 +287,10 @@ func (l *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
 
 func (l *LoadBalance) CheckOutbounds() {
 	l.group.CheckOutbounds(l.ctx, true)
+}
+
+func (l *LoadBalance) PerformUpdateCheck() {
+	l.rebuildSnapshot()
 }
 
 func (l *LoadBalance) selectCandidate(metadata adapter.InboundContext) (Candidate, error) {
@@ -317,6 +350,9 @@ func (l *LoadBalance) rebuildSnapshot() {
 	} else {
 		candidates = l.healthyCandidates(l.backupTags, l.backupOutbounds, false)
 	}
+	if len(candidates) == 0 && snap != nil && snapshotAllZeroLatency(snap) && l.hasPendingSelfTestingMember() {
+		return
+	}
 	if snap != nil && sameCandidateSet(snap.Candidates, candidates) {
 		l.snapshot.Store(&CandidateSnapshot{
 			Candidates: candidates,
@@ -374,14 +410,15 @@ func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adap
 		if detour == nil {
 			continue
 		}
-		history := l.history.LoadURLTestHistory(RealTag(detour))
-		if history == nil || history.Delay == 0 || (l.timeout > 0 && time.Duration(history.Delay)*time.Millisecond >= l.timeout) {
+		delay, ok := l.liveMemberDelay(tag, detour)
+		if !ok || delay == 0 || (l.timeout > 0 && time.Duration(delay)*time.Millisecond >= l.timeout) {
+			l.resetWindow(tag)
 			continue
 		}
 		candidates = append(candidates, Candidate{
 			Tag:       tag,
 			Outbound:  detour,
-			Latency:   history.Delay,
+			Latency:   l.rankedDelay(tag, delay),
 			IsPrimary: isPrimary,
 		})
 	}
@@ -513,4 +550,134 @@ func loadBalanceMetadata(ctx context.Context) adapter.InboundContext {
 		return *metadata
 	}
 	return adapter.InboundContext{}
+}
+
+func (l *LoadBalance) probeInterval() time.Duration {
+	if l.interval > 0 {
+		return l.interval
+	}
+	return C.DefaultURLTestInterval
+}
+
+func (l *LoadBalance) memberProbe(detour adapter.Outbound) (uint16, probeAction) {
+	switch member := detour.(type) {
+	case *LoadBalance:
+		delay, ok := nestedMinDelay(member, l.history)
+		if ok {
+			return delay, probeUseCache
+		}
+		return 0, probeSkip
+	case *URLTest:
+		history := l.history.LoadURLTestHistory(RealTag(member))
+		if history != nil && history.Delay != 0 {
+			return history.Delay, probeUseCache
+		}
+		return 0, probeSkip
+	default:
+		history := l.history.LoadURLTestHistory(RealTag(detour))
+		if history != nil && history.Delay != 0 && time.Since(history.Time) < l.probeInterval() {
+			return history.Delay, probeUseCache
+		}
+		return 0, probeHTTP
+	}
+}
+
+func nestedMinDelay(nested *LoadBalance, history *urltest.HistoryStorage) (uint16, bool) {
+	snap := nested.snapshot.Load()
+	if snap != nil {
+		var min uint16
+		found := false
+		for _, candidate := range snap.Candidates {
+			if candidate.Latency == 0 {
+				continue
+			}
+			if !found || candidate.Latency < min {
+				min = candidate.Latency
+				found = true
+			}
+		}
+		if found {
+			return min, true
+		}
+	}
+	var min uint16
+	found := false
+	for _, tag := range nested.tags {
+		detour := nested.primaryOutbounds[tag]
+		if detour == nil {
+			detour = nested.backupOutbounds[tag]
+		}
+		if detour == nil {
+			continue
+		}
+		stored := history.LoadURLTestHistory(RealTag(detour))
+		if stored == nil || stored.Delay == 0 {
+			continue
+		}
+		if !found || stored.Delay < min {
+			min = stored.Delay
+			found = true
+		}
+	}
+	return min, found
+}
+
+func (l *LoadBalance) liveMemberDelay(tag string, detour adapter.Outbound) (uint16, bool) {
+	switch member := detour.(type) {
+	case *LoadBalance:
+		return nestedMinDelay(member, l.history)
+	case *URLTest:
+		history := l.history.LoadURLTestHistory(RealTag(member))
+		if history == nil || history.Delay == 0 {
+			return 0, false
+		}
+		return history.Delay, true
+	default:
+		history := l.history.LoadURLTestHistory(RealTag(detour))
+		if history == nil || history.Delay == 0 {
+			return 0, false
+		}
+		return history.Delay, true
+	}
+}
+
+func (l *LoadBalance) hasPendingSelfTestingMember() bool {
+	tags := l.primaryTags
+	outbounds := l.primaryOutbounds
+	hasPrimary := false
+	for _, tag := range tags {
+		if outbounds[tag] != nil {
+			hasPrimary = true
+			break
+		}
+	}
+	if !hasPrimary {
+		tags = l.backupTags
+		outbounds = l.backupOutbounds
+	}
+	for _, tag := range tags {
+		detour := outbounds[tag]
+		if detour == nil {
+			continue
+		}
+		switch detour.(type) {
+		case *LoadBalance, *URLTest:
+			if _, ok := l.liveMemberDelay(tag, detour); !ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func snapshotAllZeroLatency(snap *CandidateSnapshot) bool {
+	if snap == nil || len(snap.Candidates) == 0 {
+		return false
+	}
+	for _, candidate := range snap.Candidates {
+		if candidate.Latency != 0 {
+			return false
+		}
+	}
+	return true
 }

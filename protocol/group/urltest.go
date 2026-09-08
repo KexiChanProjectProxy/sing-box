@@ -244,6 +244,14 @@ func (s *URLTest) NewPacketConnection(ctx context.Context, conn N.PacketConn, me
 	s.connection.NewPacketConnection(ctx, s, conn, metadata, onClose)
 }
 
+type probeAction int
+
+const (
+	probeHTTP probeAction = iota
+	probeUseCache
+	probeSkip
+)
+
 type URLTestGroup struct {
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
@@ -262,6 +270,9 @@ type URLTestGroup struct {
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
 	updateCallback               func()
+	dataPathLatency              bool
+	memberProbe                  func(detour adapter.Outbound) (uint16, probeAction)
+	afterProbe                   func(memberTag string, delay uint16, ok bool)
 	access                       sync.Mutex
 	updateAccess                 sync.Mutex
 	ticker                       *time.Ticker
@@ -434,8 +445,29 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 	b, _ := batch.New(ctx, batch.WithConcurrencyNum[any](10))
 	checked := make(map[string]bool)
 	var resultAccess sync.Mutex
+	now := time.Now()
 	for _, detour := range g.outbounds {
 		tag := detour.Tag()
+		if g.memberProbe != nil {
+			delay, action := g.memberProbe(detour)
+			switch action {
+			case probeUseCache:
+				g.history.StoreURLTestHistory(tag, &adapter.URLTestHistory{
+					Time:  now,
+					Delay: delay,
+				})
+				g.logger.DebugEvent("urltest.result", "urltest result", log.String("tag", tag), log.Int64("latency_ms", int64(delay)))
+				resultAccess.Lock()
+				result[tag] = delay
+				resultAccess.Unlock()
+				if g.afterProbe != nil {
+					g.afterProbe(tag, delay, true)
+				}
+				continue
+			case probeSkip:
+				continue
+			}
+		}
 		realTag := RealTag(detour)
 		if checked[realTag] {
 			continue
@@ -454,7 +486,13 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 			defer cancel()
 			testChan := make(chan urlTestResult, 1)
 			go func() {
-				delay, testErr := urltest.URLTest(testCtx, g.link, p)
+				var delay uint16
+				var testErr error
+				if g.dataPathLatency {
+					delay, testErr = urltest.URLTestDataPath(testCtx, g.link, p)
+				} else {
+					delay, testErr = urltest.URLTest(testCtx, g.link, p)
+				}
 				testChan <- urlTestResult{delay, testErr}
 			}()
 			var testResult urlTestResult
@@ -466,6 +504,9 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 			if testResult.err != nil {
 				g.logger.DebugEvent("urltest.error", "urltest error", log.Err(testResult.err), log.String("tag", tag))
 				g.history.DeleteURLTestHistory(realTag)
+				if g.afterProbe != nil {
+					g.afterProbe(tag, 0, false)
+				}
 			} else {
 				g.logger.DebugEvent("urltest.result", "urltest result", log.String("tag", tag), log.Int64("latency_ms", int64(testResult.delay)))
 				g.history.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
@@ -475,6 +516,9 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 				resultAccess.Lock()
 				result[tag] = testResult.delay
 				resultAccess.Unlock()
+				if g.afterProbe != nil {
+					g.afterProbe(tag, testResult.delay, true)
+				}
 			}
 			return nil, nil
 		})

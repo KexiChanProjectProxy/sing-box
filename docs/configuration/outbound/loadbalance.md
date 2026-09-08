@@ -112,6 +112,32 @@ On the first snapshot, the N lowest-latency healthy primaries are taken as-is.
 Afterwards, a faster outbound replaces an incumbent only if it is better by more than this value. An equal delta keeps the incumbent.
 `10` will be used if empty.
 
+#### weighted_delay
+
+==Optional==
+
+When this object is present, ranking latency (top-N, sort, `now`, `tolerance`) is a sliding-window weighted average instead of the last sample. Timeout and health still use the live raw delay.
+
+Omit the object to keep last-sample ranking.
+
+#### weighted_delay.window
+
+==Optional==
+
+Number of samples in the window. `5` will be used if empty. Must be between `1` and `64`.
+
+#### weighted_delay.window_weight
+
+==Optional==
+
+Weight of the sum of samples in the window. `1` will be used if empty.
+
+#### weighted_delay.last_weight
+
+==Optional==
+
+Weight of the newest sample. That sample is also included in the window sum. `1` will be used if empty.
+
 #### strategy
 
 ==Optional==
@@ -191,15 +217,15 @@ See [Dial Fields](/configuration/shared/dial/#override_ip).
 
 ### Startup Behavior
 
-The outbound starts immediately and seeds the candidate pool with all primary outbounds. A background health check then replaces that seed with the healthy top-N set. `empty_pool_action` applies only after health results exist and no candidate remains healthy.
+The outbound starts immediately and seeds the candidate pool with all primary outbounds. A background health check then replaces that seed with the healthy top-N set. Nested `loadbalance` / `urltest` members that have not produced a delay yet keep the seed. `empty_pool_action` applies only after health results exist and no candidate remains healthy. Leaf members that fail HTTP still empty the pool.
 
 ### Health Check
 
-Members are probed in the background with the same URL-test machinery as [`urltest`](/configuration/outbound/urltest/). A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`.
+Members are probed in the background. Unlike [`urltest`](/configuration/outbound/urltest/), loadbalance measures HTTP RTT after dial, proxy handshake, and destination TLS have finished.
 
-Failed probes and failed dials delete that member's stored latency. The candidate pool is rebuilt after each health-check round.
+A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`. Failed probes and failed dials delete that member's stored latency and reset its delay window. The candidate pool is rebuilt after each health-check round.
 
-When a member is a group outbound, the probe unwraps one level through that group's current selection (`Now()`) and tests the leaf, not the nested group itself.
+Nested `loadbalance` and `urltest` members are never HTTP-probed by the parent. The parent reuses the child's current ranking delay (snapshot minimum, or last urltest history). A nested `selector` is treated as a leaf: reuse a fresh history of the selected outbound, otherwise HTTP-probe that outbound.
 
 ### Primary/Backup Semantics
 

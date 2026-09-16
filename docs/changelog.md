@@ -5,6 +5,8 @@ icon: material/alert-decagram
 #### 1.14.0.15
 
 * Fail over [`loadbalance`](/configuration/outbound/loadbalance/#connection-fail-over) connections whose handshake fails to the remaining primary outbounds, then backup outbounds, ordered by last measured latency
+* Change [`empty_pool_action: error`](/configuration/outbound/loadbalance/#empty_pool_action) to walk every configured member instead of failing immediately on an empty candidate pool
+* Log `loadbalance.failover` and `loadbalance.failover.exhausted` events with the selected, used, and tried members
 
 #### 1.14.0.14
 

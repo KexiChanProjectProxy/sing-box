@@ -5,6 +5,8 @@ icon: material/alert-decagram
 #### 1.14.0.15
 
 * [`loadbalance`](/zh/configuration/outbound/loadbalance/#连接级故障转移) 握手失败时在同一连接上按最近延迟依次改试其余主出站、再改试备用出站
+* [`empty_pool_action: error`](/zh/configuration/outbound/loadbalance/#empty_pool_action) 在候选池为空时不再立即失败，改为依次尝试全部已配置成员
+* 新增 `loadbalance.failover` 与 `loadbalance.failover.exhausted` 日志事件，记录首选、实际使用与已尝试的成员
 
 #### 1.14.0.14
 

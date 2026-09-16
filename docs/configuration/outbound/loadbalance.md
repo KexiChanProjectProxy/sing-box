@@ -217,7 +217,7 @@ See [Dial Fields](/configuration/shared/dial/#override_ip).
 
 ### Startup Behavior
 
-The outbound starts immediately and seeds the candidate pool with all primary outbounds. A background health check then replaces that seed with the healthy top-N set. Nested `loadbalance` / `urltest` members that have not produced a delay yet keep the seed. `empty_pool_action` applies only after health results exist and no candidate remains healthy. Leaf members that fail HTTP still empty the pool.
+The outbound starts immediately and seeds the candidate pool with all primary outbounds. A background health check then replaces that seed with the healthy top-N set. Nested `loadbalance` / `urltest` members that have not produced a delay yet keep the seed. `empty_pool_action` applies only after health results exist and no candidate remains healthy. Leaf members that fail HTTP still empty the pool, but with the default `error` action a connection still [fails over](#connection-fail-over) through every configured member before it fails.
 
 ### Health Check
 
@@ -246,6 +246,12 @@ Fail-over stops as soon as a member succeeds. Errors after the tunnel is establi
 A failed connection does not rebuild the candidate pool, change consistent-hash affinity, or interrupt other connections. The next connection still picks its first choice from the current pool; failed members leave the pool only through their deleted latency and the next health-check round.
 
 There is no overall fail-over timeout. In the worst case a connection waits for the connect timeout of every member in turn, bounded by the caller's own deadline.
+
+Each failed attempt logs a `urltest.error` event with the member tag. A connection that succeeds on a member other than the first choice logs an info `loadbalance.failover` event with `selected` (empty when the pool was empty), `used`, and `tried`. A connection that fails after more than one attempt logs an error `loadbalance.failover.exhausted` event with `selected`, `tried`, and the last error.
+
+!!! warning "Behaviour change in 1.14.0.15"
+
+    With `empty_pool_action: error`, an empty candidate pool no longer fails the dial immediately. Deployments that relied on fast failure when every member is unhealthy now wait for real dial attempts.
 
 ### Primary/Backup Semantics
 

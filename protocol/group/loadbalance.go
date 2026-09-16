@@ -198,27 +198,26 @@ func (l *LoadBalance) OverrideIP() *option.OverrideIPOptions {
 }
 
 func (l *LoadBalance) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	if networkName := N.NetworkName(network); networkName != N.NetworkTCP && networkName != N.NetworkUDP {
+	networkName := N.NetworkName(network)
+	if networkName != N.NetworkTCP && networkName != N.NetworkUDP {
 		return nil, E.Extend(N.ErrUnknownNetwork, network)
 	}
 	l.group.Touch()
 	metadata := loadBalanceMetadata(ctx)
-	metadata.Network = N.NetworkName(network)
+	metadata.Network = networkName
 	metadata.Destination = destination
-	candidate, err := l.selectCandidate(metadata)
+	selected, found, err := l.pickCandidate(metadata)
 	if err != nil {
 		return nil, err
 	}
-	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
-		ctx = adapter.ContextWithPreferDomain(ctx, true)
-	}
-	ctx = withOverrideIPContext(ctx, l.overrideIP)
-	conn, err := candidate.Outbound.DialContext(ctx, network, destination)
+	ctx = l.memberDialContext(ctx)
+	var conn net.Conn
+	_, err = l.walk(ctx, selected, found, networkName, func(ctx context.Context, detour adapter.Outbound) error {
+		var dialErr error
+		conn, dialErr = detour.DialContext(ctx, network, destination)
+		return dialErr
+	})
 	if err != nil {
-		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
-
-		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
-		l.resetWindow(candidate.Tag)
 		return nil, err
 	}
 	return l.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
@@ -229,23 +228,124 @@ func (l *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	metadata := loadBalanceMetadata(ctx)
 	metadata.Network = N.NetworkUDP
 	metadata.Destination = destination
-	candidate, err := l.selectCandidate(metadata)
+	selected, found, err := l.pickCandidate(metadata)
 	if err != nil {
 		return nil, err
 	}
-	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
-		ctx = adapter.ContextWithPreferDomain(ctx, true)
-	}
-	ctx = withOverrideIPContext(ctx, l.overrideIP)
-	conn, err := candidate.Outbound.ListenPacket(ctx, destination)
+	ctx = l.memberDialContext(ctx)
+	var conn net.PacketConn
+	_, err = l.walk(ctx, selected, found, N.NetworkUDP, func(ctx context.Context, detour adapter.Outbound) error {
+		var listenErr error
+		conn, listenErr = detour.ListenPacket(ctx, destination)
+		return listenErr
+	})
 	if err != nil {
-		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", RealTag(candidate.Outbound)))
-
-		l.history.DeleteURLTestHistory(RealTag(candidate.Outbound))
-		l.resetWindow(candidate.Tag)
 		return nil, err
 	}
 	return l.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil
+}
+
+func (l *LoadBalance) memberDialContext(ctx context.Context) context.Context {
+	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
+		ctx = adapter.ContextWithPreferDomain(ctx, true)
+	}
+	return withOverrideIPContext(ctx, l.overrideIP)
+}
+
+// walk dials the strategy's first choice, then every remaining configured
+// primary and backup ordered by last measured delay, until one succeeds.
+// Global state (snapshot, hash ring, interrupt group) is left untouched.
+func (l *LoadBalance) walk(ctx context.Context, selected Candidate, found bool, network string, dial func(context.Context, adapter.Outbound) error) (Candidate, error) {
+	var selectedPtr *Candidate
+	if found {
+		selectedPtr = &selected
+	}
+	attempts := l.failoverAttempts(selectedPtr, network)
+	used, tried, err := l.dialAttempts(ctx, attempts, dial)
+	if err != nil {
+		if len(tried) > 1 {
+			l.logger.ErrorEventContext(ctx, "loadbalance.failover.exhausted", "loadbalance fail-over exhausted",
+				log.String("selected", selected.Tag),
+				log.String("tried", strings.Join(tried, ",")),
+				log.Err(err))
+		}
+		return Candidate{}, err
+	}
+	if !found || used.Tag != selected.Tag {
+		l.logger.InfoEventContext(ctx, "loadbalance.failover", "loadbalance fail-over",
+			log.String("selected", selected.Tag),
+			log.String("used", used.Tag),
+			log.String("tried", strings.Join(tried, ",")))
+	}
+	return used, nil
+}
+
+// failoverAttempts builds the frozen per-connection attempt order: selected
+// first, then untried primaries by last raw delay, then untried backups by last
+// raw delay. Members that do not support network are skipped.
+func (l *LoadBalance) failoverAttempts(selected *Candidate, network string) []Candidate {
+	tried := make(map[string]struct{}, len(l.tags))
+	attempts := make([]Candidate, 0, len(l.primaryTags)+len(l.backupTags))
+	if selected != nil && selected.Outbound != nil && common.Contains(selected.Outbound.Network(), network) {
+		attempts = append(attempts, *selected)
+		tried[selected.Tag] = struct{}{}
+	}
+	attempts = append(attempts, l.poolByLastDelay(l.primaryTags, l.primaryOutbounds, true, network, tried)...)
+	attempts = append(attempts, l.poolByLastDelay(l.backupTags, l.backupOutbounds, false, network, tried)...)
+	return attempts
+}
+
+func (l *LoadBalance) poolByLastDelay(tags []string, outbounds map[string]adapter.Outbound, isPrimary bool, network string, tried map[string]struct{}) []Candidate {
+	var measured, unmeasured []Candidate
+	for _, tag := range tags {
+		if _, done := tried[tag]; done {
+			continue
+		}
+		detour := outbounds[tag]
+		if detour == nil || !common.Contains(detour.Network(), network) {
+			continue
+		}
+		tried[tag] = struct{}{}
+		candidate := Candidate{Tag: tag, Outbound: detour, IsPrimary: isPrimary}
+		if delay, ok := l.liveMemberDelay(tag, detour); ok && delay != 0 {
+			candidate.Latency = delay
+			measured = append(measured, candidate)
+		} else {
+			unmeasured = append(unmeasured, candidate)
+		}
+	}
+	sortCandidates(measured)
+	sortCandidates(unmeasured)
+	return append(measured, unmeasured...)
+}
+
+// dialAttempts tries each candidate once, in order. It returns the successful
+// candidate and the tags attempted (including the successful one).
+func (l *LoadBalance) dialAttempts(ctx context.Context, attempts []Candidate, dial func(context.Context, adapter.Outbound) error) (Candidate, []string, error) {
+	if len(attempts) == 0 {
+		return Candidate{}, nil, l.emptyPoolError()
+	}
+	tried := make([]string, 0, len(attempts))
+	var lastErr error
+	for _, candidate := range attempts {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Candidate{}, tried, ctxErr
+		}
+		tried = append(tried, candidate.Tag)
+		err := dial(ctx, candidate.Outbound)
+		if err == nil {
+			return candidate, tried, nil
+		}
+		realTag := RealTag(candidate.Outbound)
+		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", realTag))
+		l.history.DeleteURLTestHistory(realTag)
+		l.resetWindow(candidate.Tag)
+		lastErr = err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Candidate{}, tried, ctxErr
+	}
+	return Candidate{}, tried, lastErr
 }
 
 func (l *LoadBalance) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
@@ -294,16 +394,37 @@ func (l *LoadBalance) PerformUpdateCheck() {
 }
 
 func (l *LoadBalance) selectCandidate(metadata adapter.InboundContext) (Candidate, error) {
+	candidate, found, err := l.pickCandidate(metadata)
+	if err != nil {
+		return Candidate{}, err
+	}
+	if !found {
+		return Candidate{}, l.emptyPoolError()
+	}
+	return candidate, nil
+}
+
+// pickCandidate returns the strategy's first choice. found is false (with a nil
+// error) when the snapshot is empty and empty_pool_action is error; strategy
+// errors such as an empty hash key are returned as errors.
+func (l *LoadBalance) pickCandidate(metadata adapter.InboundContext) (Candidate, bool, error) {
 	snapshot := l.snapshot.Load()
 	if snapshot == nil || len(snapshot.Candidates) == 0 {
-		return l.selectEmptyPoolFallback()
+		if l.emptyPoolAction == "random" {
+			candidate, err := l.selectEmptyPoolFallback()
+			if err != nil {
+				return Candidate{}, false, nil
+			}
+			return candidate, true, nil
+		}
+		return Candidate{}, false, nil
 	}
 	if l.strategy == "random" {
 		candidate, err := SelectRandomFromSnapshot(snapshot)
 		if err != nil {
-			return Candidate{}, E.Cause(err, "loadbalance")
+			return Candidate{}, false, E.Cause(err, "loadbalance")
 		}
-		return candidate, nil
+		return candidate, true, nil
 	}
 	key := l.computeHashKey(metadata)
 	onEmptyKey := "random"
@@ -318,9 +439,9 @@ func (l *LoadBalance) selectCandidate(metadata adapter.InboundContext) (Candidat
 	}
 	candidate, err := SelectFromSnapshot(snapshot, key, onEmptyKey, virtualNodes, keySalt)
 	if err != nil {
-		return Candidate{}, E.Cause(err, "loadbalance")
+		return Candidate{}, false, E.Cause(err, "loadbalance")
 	}
-	return candidate, nil
+	return candidate, true, nil
 }
 
 func (l *LoadBalance) computeHashKey(metadata adapter.InboundContext) string {

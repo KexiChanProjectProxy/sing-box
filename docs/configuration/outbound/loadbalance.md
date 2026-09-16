@@ -189,7 +189,7 @@ Salt prepended to the hash key and to virtual-node names. Default: `""`.
 
 ==Optional==
 
-Action when no healthy candidate exists. Supported values: `error`, `random`. `error` causes dials to fail; `random` selects randomly from all configured primary and backup outbounds without health filtering. Default: `error`.
+Action when no healthy candidate exists. Supported values: `error`, `random`. `error` picks no first choice and the connection goes straight to [connection fail-over](#connection-fail-over), walking every configured primary and then every configured backup; the dial fails only when all of them fail, or immediately when no outbound is configured. `random` picks a random first choice from all configured primary and backup outbounds without health filtering, then fails over through the rest. Default: `error`.
 
 #### interrupt_exist_connections
 
@@ -223,9 +223,29 @@ The outbound starts immediately and seeds the candidate pool with all primary ou
 
 Members are probed in the background. Unlike [`urltest`](/configuration/outbound/urltest/), loadbalance measures HTTP RTT after dial, proxy handshake, and destination TLS have finished.
 
-A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`. Failed probes and failed dials delete that member's stored latency and reset its delay window. The candidate pool is rebuilt after each health-check round.
+A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`. Failed probes and failed dials delete that member's stored latency and reset its delay window. A failed dial also moves the current connection to the next member (see [Connection Fail-over](#connection-fail-over)). The candidate pool is rebuilt after each health-check round, not after a failed dial.
 
 Nested `loadbalance` and `urltest` members are never HTTP-probed by the parent. The parent reuses the child's current ranking delay (snapshot minimum, or last urltest history). A nested `selector` is treated as a leaf: reuse a fresh history of the selected outbound, otherwise HTTP-probe that outbound.
+
+### Connection Fail-over
+
+When the chosen member fails before any payload is forwarded, the same connection tries the next member instead of failing. Failures that trigger this include TCP connect errors, TLS or proxy handshake errors, authentication failures, rejections, and timeouts returned by the member's dial (or UDP listen).
+
+Attempt order is fixed when the connection starts:
+
+1. The first choice from `strategy` and the current candidate pool, exactly as without fail-over.
+2. Every other configured `primary_outbounds` member.
+3. Every other configured `backup_outbounds` member, only after all primaries have failed.
+
+Within steps 2 and 3, members are ordered by their last measured raw latency, lowest first, with ties broken by tag. Members without a measurement come last, ordered by tag. `weighted_delay`, `top_n`, `tolerance`, and health filtering do not apply here: unhealthy members are still tried as long as they are configured. A backup is never tried before an untried primary, even when it is faster.
+
+Each member is tried at most once per connection. Members that do not support the connection's network are skipped. A nested `loadbalance`, `urltest`, or `selector` counts as one member and handles its own members. When every member fails, the error of the last attempt is returned.
+
+Fail-over stops as soon as a member succeeds. Errors after the tunnel is established, such as resets, empty responses, or destination HTTP errors, never trigger fail-over. Cancelling the connection stops the walk.
+
+A failed connection does not rebuild the candidate pool, change consistent-hash affinity, or interrupt other connections. The next connection still picks its first choice from the current pool; failed members leave the pool only through their deleted latency and the next health-check round.
+
+There is no overall fail-over timeout. In the worst case a connection waits for the connect timeout of every member in turn, bounded by the caller's own deadline.
 
 ### Primary/Backup Semantics
 

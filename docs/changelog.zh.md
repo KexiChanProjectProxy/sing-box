@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.15
+
+* [`loadbalance`](/zh/configuration/outbound/loadbalance/#连接级故障转移) 握手失败时在同一连接上按最近延迟依次改试其余主出站、再改试备用出站
+
 #### 1.14.0.14
 
 * [`loadbalance`](/zh/configuration/outbound/loadbalance/#健康检查) 健康检查改为握手完成后的 HTTP RTT，复用嵌套/urltest 结果，并新增可选 [`weighted_delay`](/zh/configuration/outbound/loadbalance/#weighted_delay)

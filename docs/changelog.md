@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.15
+
+* Fail over [`loadbalance`](/configuration/outbound/loadbalance/#connection-fail-over) connections whose handshake fails to the remaining primary outbounds, then backup outbounds, ordered by last measured latency
+
 #### 1.14.0.14
 
 * Measure [`loadbalance`](/configuration/outbound/loadbalance/#health-check) health as HTTP RTT after handshakes, reuse nested/urltest results, and add optional [`weighted_delay`](/configuration/outbound/loadbalance/#weighted_delay)

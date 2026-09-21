@@ -11,9 +11,14 @@ import (
 )
 
 type Candidate struct {
-	Tag       string
-	Outbound  adapter.Outbound
-	Latency   uint16
+	Tag      string
+	Outbound adapter.Outbound
+	// Latency is the member's raw health check delay in milliseconds, kept for
+	// health decisions, fail-over ordering and reporting.
+	Latency uint16
+	// Score is the sorter's millisecond equivalent ranking value, where lower
+	// ranks better. With no sorter configured it equals Latency.
+	Score     float64
 	IsPrimary bool
 }
 

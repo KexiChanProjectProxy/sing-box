@@ -1,71 +1,130 @@
 package group
 
-import "testing"
+import (
+	"testing"
+	"time"
 
-func TestComputeWeightedDelayEqualWeights(t *testing.T) {
-	t.Parallel()
-	got := computeWeightedDelay([]uint16{10, 20, 30}, 1, 1)
-	if got != 25 {
-		t.Fatalf("got %d want 25", got)
+	"github.com/sagernet/sing-box/common/transportstats"
+	"github.com/sagernet/sing-box/option"
+
+	"github.com/stretchr/testify/require"
+)
+
+func newLatencyWindowBalance(t *testing.T) *LoadBalance {
+	t.Helper()
+	memberSorter, err := newSorter(map[string]float64{"latency_avg_1m": 1})
+	require.NoError(t, err)
+	return &LoadBalance{
+		sorter:       memberSorter,
+		latencyStats: make(map[string]*transportstats.Recorder),
 	}
 }
 
-func TestComputeWeightedDelayUnequalWeights(t *testing.T) {
+func TestObserveDelayRecordsLatency(t *testing.T) {
 	t.Parallel()
-	got := computeWeightedDelay([]uint16{10, 20, 30}, 7, 3)
-	if got != 23 {
-		t.Fatalf("got %d want 23", got)
-	}
+	lb := newLatencyWindowBalance(t)
+	lb.observeDelay("x", 100)
+	lb.observeDelay("x", 300)
+
+	average, ok := lb.latencyRecorderIfExists("x").Latency(time.Minute)
+	require.True(t, ok)
+	require.InDelta(t, 200, average, 1e-9)
 }
 
-func TestObserveDelayWindowOfTwo(t *testing.T) {
+func TestResetWindowDropsLatency(t *testing.T) {
 	t.Parallel()
-	lb := &LoadBalance{
-		delayWindow:  2,
-		windowWeight: 1,
-		lastWeight:   1,
-		windows:      make(map[string]*delayWindow),
-	}
-	lb.observeDelay("x", 10)
-	lb.observeDelay("x", 20)
-	got := lb.observeDelay("x", 30)
-	window := lb.windows["x"]
-	if window == nil {
-		t.Fatal("missing window")
-	}
-	if len(window.samples) != 2 || window.samples[0] != 20 || window.samples[1] != 30 {
-		t.Fatalf("samples %v want [20 30]", window.samples)
-	}
-	if got != 27 {
-		t.Fatalf("weighted %d want 27", got)
-	}
-}
-
-func TestResetWindowThenObserve(t *testing.T) {
-	t.Parallel()
-	lb := &LoadBalance{
-		delayWindow:  5,
-		windowWeight: 1,
-		lastWeight:   1,
-		windows:      make(map[string]*delayWindow),
-	}
-	lb.observeDelay("x", 10)
-	lb.observeDelay("x", 20)
+	lb := newLatencyWindowBalance(t)
+	lb.observeDelay("x", 100)
 	lb.resetWindow("x")
-	got := lb.observeDelay("x", 40)
-	if got != 40 {
-		t.Fatalf("got %d want 40", got)
-	}
+
+	_, ok := lb.latencyRecorderIfExists("x").Latency(time.Minute)
+	require.False(t, ok)
 }
 
-func TestObserveDelayDisabled(t *testing.T) {
+func TestLatencyWindowDisabledWhenUnused(t *testing.T) {
 	t.Parallel()
-	lb := &LoadBalance{}
-	got := lb.observeDelay("x", 15)
-	if got != 15 {
-		t.Fatalf("got %d want 15", got)
+	// The default sorter reads only the latest delay, so no history is kept.
+	lb := &LoadBalance{sorter: defaultSorter()}
+	lb.observeDelay("x", 100)
+	lb.resetWindow("x")
+	require.Nil(t, lb.latencyRecorderIfExists("x"))
+	require.Nil(t, lb.latencyRecorder("x"))
+}
+
+func TestLatencyRecorderCreatedOnDemand(t *testing.T) {
+	t.Parallel()
+	lb := newLatencyWindowBalance(t)
+	require.Nil(t, lb.latencyRecorderIfExists("x"), "scoring must not allocate for unseen members")
+	require.NotNil(t, lb.latencyRecorder("x"))
+	require.NotNil(t, lb.latencyRecorderIfExists("x"))
+}
+
+// weighted_delay is deprecated but still supported, and must keep blending the
+// window average with the latest sample in the same proportions.
+func TestWeightedDelayTranslatesToSorter(t *testing.T) {
+	t.Parallel()
+	options := option.LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		WeightedDelay:    &option.LoadBalanceWeightedDelayOptions{WindowWeight: 7, LastWeight: 3},
 	}
-	if lb.windows != nil {
-		t.Fatal("disabled observe should not allocate windows")
+	require.NoError(t, options.Check())
+
+	memberSorter, err := newSorter(options.SorterWeights())
+	require.NoError(t, err)
+	require.False(t, memberSorter.isDefault)
+	require.True(t, memberSorter.usesLatencyWindow)
+	require.Empty(t, memberSorter.directions, "weighted_delay never reads transport statistics")
+
+	weights := map[string]float64{}
+	for _, key := range memberSorter.keys {
+		weights[key.name] = key.weight
 	}
+	require.InDelta(t, 0.3, weights[MetricLatency], 1e-9)
+	require.InDelta(t, 0.7, weights["latency_avg_5m"], 1e-9)
+}
+
+func TestWeightedDelayScoreMatchesOldBlend(t *testing.T) {
+	t.Parallel()
+	options := option.LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		WeightedDelay:    &option.LoadBalanceWeightedDelayOptions{WindowWeight: 1, LastWeight: 1},
+	}
+	require.NoError(t, options.Check())
+	memberSorter, err := newSorter(options.SorterWeights())
+	require.NoError(t, err)
+
+	lb := &LoadBalance{sorter: memberSorter, latencyStats: make(map[string]*transportstats.Recorder)}
+	// Three samples averaging 70, with the latest at 10.
+	lb.observeDelay("a", 100)
+	lb.observeDelay("a", 100)
+	lb.observeDelay("a", 10)
+
+	candidates := []Candidate{{Tag: "a", Latency: 10}}
+	lb.scoreCandidates(candidates)
+	// (70 + 10) / 2 = 40, the value the old sample window produced.
+	require.InDelta(t, 40, candidates[0].Score, 1e-9)
+}
+
+func TestWeightedDelayDefaultsApplied(t *testing.T) {
+	t.Parallel()
+	options := option.LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		WeightedDelay:    &option.LoadBalanceWeightedDelayOptions{},
+	}
+	require.NoError(t, options.Check())
+	weights := options.SorterWeights()
+	require.InDelta(t, 0.5, weights[MetricLatency], 1e-9)
+	require.InDelta(t, 0.5, weights["latency_avg_5m"], 1e-9)
+}
+
+// SorterWeights is documented as callable after Check, but must not divide by
+// zero if it is reached before the defaults are filled in.
+func TestWeightedDelayWeightsWithoutCheck(t *testing.T) {
+	t.Parallel()
+	options := option.LoadBalanceOutboundOptions{
+		WeightedDelay: &option.LoadBalanceWeightedDelayOptions{},
+	}
+	weights := options.SorterWeights()
+	require.InDelta(t, 0.5, weights[MetricLatency], 1e-9)
+	require.InDelta(t, 0.5, weights["latency_avg_5m"], 1e-9)
 }

@@ -44,7 +44,7 @@ require (
 	github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.1
 	github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf
 	github.com/sagernet/nftables v0.3.0-mod.4
-	github.com/sagernet/quic-go v0.61.0-sing-box-mod.5
+	github.com/sagernet/quic-go v0.61.0-sing-box-mod.6
 	github.com/sagernet/sing v0.9.0-beta.4
 	github.com/sagernet/sing-cloudflared v0.1.3-0.20260706062323-d9787e794aa3
 	github.com/sagernet/sing-mux v0.3.5
@@ -209,6 +209,6 @@ require (
 	zombiezen.com/go/capnproto2 v2.18.2+incompatible // indirect
 )
 
-replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.13
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.14-kexi.1
 
-replace github.com/sagernet/sing-quic => github.com/KexiChanProjectProxy/sing-quic v0.7.0-beta.4
+replace github.com/sagernet/sing-quic => github.com/KexiChanProjectProxy/sing-quic v0.7.1-kexi.1

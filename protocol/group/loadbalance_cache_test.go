@@ -6,6 +6,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/interrupt"
+	"github.com/sagernet/sing-box/common/transportstats"
 	"github.com/sagernet/sing-box/common/urltest"
 )
 
@@ -119,13 +120,15 @@ func TestRebuildSnapshotRanksNestedByMinLatency(t *testing.T) {
 	}
 }
 
-func TestHealthyCandidatesUsesWeightedDelay(t *testing.T) {
+func TestHealthyCandidatesScoresWithLatencyWindow(t *testing.T) {
 	t.Parallel()
+	memberSorter, err := newSorter(map[string]float64{MetricLatency: 0.5, "latency_avg_5m": 0.5})
+	if err != nil {
+		t.Fatal(err)
+	}
 	lb := &LoadBalance{
-		delayWindow:  3,
-		windowWeight: 1,
-		lastWeight:   1,
-		windows:      make(map[string]*delayWindow),
+		sorter:       memberSorter,
+		latencyStats: make(map[string]*transportstats.Recorder),
 		history:      urltest.NewHistoryStorage(),
 		primaryTags:  []string{"a", "b"},
 		primaryOutbounds: map[string]adapter.Outbound{
@@ -140,18 +143,27 @@ func TestHealthyCandidatesUsesWeightedDelay(t *testing.T) {
 	lb.observeDelay("b", 100)
 	lb.observeDelay("b", 10)
 	got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true)
-	var bLatency uint16
-	found := false
-	for _, candidate := range got {
-		if candidate.Tag == "b" {
-			bLatency = candidate.Latency
-			found = true
+
+	var candidateB *Candidate
+	for i := range got {
+		if got[i].Tag == "b" {
+			candidateB = &got[i]
 		}
 	}
-	if !found {
+	if candidateB == nil {
 		t.Fatal("missing candidate b")
 	}
-	if bLatency != 40 {
-		t.Fatalf("b latency %d want weighted 40", bLatency)
+	// Latency keeps the raw measurement, while the blended value moves to Score:
+	// the window averages 70 and the latest sample is 10, so (70 + 10) / 2 = 40.
+	if candidateB.Latency != 10 {
+		t.Fatalf("b latency %d want raw 10", candidateB.Latency)
+	}
+	if candidateB.Score < 39.999 || candidateB.Score > 40.001 {
+		t.Fatalf("b score %v want blended 40", candidateB.Score)
+	}
+	// "a" has no window history, so its window key falls back to its latest
+	// delay of 50 and it ranks behind "b".
+	if got[0].Tag != "b" {
+		t.Fatalf("ranking got %v want b first", got)
 	}
 }

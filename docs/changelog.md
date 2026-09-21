@@ -2,6 +2,15 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.16
+
+* Upgrade sing-quic to upstream v0.7.0: Brutal now compensates for loss as designed, and the [`naive`](/configuration/inbound/naive/#quic_congestion_control) BBR variants map onto one BBR implementation's profiles
+* Report transport statistics from [`hysteria2`](/configuration/outbound/hysteria2/) and [`anytls`](/configuration/outbound/anytls/) members for the [`loadbalance`](/configuration/outbound/loadbalance/#sorter) sorter, including the server's view of the connection, negotiated so that older clients and servers are unaffected
+* Merge upstream sing-anytls v0.0.13, including splitting writes larger than 64 KiB, which previously corrupted the session
+* Add [`loadbalance.sorter`](/configuration/outbound/loadbalance/#sorter): rank members by a weighted combination of latency, RTT, RTT variance, loss rate and delivery rate instead of latency alone
+* Deprecate [`loadbalance.weighted_delay`](/configuration/outbound/loadbalance/#weighted_delay); it is translated to an equivalent sorter, and its window is now five minutes of samples rather than a sample count
+* Log `loadbalance.score` events at debug level with each member's score and per-keyword contribution, and warn on `loadbalance.sorter.coarse_interval` and `loadbalance.sorter.unsupported`
+
 #### 1.14.0.15
 
 * Fail over [`loadbalance`](/configuration/outbound/loadbalance/#connection-fail-over) connections whose handshake fails to the remaining primary outbounds, then backup outbounds, ordered by last measured latency

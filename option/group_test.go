@@ -1,6 +1,7 @@
 package option
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -311,4 +312,136 @@ func TestLoadBalanceWeightedDelayWindowTooLarge(t *testing.T) {
 	err = options.Check()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "greater than 64")
+}
+
+func TestLoadBalanceSorterJSON(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{
+		"primary_outbounds": ["a"],
+		"sorter": {
+			"latency_avg_1m": 1,
+			"client_rtt": 0.5,
+			"server_loss_rate_1m": 20,
+			"server_delivery_rate": 0.1
+		}
+	}`), &options)
+	require.NoError(t, err)
+	require.NoError(t, options.Check())
+	require.Len(t, options.Sorter, 4)
+	require.Equal(t, float64(1), options.Sorter["latency_avg_1m"])
+	require.Equal(t, 0.5, options.Sorter["client_rtt"])
+
+	encoded, err := json.Marshal(&options)
+	require.NoError(t, err)
+	var roundTrip LoadBalanceOutboundOptions
+	require.NoError(t, json.Unmarshal(encoded, &roundTrip))
+	require.Equal(t, options.Sorter, roundTrip.Sorter)
+}
+
+func TestLoadBalanceSorterEveryKeyAccepted(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range LoadBalanceSorterKeys {
+		options := LoadBalanceOutboundOptions{
+			PrimaryOutbounds: []string{"a"},
+			Sorter:           map[string]float64{key: 1},
+		}
+		require.NoError(t, options.Check(), key)
+	}
+}
+
+func TestLoadBalanceSorterRejectsUnknownKey(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		Sorter:           map[string]float64{"latency_avg_2m": 1},
+	}
+	require.ErrorContains(t, options.Check(), "unsupported sorter key")
+}
+
+func TestLoadBalanceSorterRejectsNegativeWeight(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		Sorter:           map[string]float64{"latency": -1},
+	}
+	require.ErrorContains(t, options.Check(), "negative weight")
+}
+
+func TestLoadBalanceSorterRejectsNonFiniteWeight(t *testing.T) {
+	t.Parallel()
+
+	for _, weight := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		options := LoadBalanceOutboundOptions{
+			PrimaryOutbounds: []string{"a"},
+			Sorter:           map[string]float64{"latency": weight},
+		}
+		require.ErrorContains(t, options.Check(), "non-finite weight")
+	}
+}
+
+func TestLoadBalanceSorterRejectsAllZeroWeights(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		Sorter:           map[string]float64{"latency": 0, "client_rtt": 0},
+	}
+	require.ErrorContains(t, options.Check(), "no key with a positive weight")
+}
+
+func TestLoadBalanceSorterConflictsWithWeightedDelay(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		Sorter:           map[string]float64{"latency": 1},
+		WeightedDelay:    &LoadBalanceWeightedDelayOptions{Window: 5},
+	}
+	require.ErrorContains(t, options.Check(), "mutually exclusive")
+}
+
+func TestLoadBalanceSorterWeightsCopiesConfiguration(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		Sorter:           map[string]float64{"latency": 1},
+	}
+	weights := options.SorterWeights()
+	weights["latency"] = 99
+	weights["client_rtt"] = 1
+	require.Equal(t, map[string]float64{"latency": 1}, options.Sorter, "the caller must not be able to mutate the options")
+}
+
+func TestLoadBalanceSorterWeightsUnsetIsNil(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{PrimaryOutbounds: []string{"a"}}
+	require.NoError(t, options.Check())
+	require.Nil(t, options.SorterWeights())
+}
+
+func TestLoadBalanceSorterRejectsEmptyObject(t *testing.T) {
+	t.Parallel()
+
+	var options LoadBalanceOutboundOptions
+	err := json.Unmarshal([]byte(`{"primary_outbounds":["a"],"sorter":{}}`), &options)
+	require.NoError(t, err)
+	require.ErrorContains(t, options.Check(), "sorter is empty")
+}
+
+func TestLoadBalanceSorterEmptyObjectStillConflictsWithWeightedDelay(t *testing.T) {
+	t.Parallel()
+
+	options := LoadBalanceOutboundOptions{
+		PrimaryOutbounds: []string{"a"},
+		Sorter:           map[string]float64{},
+		WeightedDelay:    &LoadBalanceWeightedDelayOptions{},
+	}
+	require.ErrorContains(t, options.Check(), "mutually exclusive")
 }

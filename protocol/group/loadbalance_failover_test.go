@@ -12,6 +12,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/interrupt"
+	"github.com/sagernet/sing-box/common/transportstats"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -277,14 +278,20 @@ func TestFailoverUnmeasuredAfterMeasuredByTag(t *testing.T) {
 	}
 }
 
-func TestFailoverIgnoresWeightedWindowAndTimeout(t *testing.T) {
+// Fail-over orders on the raw last delay, not on the sorter, so neither the
+// latency history nor the health timeout may reorder or drop an attempt.
+func TestFailoverIgnoresSorterAndTimeout(t *testing.T) {
 	t.Parallel()
 	f := newFailoverFixture([]memberSpec{{tag: "a", delay: 30}, {tag: "b", delay: 60000}}, nil)
 	f.lb.timeout = time.Second
-	f.lb.delayWindow = 3
-	f.lb.windowWeight = 1
-	f.lb.lastWeight = 1
-	f.lb.windows = map[string]*delayWindow{"a": {samples: []uint16{900}, weighted: 900}}
+	memberSorter, err := newSorter(map[string]float64{"latency_avg_5m": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.lb.sorter = memberSorter
+	f.lb.latencyStats = make(map[string]*transportstats.Recorder)
+	// A history that would rank "a" last if the sorter were consulted.
+	f.lb.observeDelay("a", 900)
 	got := attemptTags(f.lb.failoverAttempts(nil, N.NetworkTCP))
 	if got != "a,b" {
 		t.Fatalf("attempts %q want a,b", got)

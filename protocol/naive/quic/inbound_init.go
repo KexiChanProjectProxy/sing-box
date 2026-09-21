@@ -15,8 +15,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/naive"
 	qtls "github.com/sagernet/sing-quic"
-	"github.com/sagernet/sing-quic/congestion_bbr1"
-	"github.com/sagernet/sing-quic/congestion_bbr2"
 	congestion_meta1 "github.com/sagernet/sing-quic/congestion_meta1"
 	congestion_meta2 "github.com/sagernet/sing-quic/congestion_meta2"
 	"github.com/sagernet/sing/common"
@@ -44,47 +42,24 @@ func init() {
 		if timeFunc == nil {
 			timeFunc = time.Now
 		}
+		// sing-quic keeps a single BBR implementation with tunable profiles, so
+		// the BBR variants map onto its profiles: the standard ones onto the
+		// standard profile, and the experimental variant onto the aggressive one.
+		newBBR := func(profile congestion_meta2.Profile) func(conn *quic.Conn) congestion.CongestionControl {
+			return func(conn *quic.Conn) congestion.CongestionControl {
+				return congestion_meta2.NewBbrSenderWithProfile(conn.InitialPacketSize(), profile)
+			}
+		}
 		switch options.QUICCongestionControl {
-		case "", "bbr":
-			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
-				return congestion_meta2.NewBbrSender(
-					congestion_meta2.DefaultClock{TimeFunc: timeFunc},
-					congestion.ByteCount(conn.Config().InitialPacketSize),
-					congestion.ByteCount(congestion_meta1.InitialCongestionWindow),
-				)
-			}
-		case "bbr_standard":
-			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
-				return congestion_bbr1.NewBbrSender(
-					congestion_bbr1.DefaultClock{TimeFunc: timeFunc},
-					congestion.ByteCount(conn.Config().InitialPacketSize),
-					congestion_bbr1.InitialCongestionWindowPackets,
-					congestion_bbr1.MaxCongestionWindowPackets,
-				)
-			}
-		case "bbr2":
-			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
-				return congestion_bbr2.NewBBR2Sender(
-					congestion_bbr2.DefaultClock{TimeFunc: timeFunc},
-					congestion.ByteCount(conn.Config().InitialPacketSize),
-					0,
-					false,
-				)
-			}
+		case "", "bbr", "bbr_standard", "bbr2":
+			congestionControl = newBBR(congestion_meta2.ProfileStandard)
 		case "bbr2_variant":
-			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
-				return congestion_bbr2.NewBBR2Sender(
-					congestion_bbr2.DefaultClock{TimeFunc: timeFunc},
-					congestion.ByteCount(conn.Config().InitialPacketSize),
-					32*congestion.ByteCount(conn.Config().InitialPacketSize),
-					true,
-				)
-			}
+			congestionControl = newBBR(congestion_meta2.ProfileAggressive)
 		case "cubic":
 			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
 				return congestion_meta1.NewCubicSender(
 					congestion_meta1.DefaultClock{TimeFunc: timeFunc},
-					congestion.ByteCount(conn.Config().InitialPacketSize),
+					conn.InitialPacketSize(),
 					false,
 				)
 			}
@@ -92,7 +67,7 @@ func init() {
 			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
 				return congestion_meta1.NewCubicSender(
 					congestion_meta1.DefaultClock{TimeFunc: timeFunc},
-					congestion.ByteCount(conn.Config().InitialPacketSize),
+					conn.InitialPacketSize(),
 					true,
 				)
 			}

@@ -19,6 +19,9 @@
   "timeout": "15s",
   "idle_timeout": "30m",
   "tolerance": 10,
+  "sorter": {
+    "latency": 1
+  },
   "top_n": {
     "primary": 0
   },
@@ -38,7 +41,7 @@
 
 !!! quote ""
 
-    The group is visible in the [Clash API](/configuration/experimental/clash-api/) (`now` / `all`). `now` is the lowest-latency candidate, or the first primary before the first health result. Members cannot be selected through the API.
+    The group is visible in the [Clash API](/configuration/experimental/clash-api/) (`now` / `all`). `now` is the best-ranked candidate, or the first primary before the first health result. Members cannot be selected through the API.
 
 ### Fields
 
@@ -96,7 +99,7 @@ Top N candidate selection options. Only `primary` is used.
 
 ==Optional==
 
-Select top N healthy primary outbounds by latency. `0` means all healthy primary outbounds are used. Default: `0`.
+Select top N healthy primary outbounds by score (see [sorter](#sorter)). `0` means all healthy primary outbounds are used. Default: `0`.
 
 #### top_n.backup
 
@@ -106,35 +109,141 @@ Not supported. Must be omitted or `0`.
 
 ==Optional==
 
-Latency tolerance in milliseconds when choosing the top-N candidate set.
+Score tolerance when choosing the top-N candidate set, in milliseconds.
 
-On the first snapshot, the N lowest-latency healthy primaries are taken as-is.
-Afterwards, a faster outbound replaces an incumbent only if it is better by more than this value. An equal delta keeps the incumbent.
+On the first snapshot, the N best-scoring healthy primaries are taken as-is.
+Afterwards, a better outbound replaces an incumbent only if it is better by more than this value. An equal delta keeps the incumbent.
 `10` will be used if empty.
+
+Scores are millisecond equivalent (see [sorter](#sorter)), so this value keeps its meaning whatever the sorter ranks on.
+
+#### sorter
+
+==Optional==
+
+Ranking weights, as a map of metric keyword to weight. Ranking (`top_n`, sort order, `now`, `tolerance`) uses the resulting score, lowest first. Health checking and the timeout still use the raw measured delay, and so does connection fail-over.
+
+`{"latency": 1}` will be used if omitted, which ranks on the last measured delay alone. An empty object is a configuration error.
+
+A member's score is the weighted sum of its metrics:
+
+```
+score = Σ weight × metric
+```
+
+Every weight is positive, and says **how many milliseconds one unit of that metric is worth**. Metrics where a higher value is better are subtracted rather than added, so a lower score is always better and scores stay comparable with the raw delay they replace.
+
+```json
+{
+  "sorter": {
+    "latency_avg_1m": 1,
+    "client_rtt": 0.5,
+    "server_loss_rate_1m": 20,
+    "server_delivery_rate": 0.1
+  }
+}
+```
+
+Read as: rank mostly on the one minute average delay, count half a millisecond for each millisecond of transport RTT, treat one percent of downstream loss as 20 ms, and credit 0.1 ms for each Mbps of measured throughput.
+
+Supported keywords:
+
+| Keyword                | Unit | Window     | Better |
+|------------------------|------|------------|--------|
+| `latency`              | ms   | latest     | lower  |
+| `latency_avg_1m`       | ms   | 1m mean    | lower  |
+| `latency_avg_5m`       | ms   | 5m mean    | lower  |
+| `client_rtt`           | ms   | 1m mean    | lower  |
+| `client_rttvar`        | ms   | 1m mean    | lower  |
+| `client_loss_rate_30s` | %    | 30s totals | lower  |
+| `client_loss_rate_1m`  | %    | 1m totals  | lower  |
+| `client_loss_rate_5m`  | %    | 5m totals  | lower  |
+| `client_delivery_rate` | Mbps | 1m peak    | higher |
+| `server_rtt`           | ms   | 1m mean    | lower  |
+| `server_rttvar`        | ms   | 1m mean    | lower  |
+| `server_loss_rate_30s` | %    | 30s totals | lower  |
+| `server_loss_rate_1m`  | %    | 1m totals  | lower  |
+| `server_loss_rate_5m`  | %    | 5m totals  | lower  |
+| `server_delivery_rate` | Mbps | 1m peak    | higher |
+
+Windows are accumulated in ten second buckets, so a window covers between one bucket less than its name and its name. A loss rate is lost packets over sent packets across the window, an RTT keyword is the mean of the samples in it, and a delivery rate is its highest bucket, because a proxy connection is usually limited by what the application asks for rather than by the path.
+
+An unknown keyword or a negative weight is a configuration error, as is a set of weights that are all zero. A single keyword weighted zero is simply dropped.
+
+!!! note "Which members report transport statistics"
+
+    Only [`hysteria2`](/configuration/outbound/hysteria2/) and [`anytls`](/configuration/outbound/anytls/) members report `client_*` and `server_*`. Other members are scored on the pool average for them, and a nested group is measured through the member it currently selects.
+
+    | Keyword          | `hysteria2`                                   | `anytls`                                       |
+    |------------------|-----------------------------------------------|------------------------------------------------|
+    | `*_rtt`          | QUIC smoothed RTT                             | `TCP_INFO` RTT                                 |
+    | `*_rttvar`       | QUIC RTT mean deviation                       | `TCP_INFO` RTT variance                        |
+    | `*_loss_rate_*`  | packets declared lost over packets sent        | retransmitted segments over data segments sent |
+    | `*_delivery_rate`| measured throughput                           | kernel delivery rate estimate                  |
+
+    `client_*` is read locally: always for `hysteria2`, and on Linux for `anytls`. `server_*` is reported by the server over the protocol and needs a sing-box server that supports it; for `anytls` the server must also run on Linux. The request is negotiated when a connection is set up, so it covers connections opened after the group starts. A server that does not support it ignores the request, and the member is then scored on the pool average for `server_*`.
+
+    Limits worth knowing:
+
+    - An `anytls` member with a `detour` does not report `client_*`, since the socket under it belongs to another transport.
+    - A connection that sent fewer than 32 packets since the last sample — for example only keepalives, heartbeats or the statistics exchange — contributes nothing to that sample unless it lost at least half of what it sent, and at least two packets. A member carrying little traffic is therefore scored on the pool average rather than on that noise once its earlier samples age out of the window, while an `anytls` member whose retransmissions start failing shows its losses for a while, until its backed-off retransmissions become too sparse and it too returns to the pool average. A `hysteria2` path that stops delivering anything shows no loss here, since QUIC finds such losses by its probe timer and does not report them; health checks catch that case instead.
+    - For `hysteria2`, if one request for the server's statistics fails, the server direction stops reporting for the rest of that connection and resumes on the next one.
+
+    When no member of the group reports at all, `loadbalance.sorter.unsupported` is logged at startup.
+
+!!! note "Latency keywords"
+
+    `latency` is the last health check result. `latency_avg_1m` and `latency_avg_5m` average the results measured within that window, and fall back to the last result when the window holds no sample.
+
+    An average is only meaningful when the window holds several probes, so lower `interval` to around `15s`–`30s` before ranking on one. A `loadbalance.sorter.coarse_interval` warning is logged at startup when `interval` is more than half the narrowest window configured, which the default `interval` of three minutes is for both of them.
+
+!!! note "Transport keywords"
+
+    `client_*` is measured locally and describes the client to server direction. `server_*` is measured by the proxy server and reported back over the protocol, and describes the server to client direction — downstream loss is not visible to the client on its own.
+
+    Both cover only the hop between this machine and the proxy server. A member that cannot report a metric is scored on the average of the members that can, so it is neither favoured nor penalised for it, and a keyword no member can report has no effect on the order.
+
+    Members that are not in the current candidate set carry no user traffic, so their transport metrics are often missing. A member that is itself a group is measured through the outbound it currently selects; for a nested `loadbalance` that is its best-ranked member, which stands in for its whole pool.
+
+    Members with equal scores are ordered by raw delay, then by tag. This matters whenever a sorter cannot tell members apart — for example when no member reports its keywords, or when several members report none of them and all take the same pool average — so latency still decides rather than tag names. The `loadbalance.sorter.unsupported` warning is logged once at startup, and only when no member implements the reporting interface at all.
+
+!!! note "Reading the scores"
+
+    At `debug` level the group logs each member's score and the contribution of each keyword after every health check round, which is how a weight is tuned.
 
 #### weighted_delay
 
-==Optional==
+==Deprecated==
 
-When this object is present, ranking latency (top-N, sort, `now`, `tolerance`) is a sliding-window weighted average instead of the last sample. Timeout and health still use the live raw delay.
+Use [sorter](#sorter) instead. It is translated to an equivalent sorter, and configuring both is an error.
 
-Omit the object to keep last-sample ranking.
+When this object is present, ranking latency blends the window average with the last sample. The blend is preserved by the translation, the window is not: `weighted_delay` counted samples, while the sorter's `latency_avg_5m` covers a fixed five minutes. Because the translation always produces `latency_avg_5m`, the default `interval` of three minutes raises the `loadbalance.sorter.coarse_interval` warning described under [sorter](#sorter).
+
+```json
+{"weighted_delay": {"window_weight": 7, "last_weight": 3}}
+```
+
+is equivalent to
+
+```json
+{"sorter": {"latency_avg_5m": 0.7, "latency": 0.3}}
+```
 
 #### weighted_delay.window
 
-==Optional==
+==Deprecated==
 
-Number of samples in the window. `5` will be used if empty. Must be between `1` and `64`.
+Number of samples in the window. `5` will be used if empty. Must be between `1` and `64`. Ignored by the translation, which always uses a five minute window.
 
 #### weighted_delay.window_weight
 
-==Optional==
+==Deprecated==
 
 Weight of the sum of samples in the window. `1` will be used if empty.
 
 #### weighted_delay.last_weight
 
-==Optional==
+==Deprecated==
 
 Weight of the newest sample. That sample is also included in the window sum. `1` will be used if empty.
 
@@ -223,9 +332,9 @@ The outbound starts immediately and seeds the candidate pool with all primary ou
 
 Members are probed in the background. Unlike [`urltest`](/configuration/outbound/urltest/), loadbalance measures HTTP RTT after dial, proxy handshake, and destination TLS have finished.
 
-A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`. Failed probes and failed dials delete that member's stored latency and reset its delay window. A failed dial also moves the current connection to the next member (see [Connection Fail-over](#connection-fail-over)). The candidate pool is rebuilt after each health-check round, not after a failed dial.
+A member is healthy only when a stored latency exists, is non-zero, and is strictly below `timeout`. Health never depends on the [sorter](#sorter): a member is filtered on its raw delay, then the survivors are scored and ranked. Failed probes and failed dials delete that member's stored latency, and any member filtered out as unhealthy — including one whose delay merely reached `timeout` — has its latency history reset, so it is not ranked on averages from before it degraded. A failed dial also moves the current connection to the next member (see [Connection Fail-over](#connection-fail-over)). The candidate pool is rebuilt after each health-check round, not after a failed dial, so transport metrics reach the ranking on the next round.
 
-Nested `loadbalance` and `urltest` members are never HTTP-probed by the parent. The parent reuses the child's current ranking delay (snapshot minimum, or last urltest history). A nested `selector` is treated as a leaf: reuse a fresh history of the selected outbound, otherwise HTTP-probe that outbound.
+Nested `loadbalance` and `urltest` members are never HTTP-probed by the parent. The parent reuses the child's current delay (the lowest raw delay in its snapshot, or last urltest history). For transport keywords a nested group is instead measured through its current selection, so for a nested `loadbalance` the two can describe different members. A nested `selector` is treated as a leaf: reuse a fresh history of the selected outbound, otherwise HTTP-probe that outbound.
 
 ### Connection Fail-over
 
@@ -237,7 +346,7 @@ Attempt order is fixed when the connection starts:
 2. Every other configured `primary_outbounds` member.
 3. Every other configured `backup_outbounds` member, only after all primaries have failed.
 
-Within steps 2 and 3, members are ordered by their last measured raw latency, lowest first, with ties broken by tag. Members without a measurement come last, ordered by tag. `weighted_delay`, `top_n`, `tolerance`, and health filtering do not apply here: unhealthy members are still tried as long as they are configured. A backup is never tried before an untried primary, even when it is faster.
+Within steps 2 and 3, members are ordered by their last measured raw latency, lowest first, with ties broken by tag. Members without a measurement come last, ordered by tag. `sorter`, `top_n`, `tolerance`, and health filtering do not apply here: a dial that is already failing falls back on the simplest signal available, and unhealthy members are still tried as long as they are configured. A backup is never tried before an untried primary, even when it is faster.
 
 Each member is tried at most once per connection. Members that do not support the connection's network are skipped. A nested `loadbalance`, `urltest`, or `selector` counts as one member and handles its own members. When every member fails, the error of the last attempt is returned.
 
@@ -257,7 +366,7 @@ Each failed attempt logs a `urltest.error` event with the member tag. A connecti
 
 Healthy primary outbounds are always preferred over backup outbounds. Backup outbounds are only used when no primary candidate is healthy.
 
-When `top_n.primary` is `0` or at least as large as the healthy primary set, every healthy primary is used. Otherwise the pool is the N lowest-latency healthy primaries, with `tolerance` hysteresis after the first snapshot.
+When `top_n.primary` is `0` or at least as large as the healthy primary set, every healthy primary is used. Otherwise the pool is the N best-scoring healthy primaries (see [sorter](#sorter)), with `tolerance` hysteresis after the first snapshot.
 
 Backup outbounds skip top-N: if no primary is healthy, every healthy backup is used.
 

@@ -58,6 +58,10 @@ QUIC congestion control algorithm.
 
 `bbr` is used by default (the default of QUICHE, used by Chromium which NaiveProxy is based on).
 
+!!! note ""
+
+    Since sing-box 1.14.0.16 the BBR variants share one BBR implementation: `bbr`, `bbr_standard` and `bbr2` use its standard profile, and `bbr2_variant` uses its aggressive profile. The values remain valid, so existing configurations keep working.
+
 #### tls
 
 TLS configuration, see [TLS](/configuration/shared/tls/#inbound).

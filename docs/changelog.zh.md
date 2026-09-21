@@ -2,6 +2,15 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.16
+
+* 升级 sing-quic 至上游 v0.7.0：Brutal 按设计补偿丢包；[`naive`](/zh/configuration/inbound/naive/#quic_congestion_control) 的各 BBR 变体改为映射到同一 BBR 实现的配置档
+* [`hysteria2`](/zh/configuration/outbound/hysteria2/) 与 [`anytls`](/zh/configuration/outbound/anytls/) 成员为 [`loadbalance`](/zh/configuration/outbound/loadbalance/#sorter) 的 sorter 上报传输层统计，包括服务端视角的数据；该能力经协商启用，不影响旧版客户端与服务端
+* 合并上游 sing-anytls v0.0.13，包括拆分大于 64 KiB 的写入（此前会损坏会话）
+* 新增 [`loadbalance.sorter`](/zh/configuration/outbound/loadbalance/#sorter)：按延迟、RTT、RTT 抖动、丢包率与吞吐的加权组合排序成员，不再仅按延迟
+* 弃用 [`loadbalance.weighted_delay`](/zh/configuration/outbound/loadbalance/#weighted_delay)：将其转换为等价的 sorter，窗口由采样个数改为固定的 5 分钟时间窗
+* 新增 `loadbalance.score` 调试日志，记录各成员评分及每个关键词的贡献；新增 `loadbalance.sorter.coarse_interval` 与 `loadbalance.sorter.unsupported` 警告
+
 #### 1.14.0.15
 
 * [`loadbalance`](/zh/configuration/outbound/loadbalance/#连接级故障转移) 握手失败时在同一连接上按最近延迟依次改试其余主出站、再改试备用出站

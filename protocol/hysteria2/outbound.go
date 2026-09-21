@@ -7,12 +7,14 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/tls"
+	"github.com/sagernet/sing-box/common/transportstats"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -34,14 +36,21 @@ func RegisterOutbound(registry *outbound.Registry) {
 }
 
 var (
-	_ adapter.Outbound                = (*tuic.Outbound)(nil)
-	_ adapter.InterfaceUpdateListener = (*tuic.Outbound)(nil)
+	_ adapter.Outbound                   = (*tuic.Outbound)(nil)
+	_ adapter.InterfaceUpdateListener    = (*tuic.Outbound)(nil)
+	_ adapter.OutboundWithTransportStats = (*Outbound)(nil)
 )
 
 type Outbound struct {
 	outbound.Adapter
+	ctx    context.Context
 	logger log.StructuredLogger
 	client *hysteria2.Client
+
+	stats       *transportstats.Collector
+	statsStart  sync.Once
+	statsCancel context.CancelFunc
+	statsAccess sync.Mutex
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.Hysteria2OutboundOptions) (adapter.Outbound, error) {
@@ -160,8 +169,10 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	}
 	return &Outbound{
 		Adapter: outbound.NewAdapterWithDialerOptions(C.TypeHysteria2, tag, networkList, options.DialerOptions),
+		ctx:     ctx,
 		logger:  logger,
 		client:  client,
+		stats:   transportstats.NewCollector(),
 	}, nil
 }
 
@@ -212,5 +223,62 @@ func (h *Outbound) InterfaceUpdated(ctx context.Context) {
 }
 
 func (h *Outbound) Close() error {
+	h.statsAccess.Lock()
+	if h.statsCancel != nil {
+		h.statsCancel()
+	}
+	h.statsAccess.Unlock()
 	return h.client.CloseWithError(os.ErrClosed)
+}
+
+// EnableTransportStats starts sampling the connection to the server.
+//
+// The client direction is this side's view as the sender of upstream traffic,
+// read from the local QUIC connection. The server direction is the server's
+// view as the sender of downstream traffic; it is only available from a server
+// that agrees to report it, which is negotiated on the next connection.
+func (h *Outbound) EnableTransportStats(direction adapter.TransportStatsDirection) {
+	if direction == adapter.TransportStatsServer {
+		h.client.RequestServerStats()
+	}
+	h.stats.Enable(transportstats.Direction(direction))
+	h.statsStart.Do(func() {
+		h.statsAccess.Lock()
+		defer h.statsAccess.Unlock()
+		ctx, cancel := context.WithCancel(h.ctx)
+		h.statsCancel = cancel
+		go transportstats.Run(ctx, h.pollTransportStats)
+	})
+}
+
+func (h *Outbound) TransportStats(direction adapter.TransportStatsDirection) adapter.TransportStatsReader {
+	recorder := h.stats.Recorder(transportstats.Direction(direction))
+	if recorder == nil {
+		return nil
+	}
+	return recorder
+}
+
+func (h *Outbound) pollTransportStats(ctx context.Context) {
+	if h.stats.Enabled(transportstats.DirectionClient) {
+		if stats, loaded := h.client.LocalStats(); loaded {
+			h.stats.Record(transportstats.DirectionClient, []transportstats.Sample{quicSample(stats)}, true)
+		}
+	}
+	if h.stats.Enabled(transportstats.DirectionServer) {
+		if stats, loaded := h.client.ServerStats(ctx); loaded {
+			h.stats.Record(transportstats.DirectionServer, []transportstats.Sample{quicSample(stats)}, true)
+		}
+	}
+}
+
+func quicSample(stats hysteria2.TransportStats) transportstats.Sample {
+	return transportstats.Sample{
+		Key:       stats.ConnectionID,
+		Sent:      stats.PacketsSent,
+		Lost:      stats.PacketsLost,
+		BytesSent: stats.BytesSent,
+		RTT:       stats.SmoothedRTT,
+		RTTVar:    stats.RTTVariance,
+	}
 }

@@ -58,6 +58,10 @@ QUIC 拥塞控制算法。
 
 默认使用 `bbr`（NaiveProxy 基于的 Chromium 使用的 QUICHE 的默认值）。
 
+!!! note ""
+
+    自 sing-box 1.14.0.16 起，各 BBR 变体共用同一个 BBR 实现：`bbr`、`bbr_standard` 与 `bbr2` 使用其标准配置档，`bbr2_variant` 使用其激进配置档。这些取值仍然有效，现有配置无需修改。
+
 #### tls
 
 TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#入站)。

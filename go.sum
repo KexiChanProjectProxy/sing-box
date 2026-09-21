@@ -14,10 +14,10 @@ github.com/ClickHouse/ch-go v0.74.0 h1:uYs2m4wIt0ZHSM1E72rg0maCfzhR2V3xWb/vZEgpe
 github.com/ClickHouse/ch-go v0.74.0/go.mod h1:sZ/r+8ttZMjyrP9PuFbgoVbth1ywIu2LIQNA2vgko6M=
 github.com/ClickHouse/clickhouse-go/v2 v2.48.0 h1:auzd4VkapQYhQF8F2Gog7s3x78Bi1JZmByxGbrw3C+4=
 github.com/ClickHouse/clickhouse-go/v2 v2.48.0/go.mod h1:lBjUCPRG6RpRQdMbkXq+JV8rY0/O5lw+Z7jShgReFjM=
-github.com/KexiChanProjectProxy/sing-anytls v0.0.13 h1:sFWOqPI0WIpuAyGu6EoXuD8z9tZu+h1xVOADVKp23+o=
-github.com/KexiChanProjectProxy/sing-anytls v0.0.13/go.mod h1:7rjN6IukwysmdusYsrV51Fgu1uW6vsrdd6ctjnEAln8=
-github.com/KexiChanProjectProxy/sing-quic v0.7.0-beta.4 h1:iOD2PqqjbIkRHmpkbbGF91yUCk8Jr86cW7TGn8wdFe4=
-github.com/KexiChanProjectProxy/sing-quic v0.7.0-beta.4/go.mod h1:FPgVlDoSLWJlCjtT8WrFIAll4t2OutSP9nq0Iq74JLg=
+github.com/KexiChanProjectProxy/sing-anytls v0.0.14-kexi.1 h1:m38v5/DWnXMlp+RQYxArrqx19mkiegTI3++cXc+TXEc=
+github.com/KexiChanProjectProxy/sing-anytls v0.0.14-kexi.1/go.mod h1:7rjN6IukwysmdusYsrV51Fgu1uW6vsrdd6ctjnEAln8=
+github.com/KexiChanProjectProxy/sing-quic v0.7.1-kexi.1 h1:3cj3ukyKkPF/MFJ0+cU8lcgd9zj5zI7PR8SZQIGPHjY=
+github.com/KexiChanProjectProxy/sing-quic v0.7.1-kexi.1/go.mod h1:rJFeVxbEej2iuyeCJ3drKW+p5rOgtLIW3XhZ6ty7Fig=
 github.com/RyuaNerin/go-krypto v1.3.0 h1:smavTzSMAx8iuVlGb4pEwl9MD2qicqMzuXR2QWp2/Pg=
 github.com/RyuaNerin/go-krypto v1.3.0/go.mod h1:9R9TU936laAIqAmjcHo/LsaXYOZlymudOAxjaBf62UM=
 github.com/RyuaNerin/testingutil v0.1.0 h1:IYT6JL57RV3U2ml3dLHZsVtPOP6yNK7WUVdzzlpNrss=
@@ -330,8 +330,8 @@ github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf h1:b/3rm+KvxzuYRc
 github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
 github.com/sagernet/nftables v0.3.0-mod.4 h1:vnOtcDYeSXv2e5RoRuGH0lrpttQFJ8iC4ICS2nhlDSo=
 github.com/sagernet/nftables v0.3.0-mod.4/go.mod h1:8kslHG4VvYNihcco+i6uxIX7qbT8A56T0y5q7U44ZaQ=
-github.com/sagernet/quic-go v0.61.0-sing-box-mod.5 h1:D41e0fUHgdiYV2r4eGF3LgnBWNjYHm781dNW87IDzWc=
-github.com/sagernet/quic-go v0.61.0-sing-box-mod.5/go.mod h1:hmLC8GJPp+BrpBgrgJnacvI4fZGIhasuy1ROJJ8GR4E=
+github.com/sagernet/quic-go v0.61.0-sing-box-mod.6 h1:67bgUBU2QKK6jNz46GB5919wwRHcOHSafgmhD2gVf2Y=
+github.com/sagernet/quic-go v0.61.0-sing-box-mod.6/go.mod h1:hmLC8GJPp+BrpBgrgJnacvI4fZGIhasuy1ROJJ8GR4E=
 github.com/sagernet/sing v0.9.0-beta.4 h1:DYoEzb3FeCZ9bA66hJmL0NFDXckZpa4oYF/VpbFJEkE=
 github.com/sagernet/sing v0.9.0-beta.4/go.mod h1:K3Owt3xPhHugvlnlPPxZJ/exXdaJfEPOTNorGk4AXjo=
 github.com/sagernet/sing-cloudflared v0.1.3-0.20260706062323-d9787e794aa3 h1:3y6++yIa8XlDhxPkpR4p+7RUHVY2KTP9CPIGnWmOlO8=

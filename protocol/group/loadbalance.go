@@ -13,6 +13,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/interrupt"
+	"github.com/sagernet/sing-box/common/transportstats"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -62,11 +63,17 @@ type LoadBalance struct {
 	history                      *urltest.HistoryStorage
 	group                        *URLTestGroup
 	snapshot                     atomic.Pointer[CandidateSnapshot]
-	delayWindow                  int
-	windowWeight                 uint16
-	lastWeight                   uint16
-	windows                      map[string]*delayWindow
-	windowsMu                    sync.Mutex
+	// rebuildMu serialises snapshot rebuilds, which read the current snapshot
+	// and store a successor derived from it.
+	rebuildMu      sync.Mutex
+	sorter         *sorter
+	latencyStats   map[string]*transportstats.Recorder
+	latencyStatsMu sync.Mutex
+	// latencyRecorderFactory overrides how history recorders are built, so that
+	// tests can drive the window with their own clock. nil uses the wall clock.
+	latencyRecorderFactory func() *transportstats.Recorder
+	// statsEnabled is set once in Start and read without locking afterwards.
+	statsEnabled bool
 }
 
 func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
@@ -113,13 +120,44 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 	if options.TopN != nil {
 		lb.topNPrimary = options.TopN.Primary
 	}
-	if options.WeightedDelay != nil {
-		lb.delayWindow = options.WeightedDelay.Window
-		lb.windowWeight = options.WeightedDelay.WindowWeight
-		lb.lastWeight = options.WeightedDelay.LastWeight
-		lb.windows = make(map[string]*delayWindow)
+	memberSorter, err := newSorter(options.SorterWeights())
+	if err != nil {
+		return nil, err
 	}
+	lb.sorter = memberSorter
+	if memberSorter.usesLatencyWindow {
+		lb.latencyStats = make(map[string]*transportstats.Recorder)
+	}
+	if options.WeightedDelay != nil {
+		logger.WarnEvent("loadbalance.weighted_delay.deprecated",
+			"weighted_delay is deprecated, use sorter instead",
+			log.String("tag", tag))
+	}
+	lb.warnCoarseProbeInterval(logger, tag)
 	return lb, nil
+}
+
+// warnCoarseProbeInterval reports a probe interval too coarse for the latency
+// windows the sorter averages over. With an interval more than half the window,
+// the window holds at most two samples, or none, in which case the latest delay
+// is read instead, so the key behaves much like the latest delay.
+func (l *LoadBalance) warnCoarseProbeInterval(logger log.StructuredLogger, tag string) {
+	window := l.memberSorter().narrowestLatencyWindow
+	if window == 0 {
+		return
+	}
+	interval := l.interval
+	if interval == 0 {
+		interval = C.DefaultURLTestInterval
+	}
+	if interval*2 <= window {
+		return
+	}
+	logger.WarnEvent("loadbalance.sorter.coarse_interval",
+		"probe interval is too coarse for the sorter's latency window, which holds too few samples for a meaningful average",
+		log.String("tag", tag),
+		log.Duration("interval", interval),
+		log.Duration("window", window))
 }
 
 func (l *LoadBalance) Start() error {
@@ -156,7 +194,106 @@ func (l *LoadBalance) Start() error {
 	}
 	l.group = group
 	l.history = group.history
+	l.enableTransportStats()
 	l.seedInitialSnapshot()
+	return nil
+}
+
+// maxGroupDepth bounds how far the group walks into nested groups, so that a
+// configuration cycle cannot hang startup or scoring.
+const maxGroupDepth = 16
+
+// enableTransportStats asks every outbound reachable from this group to start
+// collecting the directions the sorter ranks on. It descends into nested groups,
+// because a nested member carries traffic through one of its own members and it
+// is that outbound which owns the connection being measured.
+//
+// Members are already started by the time a group starts, so enabling is
+// expected to take effect on the connections an outbound opens from now on.
+func (l *LoadBalance) enableTransportStats() {
+	directions := l.memberSorter().directions
+	if len(directions) == 0 {
+		return
+	}
+	l.statsEnabled = true
+	seen := make(map[string]int)
+	var enabled int
+	for _, outbounds := range []map[string]adapter.Outbound{l.primaryOutbounds, l.backupOutbounds} {
+		for _, detour := range outbounds {
+			enabled += l.enableTransportStatsOn(detour, directions, seen, 0)
+		}
+	}
+	if enabled == 0 {
+		l.logger.WarnEvent("loadbalance.sorter.unsupported",
+			"sorter reads transport statistics but no member reports them",
+			log.String("tag", l.Tag()))
+	}
+}
+
+// enableTransportStatsOn enables collection on detour, or on every outbound it
+// resolves to when it is a group, and returns how many were enabled.
+//
+// seen records the shallowest depth each outbound was visited at. An outbound
+// reached again at a shallower depth is walked again, because the earlier visit
+// may have been cut short by maxGroupDepth before reaching its members.
+func (l *LoadBalance) enableTransportStatsOn(detour adapter.Outbound, directions []adapter.TransportStatsDirection, seen map[string]int, depth int) int {
+	if detour == nil || depth >= maxGroupDepth {
+		return 0
+	}
+	previousDepth, visited := seen[detour.Tag()]
+	if visited && previousDepth <= depth {
+		return 0
+	}
+	seen[detour.Tag()] = depth
+	if member, isStatsMember := detour.(adapter.OutboundWithTransportStats); isStatsMember {
+		if visited {
+			// Already enabled on the deeper visit; enabling is idempotent but the
+			// count must not include it twice.
+			return 0
+		}
+		for _, direction := range directions {
+			member.EnableTransportStats(direction)
+		}
+		return 1
+	}
+	group, isGroup := detour.(adapter.OutboundGroup)
+	if !isGroup || l.outbound == nil {
+		return 0
+	}
+	var enabled int
+	for _, tag := range group.All() {
+		if nested, loaded := l.outbound.Outbound(tag); loaded {
+			enabled += l.enableTransportStatsOn(nested, directions, seen, depth+1)
+		}
+	}
+	return enabled
+}
+
+// resolveStatsMember follows a member down to the outbound currently carrying
+// its traffic and returns it when its protocol reports transport statistics.
+//
+// A nested group is resolved through its current selection. For a selector or
+// urltest that is exactly the outbound the traffic uses. A nested loadbalance
+// spreads its traffic over a whole pool, so its best ranked member stands in
+// for the pool and the statistics describe only that part of it.
+func (l *LoadBalance) resolveStatsMember(detour adapter.Outbound) adapter.OutboundWithTransportStats {
+	for depth := 0; depth < maxGroupDepth; depth++ {
+		if detour == nil {
+			return nil
+		}
+		if member, isStatsMember := detour.(adapter.OutboundWithTransportStats); isStatsMember {
+			return member
+		}
+		group, isGroup := detour.(adapter.OutboundGroup)
+		if !isGroup || l.outbound == nil {
+			return nil
+		}
+		next, loaded := l.outbound.Outbound(group.Now())
+		if !loaded || next == detour {
+			return nil
+		}
+		detour = next
+	}
 	return nil
 }
 
@@ -314,8 +451,8 @@ func (l *LoadBalance) poolByLastDelay(tags []string, outbounds map[string]adapte
 			unmeasured = append(unmeasured, candidate)
 		}
 	}
-	sortCandidates(measured)
-	sortCandidates(unmeasured)
+	sortCandidatesByLatency(measured)
+	sortCandidatesByLatency(unmeasured)
 	return append(measured, unmeasured...)
 }
 
@@ -458,7 +595,16 @@ func (l *LoadBalance) computeHashKey(metadata adapter.InboundContext) string {
 	return strings.Join(parts, "|")
 }
 
+// rebuildSnapshot re-ranks the members and republishes the candidate pool.
+//
+// It reads the previous snapshot, derives the next one from it and stores the
+// result, so concurrent rebuilds are serialised: the Clash API can call it
+// through PerformUpdateCheck while a health check round is calling it, and
+// without this they could duplicate a generation, clobber each other's pool, or
+// interrupt live connections twice.
 func (l *LoadBalance) rebuildSnapshot() {
+	l.rebuildMu.Lock()
+	defer l.rebuildMu.Unlock()
 	primaryCandidates := l.healthyCandidates(l.primaryTags, l.primaryOutbounds, true)
 	snap := l.snapshot.Load()
 	var previous []Candidate
@@ -539,17 +685,86 @@ func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adap
 		candidates = append(candidates, Candidate{
 			Tag:       tag,
 			Outbound:  detour,
-			Latency:   l.rankedDelay(tag, delay),
+			Latency:   delay,
 			IsPrimary: isPrimary,
 		})
 	}
-	sortCandidates(candidates)
+	l.scoreCandidates(candidates)
+	sortCandidatesByScore(candidates)
 	return candidates
 }
 
 const defaultLoadBalanceTolerance uint16 = 10
 
-func sortCandidates(candidates []Candidate) {
+// memberSorter returns the group's sorter, falling back to the latency only
+// ranking so that a zero valued LoadBalance behaves like an unconfigured one.
+func (l *LoadBalance) memberSorter() *sorter {
+	if l.sorter == nil {
+		return latencyOnlySorter
+	}
+	return l.sorter
+}
+
+// scoreCandidates fills in Score on every candidate from the configured sorter.
+func (l *LoadBalance) scoreCandidates(candidates []Candidate) {
+	breakdowns := l.memberSorter().score(candidates, func(candidate Candidate) metricSource {
+		source := metricSource{
+			latency:       candidate.Latency,
+			latencyWindow: l.latencyRecorderIfExists(candidate.Tag),
+		}
+		if l.statsEnabled {
+			if member := l.resolveStatsMember(candidate.Outbound); member != nil {
+				source.client = member.TransportStats(adapter.TransportStatsClient)
+				source.server = member.TransportStats(adapter.TransportStatsServer)
+			}
+		}
+		return source
+	})
+	l.logScores(breakdowns)
+}
+
+// logScores explains each member's score, which is how a weight is tuned. The
+// default sorter scores the raw delay, so it has nothing to explain.
+func (l *LoadBalance) logScores(breakdowns []breakdown) {
+	if l.logger == nil || l.memberSorter().isDefault || len(breakdowns) == 0 {
+		return
+	}
+	for _, member := range breakdowns {
+		fields := make([]log.Field, 0, len(member.Contributions)*2+2)
+		fields = append(fields, log.String("tag", member.Tag), log.Float64("score", member.Score))
+		for _, item := range member.Contributions {
+			fields = append(fields, log.Float64(item.Key, item.Weighted))
+			if !item.Measured {
+				fields = append(fields, log.Bool(item.Key+".estimated", true))
+			}
+		}
+		l.logger.DebugEvent("loadbalance.score", "loadbalance member score", fields...)
+	}
+}
+
+// sortCandidatesByScore orders candidates for ranking: best score first, then
+// lowest raw delay, then by tag so that the order is stable across rebuilds.
+//
+// The delay tie-break matters whenever a sorter cannot tell two members apart.
+// A metric no member reports contributes the same pool average to every score,
+// so a sorter built only from unreportable keys would otherwise leave the tag
+// deciding the order and ignore latency entirely.
+func sortCandidatesByScore(candidates []Candidate) {
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Score != candidates[j].Score {
+			return candidates[i].Score < candidates[j].Score
+		}
+		if candidates[i].Latency != candidates[j].Latency {
+			return candidates[i].Latency < candidates[j].Latency
+		}
+		return candidates[i].Tag < candidates[j].Tag
+	})
+}
+
+// sortCandidatesByLatency orders candidates by raw measured delay. Fail-over
+// uses it rather than the sorter, so that a dial that is already failing falls
+// back on the simplest signal available.
+func sortCandidatesByLatency(candidates []Candidate) {
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].Latency != candidates[j].Latency {
 			return candidates[i].Latency < candidates[j].Latency
@@ -558,15 +773,42 @@ func sortCandidates(candidates []Candidate) {
 	})
 }
 
+// worstCandidateIndex returns the candidate an incumbent set would give up
+// first, using the same ordering as sortCandidatesByScore.
 func worstCandidateIndex(candidates []Candidate) int {
 	worst := 0
 	for i := 1; i < len(candidates); i++ {
-		if candidates[i].Latency > candidates[worst].Latency ||
-			(candidates[i].Latency == candidates[worst].Latency && candidates[i].Tag > candidates[worst].Tag) {
+		if rankAfter(candidates[i], candidates[worst]) {
 			worst = i
 		}
 	}
 	return worst
+}
+
+// outranksBeyondTolerance reports whether next is better than incumbent by more
+// than tolerance, which is what it takes to displace an incumbent.
+//
+// Scores are compared first. When they tie, which happens whenever the sorter
+// cannot tell the two apart, the raw delay decides with the same tolerance, so
+// that a slow incumbent cannot hold its place just because nothing the sorter
+// reads distinguishes it. With the default sorter scores equal the delay, so
+// the second branch never changes the outcome there.
+func outranksBeyondTolerance(next, incumbent Candidate, tolerance uint16) bool {
+	if incumbent.Score != next.Score {
+		return incumbent.Score > next.Score+float64(tolerance)
+	}
+	return float64(incumbent.Latency) > float64(next.Latency)+float64(tolerance)
+}
+
+// rankAfter reports whether candidate ranks worse than other.
+func rankAfter(candidate, other Candidate) bool {
+	if candidate.Score != other.Score {
+		return candidate.Score > other.Score
+	}
+	if candidate.Latency != other.Latency {
+		return candidate.Latency > other.Latency
+	}
+	return candidate.Tag > other.Tag
 }
 
 func selectTopNWithTolerance(healthy []Candidate, n int, tolerance uint16, previous []Candidate) []Candidate {
@@ -605,7 +847,7 @@ func selectTopNWithTolerance(healthy []Candidate, n int, tolerance uint16, previ
 			continue
 		}
 		worst := worstCandidateIndex(selected)
-		if uint32(selected[worst].Latency) > uint32(next.Latency)+uint32(tolerance) {
+		if outranksBeyondTolerance(next, selected[worst], tolerance) {
 			delete(selectedSet, selected[worst].Tag)
 			selected[worst] = next
 			selectedSet[next.Tag] = struct{}{}
@@ -613,7 +855,7 @@ func selectTopNWithTolerance(healthy []Candidate, n int, tolerance uint16, previ
 		}
 		break
 	}
-	sortCandidates(selected)
+	sortCandidatesByScore(selected)
 	return selected
 }
 

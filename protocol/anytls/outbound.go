@@ -4,11 +4,14 @@ import (
 	"context"
 	"net"
 	"os"
+	"sync"
+	"sync/atomic"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/tls"
+	"github.com/sagernet/sing-box/common/transportstats"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -40,6 +43,14 @@ type Outbound struct {
 	sessionClient  *session.Client
 	uotClient      *uot.Client
 	logger         log.StructuredLogger
+
+	stats                 *transportstats.Collector
+	conns                 connTracker
+	localStatsUnavailable bool
+	serverStatsRequested  atomic.Bool
+	statsStart            sync.Once
+	statsAccess           sync.Mutex
+	statsCancel           context.CancelFunc
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSOutboundOptions) (adapter.Outbound, error) {
@@ -48,6 +59,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		ctx:     ctx,
 		server:  options.ServerOptions.Build(),
 		logger:  logger,
+		stats:   transportstats.NewCollector(),
 	}
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, C.ErrTLSRequired
@@ -92,6 +104,9 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		Logger:                      logger,
 	}
 	outbound.clientMetadata = options.ClientMetadata
+	// With a detour the socket under the TLS connection belongs to another
+	// outbound's transport, so its TCP_INFO would describe that hop instead.
+	outbound.localStatsUnavailable = options.DialerOptions.Detour != ""
 	return outbound, nil
 }
 
@@ -103,8 +118,11 @@ func (h *Outbound) Start(stage adapter.StartStage) error {
 	if err != nil {
 		return err
 	}
+	h.statsAccess.Lock()
 	h.client = client
+	h.statsAccess.Unlock()
 	h.sessionClient = sessionClientOf(client)
+	h.applyServerStatsHandler()
 	h.uotClient = &uot.Client{
 		Dialer:  anytlsDialer(h.createProxy),
 		Version: uot.Version,
@@ -137,7 +155,11 @@ func (d anytlsDialer) ListenPacket(ctx context.Context, destination M.Socksaddr)
 }
 
 func (h *Outbound) dialOut(ctx context.Context) (net.Conn, error) {
-	return h.dialer.DialTLSContext(ctx, h.server)
+	conn, err := h.dialer.DialTLSContext(ctx, h.server)
+	if err != nil {
+		return nil, err
+	}
+	return h.conns.track(conn), nil
 }
 
 func (h *Outbound) MultiplexEnabled() bool {
@@ -169,5 +191,10 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 }
 
 func (h *Outbound) Close() error {
+	h.statsAccess.Lock()
+	if h.statsCancel != nil {
+		h.statsCancel()
+	}
+	h.statsAccess.Unlock()
 	return common.Close(common.PtrOrNil(h.client))
 }

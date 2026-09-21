@@ -1,63 +1,60 @@
 package group
 
-import "math"
+import "github.com/sagernet/sing-box/common/transportstats"
 
-type delayWindow struct {
-	samples  []uint16
-	weighted uint16
+// The health check history feeds the sorter's latency_avg_* keys. It is only
+// kept when a configured key reads it, so a group ranking on the latest delay
+// alone allocates nothing.
+
+// newLatencyRecorder builds a history recorder. It is a field on the group so
+// that tests can drive the window with their own clock.
+func (l *LoadBalance) newLatencyRecorder() *transportstats.Recorder {
+	if l.latencyRecorderFactory != nil {
+		return l.latencyRecorderFactory()
+	}
+	return transportstats.NewRecorder()
 }
 
-func computeWeightedDelay(samples []uint16, windowWeight, lastWeight uint16) uint16 {
-	n := uint64(len(samples))
-	last := uint64(samples[n-1])
-	var sum uint64
-	for _, sample := range samples {
-		sum += uint64(sample)
+// latencyRecorder returns the member's health check history, creating it on
+// first use. It returns nil when no configured key reads the history.
+func (l *LoadBalance) latencyRecorder(tag string) *transportstats.Recorder {
+	if l.latencyStats == nil {
+		return nil
 	}
-	weighted := (uint64(windowWeight)*sum + uint64(lastWeight)*last*n) / (uint64(windowWeight+lastWeight) * n)
-	if weighted > math.MaxUint16 {
-		return math.MaxUint16
+	l.latencyStatsMu.Lock()
+	defer l.latencyStatsMu.Unlock()
+	recorder := l.latencyStats[tag]
+	if recorder == nil {
+		recorder = l.newLatencyRecorder()
+		l.latencyStats[tag] = recorder
 	}
-	return uint16(weighted)
+	return recorder
 }
 
-func (l *LoadBalance) observeDelay(tag string, delay uint16) uint16 {
-	if l.delayWindow == 0 {
-		return delay
+// latencyRecorderIfExists returns the member's health check history without
+// creating it, so that scoring does not allocate for members that never
+// reported a delay.
+func (l *LoadBalance) latencyRecorderIfExists(tag string) *transportstats.Recorder {
+	if l.latencyStats == nil {
+		return nil
 	}
-	l.windowsMu.Lock()
-	defer l.windowsMu.Unlock()
-	window := l.windows[tag]
-	if window == nil {
-		window = &delayWindow{}
-		l.windows[tag] = window
-	}
-	window.samples = append(window.samples, delay)
-	for len(window.samples) > l.delayWindow {
-		window.samples = window.samples[1:]
-	}
-	window.weighted = computeWeightedDelay(window.samples, l.windowWeight, l.lastWeight)
-	return window.weighted
+	l.latencyStatsMu.Lock()
+	defer l.latencyStatsMu.Unlock()
+	return l.latencyStats[tag]
 }
 
+// observeDelay records a successful health check result.
+func (l *LoadBalance) observeDelay(tag string, delay uint16) {
+	if recorder := l.latencyRecorder(tag); recorder != nil {
+		recorder.AddLatency(float64(delay))
+	}
+}
+
+// resetWindow drops a member's health check history, which happens when it
+// fails a probe or a dial, so that a recovering member is not ranked on
+// averages from before the failure.
 func (l *LoadBalance) resetWindow(tag string) {
-	if l.delayWindow == 0 {
-		return
+	if recorder := l.latencyRecorderIfExists(tag); recorder != nil {
+		recorder.ResetLatency()
 	}
-	l.windowsMu.Lock()
-	delete(l.windows, tag)
-	l.windowsMu.Unlock()
-}
-
-func (l *LoadBalance) rankedDelay(tag string, delay uint16) uint16 {
-	if l.delayWindow == 0 {
-		return delay
-	}
-	l.windowsMu.Lock()
-	defer l.windowsMu.Unlock()
-	window := l.windows[tag]
-	if window == nil || len(window.samples) == 0 {
-		return delay
-	}
-	return window.weighted
 }

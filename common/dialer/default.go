@@ -37,6 +37,7 @@ type DefaultDialer struct {
 	udpListener            net.ListenConfig
 	udpAddr4               string
 	udpAddr6               string
+	udpBindPort            uint16
 	netns                  string
 	autoDetectBindFunc     control.Func
 	connectionManager      adapter.ConnectionManager
@@ -86,7 +87,7 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		dialer.Control = control.Append(dialer.Control, setMarkWrapper(networkManager, uint32(options.RoutingMark), false))
 		listener.Control = control.Append(listener.Control, setMarkWrapper(networkManager, uint32(options.RoutingMark), false))
 	}
-	disableDefaultBind := options.BindInterface != "" || options.Inet4BindAddress != nil || options.Inet6BindAddress != nil
+	disableDefaultBind := options.BindInterface != "" || options.Inet4BindAddress != nil || options.Inet6BindAddress != nil || options.DisableDefaultBind
 	if disableDefaultBind || options.TCPFastOpen {
 		if options.NetworkStrategy != nil || len(options.NetworkType) > 0 && options.FallbackNetworkType == nil && options.FallbackDelay == 0 {
 			return nil, E.New("`network_strategy` is conflict with `bind_interface`, `inet4_bind_address`, `inet6_bind_address` and `tcp_fast_open`")
@@ -149,6 +150,14 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		}
 		dialer.Control = control.Append(dialer.Control, control.BindAddressNoPort())
 	}
+	if options.NonLocalBind {
+		nonLocalBindFunc, err := nonLocalBind()
+		if err != nil {
+			return nil, err
+		}
+		dialer.Control = control.Append(dialer.Control, nonLocalBindFunc)
+		listener.Control = control.Append(listener.Control, nonLocalBindFunc)
+	}
 	if options.ConnectTimeout != 0 {
 		dialer.Timeout = time.Duration(options.ConnectTimeout)
 	} else {
@@ -193,26 +202,20 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		dialer4    = dialer
 		udpDialer4 = dialer
 		udpAddr4   string
-	)
-	if options.Inet4BindAddress != nil {
-		bindAddr := options.Inet4BindAddress.Build(netip.IPv4Unspecified())
-		dialer4.LocalAddr = &net.TCPAddr{IP: bindAddr.AsSlice()}
-		udpDialer4.LocalAddr = &net.UDPAddr{IP: bindAddr.AsSlice(), Port: int(options.UDPBindPort)}
-		udpAddr4 = M.SocksaddrFrom(bindAddr, options.UDPBindPort).String()
-	} else if options.UDPBindPort != 0 {
-		udpDialer4.LocalAddr = &net.UDPAddr{IP: net.IPv4zero, Port: int(options.UDPBindPort)}
-		udpAddr4 = M.SocksaddrFrom(netip.IPv4Unspecified(), options.UDPBindPort).String()
-	}
-	var (
 		dialer6    = dialer
 		udpDialer6 = dialer
 		udpAddr6   string
 	)
+	if options.Inet4BindAddress != nil {
+		bindAddr := options.Inet4BindAddress.Build(netip.IPv4Unspecified())
+		udpAddr4 = applyBindAddress(&dialer4, &udpDialer4, bindAddr, options.UDPBindPort)
+	} else if options.UDPBindPort != 0 {
+		udpDialer4.LocalAddr = &net.UDPAddr{IP: net.IPv4zero, Port: int(options.UDPBindPort)}
+		udpAddr4 = M.SocksaddrFrom(netip.IPv4Unspecified(), options.UDPBindPort).String()
+	}
 	if options.Inet6BindAddress != nil {
 		bindAddr := options.Inet6BindAddress.Build(netip.IPv6Unspecified())
-		dialer6.LocalAddr = &net.TCPAddr{IP: bindAddr.AsSlice()}
-		udpDialer6.LocalAddr = &net.UDPAddr{IP: bindAddr.AsSlice(), Port: int(options.UDPBindPort)}
-		udpAddr6 = M.SocksaddrFrom(bindAddr, options.UDPBindPort).String()
+		udpAddr6 = applyBindAddress(&dialer6, &udpDialer6, bindAddr, options.UDPBindPort)
 	} else if options.UDPBindPort != 0 {
 		udpDialer6.LocalAddr = &net.UDPAddr{IP: net.IPv6unspecified, Port: int(options.UDPBindPort)}
 		udpAddr6 = M.SocksaddrFrom(netip.IPv6Unspecified(), options.UDPBindPort).String()
@@ -230,6 +233,7 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		udpListener:            listener,
 		udpAddr4:               udpAddr4,
 		udpAddr6:               udpAddr6,
+		udpBindPort:            options.UDPBindPort,
 		netns:                  options.NetNs,
 		autoDetectBindFunc:     autoDetectBindFunc,
 		connectionManager:      connectionManager,
@@ -241,6 +245,48 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		fallbackNetworkType:    fallbackNetworkType,
 		networkFallbackDelay:   networkFallbackDelay,
 	}, nil
+}
+
+// applyBindAddress binds the TCP and connected-UDP dialers of one address
+// family to bindAddr and returns the matching unconnected-UDP listen address.
+func applyBindAddress(tcpDialer *net.Dialer, udpDialer *net.Dialer, bindAddr netip.Addr, udpBindPort uint16) string {
+	tcpDialer.LocalAddr = &net.TCPAddr{IP: bindAddr.AsSlice()}
+	udpDialer.LocalAddr = &net.UDPAddr{IP: bindAddr.AsSlice(), Port: int(udpBindPort)}
+	return M.SocksaddrFrom(bindAddr, udpBindPort).String()
+}
+
+// WithBindAddress returns a copy of d whose IPv4 and IPv6 sockets bind to
+// inet4 and inet6. An invalid address keeps that family's binding from d.
+// The copy shares d's socket options, connection tracking and network
+// namespace; only the local addresses differ.
+func (d *DefaultDialer) WithBindAddress(inet4 netip.Addr, inet6 netip.Addr) *DefaultDialer {
+	clone := &DefaultDialer{
+		dialer4:                d.dialer4,
+		dialer6:                d.dialer6,
+		udpDialer4:             d.udpDialer4,
+		udpDialer6:             d.udpDialer6,
+		udpListener:            d.udpListener,
+		udpAddr4:               d.udpAddr4,
+		udpAddr6:               d.udpAddr6,
+		udpBindPort:            d.udpBindPort,
+		netns:                  d.netns,
+		autoDetectBindFunc:     d.autoDetectBindFunc,
+		connectionManager:      d.connectionManager,
+		networkManager:         d.networkManager,
+		powerManager:           d.powerManager,
+		networkStrategy:        d.networkStrategy,
+		defaultNetworkStrategy: d.defaultNetworkStrategy,
+		networkType:            d.networkType,
+		fallbackNetworkType:    d.fallbackNetworkType,
+		networkFallbackDelay:   d.networkFallbackDelay,
+	}
+	if inet4.IsValid() {
+		clone.udpAddr4 = applyBindAddress(&clone.dialer4.Dialer, &clone.udpDialer4, inet4.Unmap(), d.udpBindPort)
+	}
+	if inet6.IsValid() {
+		clone.udpAddr6 = applyBindAddress(&clone.dialer6.Dialer, &clone.udpDialer6, inet6, d.udpBindPort)
+	}
+	return clone
 }
 
 func setMarkWrapper(networkManager adapter.NetworkManager, mark uint32, isDefault bool) control.Func {

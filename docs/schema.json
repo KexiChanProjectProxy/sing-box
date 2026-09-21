@@ -11481,6 +11481,12 @@
             },
             "xlat464": {
               "$ref": "#/$defs/Xlat464Options"
+            },
+            "non_local_bind": {
+              "type": "boolean"
+            },
+            "source_bind": {
+              "$ref": "#/$defs/SourceBindOptions"
             }
           },
           "required": [
@@ -18256,6 +18262,92 @@
         },
         "userkey": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourceBindOptions": {
+      "type": "object",
+      "properties": {
+        "inet4_addresses": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "inet6_addresses": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "ttl": {
+          "$ref": "#/$defs/Duration"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceBindRule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourceBindRule": {
+      "type": "object",
+      "properties": {
+        "source_ip_cidr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "inet4_addresses": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "inet6_addresses": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
         }
       },
       "additionalProperties": false

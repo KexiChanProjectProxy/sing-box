@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.17
+
+* 新增 [`direct.source_bind`](/zh/configuration/outbound/direct/#source_bind)：按客户端源 IP 选择出站绑定地址，支持按源 CIDR 配置规则，未匹配的客户端从地址池中随机分配一个地址，并在其持续于 `ttl` 内新建连接期间保持不变
+* 新增 [`direct.non_local_bind`](/zh/configuration/outbound/direct/#non_local_bind)：在 Linux 与 FreeBSD 上允许绑定未分配给本地接口的地址，例如路由到本机的 IPv6 前缀内的地址
+
 #### 1.14.0.16
 
 * 升级 sing-quic 至上游 v0.7.0：Brutal 按设计补偿丢包；[`naive`](/zh/configuration/inbound/naive/#quic_congestion_control) 的各 BBR 变体改为映射到同一 BBR 实现的配置档

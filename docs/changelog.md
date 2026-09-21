@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.17
+
+* Add [`direct.source_bind`](/configuration/outbound/direct/#source_bind): choose the outbound bind address by client source IP, with source CIDR rules and a random per-client address from a pool that is kept while the client keeps connecting within `ttl`
+* Add [`direct.non_local_bind`](/configuration/outbound/direct/#non_local_bind): bind to addresses not assigned to a local interface, such as addresses inside a routed IPv6 prefix, on Linux and FreeBSD
+
 #### 1.14.0.16
 
 * Upgrade sing-quic to upstream v0.7.0: Brutal now compensates for loss as designed, and the [`naive`](/configuration/inbound/naive/#quic_congestion_control) BBR variants map onto one BBR implementation's profiles

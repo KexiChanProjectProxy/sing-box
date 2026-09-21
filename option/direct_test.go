@@ -3,6 +3,7 @@ package option
 import (
 	"net/netip"
 	"testing"
+	"time"
 
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badoption"
@@ -165,4 +166,73 @@ func TestDirectOutboundXLAT464PrefixInvariant(t *testing.T) {
 	require.NotNil(t, options.Xlat464.Prefix)
 	// badoption.Prefix is a named netip.Prefix; sanity-check the round-trip.
 	_ = badoption.Prefix(*options.Xlat464.Prefix)
+}
+
+func TestDirectOutboundSourceBindValid(t *testing.T) {
+	t.Parallel()
+
+	var options DirectOutboundOptions
+	err := json.Unmarshal([]byte(`{
+		"non_local_bind": true,
+		"source_bind": {
+			"inet4_addresses": ["203.0.113.0/28", "198.51.100.7"],
+			"inet6_addresses": "2001:db8:1::/64",
+			"ttl": "30m",
+			"rules": [{
+				"source_ip_cidr": ["10.0.1.0/24", "10.0.2.5"],
+				"inet4_addresses": "203.0.113.9",
+				"inet6_addresses": "2001:db8:1::9/120"
+			}]
+		}
+	}`), &options)
+	require.NoError(t, err)
+	require.True(t, options.NonLocalBind)
+	require.NotNil(t, options.SourceBind)
+	require.Len(t, options.SourceBind.Inet4Addresses, 2)
+	require.Equal(t, netip.MustParsePrefix("198.51.100.7/32"), netip.Prefix(*options.SourceBind.Inet4Addresses[1]))
+	require.Len(t, options.SourceBind.Inet6Addresses, 1)
+	require.Equal(t, badoption.Duration(30*time.Minute), options.SourceBind.TTL)
+	require.Len(t, options.SourceBind.Rules, 1)
+	require.Equal(t, netip.MustParsePrefix("10.0.2.5/32"), netip.Prefix(*options.SourceBind.Rules[0].SourceIPCIDR[1]))
+}
+
+// TestDirectOutboundSourceBindRulesOnly proves a rules-only block is valid:
+// unmatched clients then keep the dial fields' bind addresses.
+func TestDirectOutboundSourceBindRulesOnly(t *testing.T) {
+	t.Parallel()
+
+	var options DirectOutboundOptions
+	err := json.Unmarshal([]byte(`{"source_bind":{"rules":[{"source_ip_cidr":"10.0.0.0/8","inet6_addresses":"2001:db8::/64"}]}}`), &options)
+	require.NoError(t, err)
+	require.Zero(t, options.SourceBind.TTL)
+}
+
+func TestDirectOutboundSourceBindRejects(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name    string
+		content string
+		errText string
+	}{
+		{"empty block", `{"source_bind":{}}`, "at least one of"},
+		{"negative ttl", `{"source_bind":{"inet4_addresses":"192.0.2.1","ttl":"-1h"}}`, "ttl must not be negative"},
+		{"ipv6 in inet4", `{"source_bind":{"inet4_addresses":"2001:db8::1"}}`, "not an IPv4 address"},
+		{"ipv4 in inet6", `{"source_bind":{"inet6_addresses":"192.0.2.0/24"}}`, "not an IPv6 address"},
+		{"mapped address", `{"source_bind":{"inet6_addresses":"::ffff:192.0.2.1"}}`, "IPv4-mapped"},
+		{"unspecified", `{"source_bind":{"inet4_addresses":"0.0.0.0"}}`, "unusable bind address"},
+		{"rule without cidr", `{"source_bind":{"rules":[{"inet4_addresses":"192.0.2.1"}]}}`, "rules[0]: missing source_ip_cidr"},
+		{"rule without addresses", `{"source_bind":{"rules":[{"source_ip_cidr":"10.0.0.0/8"}]}}`, "rules[0]: missing inet4_addresses and inet6_addresses"},
+		{"rule wrong family", `{"source_bind":{"rules":[{"source_ip_cidr":"10.0.0.0/8","inet4_addresses":"2001:db8::1"}]}}`, "rules[0].inet4_addresses: not an IPv4 address"},
+		{"unknown field", `{"source_bind":{"inet4_addresses":"192.0.2.1","pool":[]}}`, "pool"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			var options DirectOutboundOptions
+			err := json.Unmarshal([]byte(testCase.content), &options)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), testCase.errText)
+		})
+	}
 }

@@ -60,6 +60,29 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		RemoteIsDomain: true,
 		DirectOutbound: true,
 	}
+	if options.NonLocalBind {
+		dialerOptions.Options.NonLocalBind = true
+	}
+	var wrappers []func(dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer
+	if options.SourceBind != nil {
+		if options.NetworkStrategy != nil || len(options.NetworkType) > 0 || len(options.FallbackNetworkType) > 0 {
+			return nil, E.New("`source_bind` is conflict with `network_strategy`, `network_type` and `fallback_network_type`")
+		}
+		dialerOptions.Options.DisableDefaultBind = true
+		// The mapper is built before the base dialer exists; the wrapper
+		// hands it the base once dialer.NewWithOptions constructs it.
+		var baseDialer *dialer.DefaultDialer
+		mapper, err := newSourceBindMapper(logger, *options.SourceBind, func(inet4 netip.Addr, inet6 netip.Addr) dialer.ParallelInterfaceDialer {
+			return baseDialer.WithBindAddress(inet4, inet6)
+		})
+		if err != nil {
+			return nil, err
+		}
+		wrappers = append(wrappers, func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
+			baseDialer = base.(*dialer.DefaultDialer)
+			return &sourceBindDialer{base: base, mapper: mapper}
+		})
+	}
 	var xlat464 *xlat464AddressMapper
 	if options.Xlat464 != nil {
 		mapper, err := newXLAT464AddressMapper(*options.Xlat464)
@@ -67,14 +90,22 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 			return nil, err
 		}
 		xlat464 = &mapper
-		dialerOptions.DialerWrapper = func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
+		wrappers = append(wrappers, func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
 			return &xlat464Dialer{dialer: base, mapper: *xlat464}
-		}
+		})
 		// Strict XLAT464 must resolve only A records so a native AAAA cannot
 		// bypass the configured translator. When allow_ipv6 is explicitly
 		// enabled, keep the configured resolver strategy so dual-stack peers
 		// can receive both families through their pinned route.
 		dialerOptions.ForceDomainStrategyIPv4Only = !options.Xlat464.AllowIPv6
+	}
+	if len(wrappers) > 0 {
+		dialerOptions.DialerWrapper = func(base dialer.ParallelInterfaceDialer) dialer.ParallelInterfaceDialer {
+			for _, wrapper := range wrappers {
+				base = wrapper(base)
+			}
+			return base
+		}
 	}
 	outboundDialer, err := dialer.NewWithOptions(dialerOptions)
 	if err != nil {
@@ -90,7 +121,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		fallbackDelay:  time.Duration(options.FallbackDelay),
 		dialer:         outboundDialer.(dialer.ParallelInterfaceDialer),
 		xlat464:        xlat464,
-		isEmpty: reflect.DeepEqual(options.DialerOptions, option.DialerOptions{
+		isEmpty: options.SourceBind == nil && !options.NonLocalBind && reflect.DeepEqual(options.DialerOptions, option.DialerOptions{
 			AbstractDialerOptions: option.AbstractDialerOptions{UDPFragmentDefault: true},
 		}),
 	}

@@ -68,7 +68,7 @@ func TestCloudflareWARPOptionsAutoMode(t *testing.T) {
 	t.Parallel()
 
 	var options CloudflareWARPOutboundOptions
-	err := json.Unmarshal([]byte(`{"license":"abc","access_jwt":"jwt","device_name":"box"}`), &options)
+	err := json.Unmarshal([]byte(`{"license":"abc","access_jwt":"jwt","device_name":"box","ephemeral":true}`), &options)
 	require.NoError(t, err)
 	require.False(t, options.StaticMode())
 }
@@ -86,6 +86,7 @@ func TestCloudflareWARPValidation(t *testing.T) {
 		{"device id without token", `{"private_key":"k","address":"172.16.0.2/32","device_id":"d"}`, "device_id and access_token must be set together"},
 		{"device id in auto mode", `{"device_id":"d","access_token":"t"}`, "device_id and access_token require private_key and address"},
 		{"license without device", `{"private_key":"k","address":"172.16.0.2/32","license":"l"}`, "license requires device_id and access_token"},
+		{"ephemeral in static mode", `{"private_key":"k","address":"172.16.0.2/32","ephemeral":true}`, "ephemeral is only used for automatic registration"},
 		{"jwt in static mode", `{"private_key":"k","address":"172.16.0.2/32","access_jwt":"j"}`, "access_jwt is only used for automatic registration"},
 		{"non host address", `{"private_key":"k","address":"172.16.0.0/24"}`, "address must be a single host prefix"},
 		{"two ipv4 addresses", `{"private_key":"k","address":["172.16.0.2/32","172.16.0.3/32"]}`, "at most one IPv4 address"},

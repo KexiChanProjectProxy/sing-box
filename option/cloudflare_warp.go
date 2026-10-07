@@ -21,6 +21,7 @@ type CloudflareWARPOutboundOptions struct {
 	License           string                           `json:"license,omitempty"`
 	AccessJWT         string                           `json:"access_jwt,omitempty"`
 	DeviceName        string                           `json:"device_name,omitempty"`
+	Ephemeral         bool                             `json:"ephemeral,omitempty"`
 	APIDetour         string                           `json:"api_detour,omitempty"`
 	Network           NetworkList                      `json:"network,omitempty"`
 	MTU               uint32                           `json:"mtu,omitempty"`
@@ -59,6 +60,9 @@ func (o *CloudflareWARPOutboundOptions) Validate() error {
 		}
 		if o.DeviceName != "" {
 			return E.New(prefix, "device_name is only used for automatic registration; remove it or remove private_key and address")
+		}
+		if o.Ephemeral {
+			return E.New(prefix, "ephemeral is only used for automatic registration; remove it or remove private_key and address")
 		}
 		var hasInet4, hasInet6 bool
 		for _, prefixAddress := range o.Address {

@@ -36,14 +36,15 @@ import (
 )
 
 const (
-	readyWaitTimeout    = 10 * time.Second
-	minReconnectDelay   = time.Second
-	maxReconnectDelay   = 30 * time.Second
-	maxAPIRetryDelay    = 5 * time.Minute
-	stableSessionTime   = time.Minute
-	tooLargeLogInterval = time.Minute
-	defaultServerPort   = warpapi.DefaultPort
-	registrationTimeout = time.Minute
+	readyWaitTimeout       = 10 * time.Second
+	minReconnectDelay      = time.Second
+	maxReconnectDelay      = 30 * time.Second
+	maxAPIRetryDelay       = 5 * time.Minute
+	stableSessionTime      = time.Minute
+	tooLargeLogInterval    = time.Minute
+	defaultServerPort      = warpapi.DefaultPort
+	registrationTimeout    = time.Minute
+	ephemeralDeleteTimeout = 5 * time.Second
 )
 
 func RegisterOutbound(registry *outbound.Registry) {
@@ -83,6 +84,7 @@ type Outbound struct {
 	kick         chan struct{}
 	kicked       atomic.Bool
 	lastTooLarge atomic.Int64
+	closeOnce    sync.Once
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.CloudflareWARPOutboundOptions) (adapter.Outbound, error) {
@@ -200,11 +202,11 @@ func (o *Outbound) Start(stage adapter.StartStage) error {
 	case adapter.StartStateStart:
 		// The cache file service is registered after outbounds are created,
 		// so it can only be looked up once the box starts.
-		if o.static == nil {
+		if o.static == nil && !o.options.Ephemeral {
 			o.cacheFile = service.FromContext[adapter.CacheFile](o.ctx)
 			if o.cacheFile == nil {
 				return E.New("cloudflare-warp: automatic registration requires experimental.cache_file.enabled; ",
-					"alternatively set private_key and address from `sing-box generate warp-registration`")
+					"alternatively set ephemeral, or private_key and address from `sing-box generate warp-registration`")
 			}
 		}
 		return o.device.Start()
@@ -218,11 +220,23 @@ func (o *Outbound) Start(stage adapter.StartStage) error {
 }
 
 func (o *Outbound) Close() error {
-	o.cancel()
+	var err error
+	o.closeOnce.Do(func() {
+		err = o.close()
+	})
+	return err
+}
+
+func (o *Outbound) close() error {
 	o.access.Lock()
 	session := o.session
 	started := o.started
+	registration := o.registration
 	o.access.Unlock()
+	// Delete before tearing anything down so DNS that is routed through this
+	// tunnel can still resolve the API host.
+	o.deleteEphemeral(registration)
+	o.cancel()
 	if session != nil {
 		session.Close()
 	}

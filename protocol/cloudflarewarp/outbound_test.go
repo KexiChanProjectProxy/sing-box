@@ -7,12 +7,15 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -304,4 +307,67 @@ func TestOutboundNotReady(t *testing.T) {
 	defer cancel()
 	_, err = created.DialContext(ctx, N.NetworkTCP, M.SocksaddrFrom(echoInet4, 80))
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestOutboundEphemeralRegistration(t *testing.T) {
+	server, err := warptest.NewServer(warptest.Options{})
+	require.NoError(t, err)
+	defer server.Close()
+	serveEcho(t, server)
+
+	var (
+		access        sync.Mutex
+		registrations int
+		deleted       []string
+	)
+	api := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		access.Lock()
+		defer access.Unlock()
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/reg":
+			registrations++
+			fmt.Fprintf(writer, `{"id":"device-%d","token":"token-%d","account":{"id":"account"}}`, registrations, registrations)
+		case request.Method == http.MethodPatch && strings.HasPrefix(request.URL.Path, "/reg/"):
+			json.NewEncoder(writer).Encode(map[string]any{
+				"id": strings.TrimPrefix(request.URL.Path, "/reg/"),
+				"config": map[string]any{
+					"peers": []any{map[string]any{
+						"public_key": encodePublicKey(t, server.PublicKey),
+						"endpoint":   map[string]any{"v4": "127.0.0.1:0"},
+					}},
+					"interface": map[string]any{"addresses": map[string]any{"v4": clientInet4.Addr().String()}},
+				},
+			})
+		case request.Method == http.MethodDelete && strings.HasPrefix(request.URL.Path, "/reg/"):
+			require.Equal(t, "Bearer token-"+strings.TrimPrefix(request.URL.Path, "/reg/device-"), request.Header.Get("Authorization"))
+			deleted = append(deleted, strings.TrimPrefix(request.URL.Path, "/reg/"))
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer api.Close()
+	previousBaseURL := apiBaseURL
+	apiBaseURL = api.URL
+	testAPIHTTPClient = api.Client()
+	t.Cleanup(func() {
+		apiBaseURL = previousBaseURL
+		testAPIHTTPClient = nil
+	})
+
+	options := option.CloudflareWARPOutboundOptions{
+		ServerOptions: option.ServerOptions{Server: "127.0.0.1", ServerPort: uint16(server.Addr().Port)},
+		Ephemeral:     true,
+	}
+	for run := 1; run <= 2; run++ {
+		// No cache file is registered in the context.
+		outbound := startOutbound(t, service.ContextWithDefaultRegistry(context.Background()), options)
+		assertEcho(t, outbound)
+		require.NoError(t, outbound.Close())
+		access.Lock()
+		require.Equal(t, run, registrations)
+		require.Equal(t, fmt.Sprintf("device-%d", run), deleted[len(deleted)-1])
+		require.Len(t, deleted, run)
+		access.Unlock()
+	}
 }

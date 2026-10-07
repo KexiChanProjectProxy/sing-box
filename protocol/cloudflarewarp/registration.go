@@ -74,6 +74,11 @@ func (o *Outbound) loadRegistration(licenseDone *bool) (*warpapi.Registration, *
 				o.logger.WarnEvent("warp.license.error", "failed to apply license", log.Err(err))
 			}
 		}
+	} else if o.options.Ephemeral {
+		registration, err = o.registerEphemeral()
+		if err != nil {
+			return nil, nil, err
+		}
 	} else {
 		registration, err = o.loadCachedRegistration()
 		if err != nil {
@@ -117,20 +122,11 @@ func (o *Outbound) loadCachedRegistration() (*warpapi.Registration, error) {
 	}
 	changed := false
 	if registration == nil {
-		privateKey, err := warpapi.GeneratePrivateKey()
-		if err != nil {
-			return nil, err
-		}
-		registration, err = client.Register(ctx, privateKey, warpapi.RegisterOptions{
-			Name:      o.options.DeviceName,
-			AccessJWT: o.options.AccessJWT,
-			License:   o.options.License,
-		})
+		registration, err = o.register(ctx, client)
 		if err != nil {
 			return nil, err
 		}
 		changed = true
-		o.logger.InfoEvent("warp.register", "registered a new WARP device", log.String("device_id", registration.DeviceID))
 	} else if o.options.License != "" && o.options.License != registration.License {
 		_, err = client.ApplyLicense(ctx, registration.DeviceID, registration.AccessToken, o.options.License)
 		if err != nil {
@@ -153,12 +149,61 @@ func (o *Outbound) loadCachedRegistration() (*warpapi.Registration, error) {
 	return registration, nil
 }
 
+func (o *Outbound) register(ctx context.Context, client *warpapi.Client) (*warpapi.Registration, error) {
+	privateKey, err := warpapi.GeneratePrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	registration, err := client.Register(ctx, privateKey, warpapi.RegisterOptions{
+		Name:      o.options.DeviceName,
+		AccessJWT: o.options.AccessJWT,
+		License:   o.options.License,
+	})
+	if err != nil {
+		return nil, err
+	}
+	o.logger.InfoEvent("warp.register", "registered a new WARP device", log.String("device_id", registration.DeviceID), log.Bool("ephemeral", o.options.Ephemeral))
+	return registration, nil
+}
+
+// registerEphemeral registers a device that lives only in memory and is
+// deleted again when the outbound closes.
+func (o *Outbound) registerEphemeral() (*warpapi.Registration, error) {
+	client, err := o.apiClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(o.ctx, registrationTimeout)
+	defer cancel()
+	return o.register(ctx, client)
+}
+
+// deleteEphemeral removes an ephemeral device from Cloudflare, best effort.
+func (o *Outbound) deleteEphemeral(registration *warpapi.Registration) {
+	if registration == nil || !o.options.Ephemeral {
+		return
+	}
+	client, err := o.apiClient()
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), ephemeralDeleteTimeout)
+		err = client.DeleteDevice(ctx, registration.DeviceID, registration.AccessToken)
+		cancel()
+	}
+	if err != nil {
+		o.logger.WarnEvent("warp.unregister.error", "failed to delete the ephemeral WARP device", log.String("device_id", registration.DeviceID), log.Err(err))
+		return
+	}
+	o.logger.InfoEvent("warp.unregister", "deleted the ephemeral WARP device", log.String("device_id", registration.DeviceID))
+}
+
 // resetRegistration drops the in-memory and cached registration so the next
 // attempt registers a new device.
 func (o *Outbound) resetRegistration() {
 	o.access.Lock()
+	registration := o.registration
 	o.registration, o.privateKey = nil, nil
 	o.access.Unlock()
+	o.deleteEphemeral(registration)
 	if o.cacheFile != nil {
 		err := o.cacheFile.DeleteCloudflareWARPRegistration(o.Tag())
 		if err != nil {

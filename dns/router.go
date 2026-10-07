@@ -1073,7 +1073,7 @@ func (r *Router) prepareExchange(ctx context.Context, message *mDNS.Msg) (*dnsEx
 		}, nil
 	}
 	if isResolverDiscoveryQuery(message.Question[0]) {
-		r.logger.DebugContext(ctx, "rejected resolver discovery query ", FormatQuestion(message.Question[0].String()))
+		r.logger.DebugEventContext(ctx, "dns.reject", "rejected resolver discovery query", log.String("question", FormatQuestion(message.Question[0].String())))
 		return nil, &mDNS.Msg{
 			MsgHdr: mDNS.MsgHdr{
 				Id:                 message.Id,

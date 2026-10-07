@@ -56,7 +56,7 @@ func (m *platformDefaultInterfaceMonitor) UnregisterCallback(element *list.Eleme
 }
 
 func (m *platformDefaultInterfaceMonitor) UpdateNetworkPath(networkPath string) {
-	m.logger.Debug("updated network path: ", networkPath)
+	m.logger.DebugEvent("monitor.network_path", "updated network path", log.String("path", networkPath))
 	if m.powerManager == nil {
 		return
 	}

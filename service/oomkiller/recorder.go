@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/common/memory"
 )
 
@@ -53,7 +53,7 @@ const (
 
 type RecorderOptions struct {
 	BasePath         string
-	Logger           logger.Logger
+	Logger           log.StructuredLogger
 	AcceptDraft      func(metadataContent []byte) bool
 	MetadataCallback func(status ReportStatus) any
 	OwnerCallback    func(path string)
@@ -74,7 +74,7 @@ type ReportStatus struct {
 type Recorder struct {
 	basePath         string
 	draftPath        string
-	logger           logger.Logger
+	logger           log.StructuredLogger
 	acceptDraft      func(metadataContent []byte) bool
 	metadataCallback func(status ReportStatus) any
 	ownerCallback    func(path string)
@@ -153,7 +153,7 @@ type runtimeStats struct {
 func NewRecorder(options RecorderOptions) *Recorder {
 	recorderLogger := options.Logger
 	if recorderLogger == nil {
-		recorderLogger = logger.NOP()
+		recorderLogger = log.NewNOPFactory().Logger()
 	}
 	return &Recorder{
 		basePath:         options.BasePath,
@@ -308,7 +308,7 @@ func (r *Recorder) sample(sample memorySample, state pressureState, connections 
 	timelinePath := filepath.Join(r.draftPath, timelineFileName)
 	err = appendRecord(timelinePath, row)
 	if err != nil {
-		r.logger.Error(E.Cause(err, "OOM report: write timeline"))
+		r.logger.ErrorEvent("oom.report.error", "write timeline", log.Err(err))
 		return
 	}
 	r.chown(timelinePath)
@@ -440,7 +440,7 @@ func (r *Recorder) ensureDraftLocked() error {
 		if err == nil {
 			return nil
 		}
-		r.logger.Error("OOM report: draft directory lost, recreating")
+		r.logger.ErrorEvent("oom.report.error", "draft directory lost, recreating")
 		r.releaseDraftLocked()
 		r.draftCreated = false
 		r.hasRow = false
@@ -453,7 +453,7 @@ func (r *Recorder) ensureDraftLocked() error {
 	}
 	err := os.MkdirAll(r.draftPath, 0o777)
 	if err != nil {
-		r.logger.Error(E.Cause(err, "OOM report: create draft directory"))
+		r.logger.ErrorEvent("oom.report.error", "create draft directory", log.Err(err))
 		return E.Cause(err, "create draft directory ", r.draftPath)
 	}
 	r.chown(r.draftPath)
@@ -480,7 +480,7 @@ func (r *Recorder) appendEventLocked(event eventRecord) {
 	eventsPath := filepath.Join(r.draftPath, eventsFileName)
 	err = appendRecord(eventsPath, event)
 	if err != nil {
-		r.logger.Error(E.Cause(err, "OOM report: write events"))
+		r.logger.ErrorEvent("oom.report.error", "write events", log.Err(err))
 	} else {
 		r.chown(eventsPath)
 	}
@@ -513,7 +513,7 @@ func (r *Recorder) writeLogLocked() {
 func (r *Recorder) writeFile(path string, content []byte) {
 	err := os.WriteFile(path, content, 0o666)
 	if err != nil {
-		r.logger.Error(E.Cause(err, "OOM report: write ", filepath.Base(path)))
+		r.logger.ErrorEvent("oom.report.error", "write file", log.Err(err), log.String("file", filepath.Base(path)))
 		return
 	}
 	r.chown(path)

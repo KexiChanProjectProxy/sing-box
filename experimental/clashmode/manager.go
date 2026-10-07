@@ -8,14 +8,13 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common"
-	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/observable"
 	"github.com/sagernet/sing/service"
 )
 
 type Manager struct {
 	ctx          context.Context
-	logger       log.Logger
+	logger       log.StructuredLogger
 	dnsRouter    adapter.DNSRouter
 	mode         string
 	modeList     []string
@@ -23,7 +22,7 @@ type Manager struct {
 	updateHooks  []*observable.Subscriber[struct{}]
 }
 
-func NewManager(ctx context.Context, logger log.Logger, defaultMode string, modeList []string) *Manager {
+func NewManager(ctx context.Context, logger log.StructuredLogger, defaultMode string, modeList []string) *Manager {
 	if defaultMode == "" {
 		defaultMode = "Rule"
 	}
@@ -100,10 +99,10 @@ func (m *Manager) SetMode(newMode string) {
 	if cacheFile != nil {
 		err := cacheFile.StoreMode(newMode)
 		if err != nil {
-			m.logger.Error(E.Cause(err, "save mode"))
+			m.logger.ErrorEvent("clash.error", "save mode", log.Err(err))
 		}
 	}
-	m.logger.Info("updated mode: ", newMode)
+	m.logger.InfoEvent("clash.mode.updated", "updated mode", log.String("mode", newMode))
 }
 
 var _ adapter.LifecycleService = (*Manager)(nil)

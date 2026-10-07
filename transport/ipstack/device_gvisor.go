@@ -1,0 +1,352 @@
+//go:build with_gvisor
+
+package ipstack
+
+import (
+	"context"
+	"net"
+	"net/netip"
+	"slices"
+	"sync"
+	"sync/atomic"
+
+	"github.com/sagernet/gvisor/pkg/buffer"
+	"github.com/sagernet/gvisor/pkg/tcpip"
+	"github.com/sagernet/gvisor/pkg/tcpip/adapters/gonet"
+	"github.com/sagernet/gvisor/pkg/tcpip/header"
+	"github.com/sagernet/gvisor/pkg/tcpip/network/ipv4"
+	"github.com/sagernet/gvisor/pkg/tcpip/network/ipv6"
+	"github.com/sagernet/gvisor/pkg/tcpip/stack"
+	"github.com/sagernet/gvisor/pkg/tcpip/transport/icmp"
+	"github.com/sagernet/gvisor/pkg/tcpip/transport/tcp"
+	"github.com/sagernet/gvisor/pkg/tcpip/transport/udp"
+	tun "github.com/sagernet/sing-tun"
+	"github.com/sagernet/sing/common/buf"
+	E "github.com/sagernet/sing/common/exceptions"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
+)
+
+var _ Device = (*stackDevice)(nil)
+
+type stackDevice struct {
+	options       DeviceOptions
+	stateAccess   sync.RWMutex
+	addresses     []netip.Prefix
+	inet4Address  netip.Addr
+	inet6Address  netip.Addr
+	stack         *stack.Stack
+	endpoint      *stackEndpoint
+	udpForwarder  *tun.UDPForwarder
+	icmpForwarder *tun.ICMPForwarder
+	packetWriter  atomic.Pointer[PacketWriter]
+	closeOnce     sync.Once
+}
+
+func NewDevice(options DeviceOptions) (Device, error) {
+	if options.MTU == 0 {
+		options.MTU = DefaultMTU
+	}
+	if options.Context == nil {
+		options.Context = context.Background()
+	}
+	device := &stackDevice{options: options}
+	endpoint := &stackEndpoint{device: device, done: make(chan struct{})}
+	endpoint.mtu.Store(options.MTU)
+	ipStack, err := tun.NewGVisorStackWithOptions(endpoint, stack.NICOptions{}, true)
+	if err != nil {
+		return nil, err
+	}
+	device.stack = ipStack
+	device.endpoint = endpoint
+	err = device.UpdateAddresses(options.Addresses)
+	if err != nil {
+		ipStack.Close()
+		return nil, err
+	}
+	if options.Handler != nil {
+		ipStack.SetTransportProtocolHandler(tcp.ProtocolNumber, tun.NewTCPForwarder(options.Context, ipStack, options.Handler).HandlePacket)
+		udpForwarder := tun.NewUDPForwarder(options.Context, ipStack, options.Handler, tun.UDPNatOptions{
+			Timeout:         options.UDPTimeout,
+			Shared:          true,
+			Mapping:         options.UDPMapping,
+			Filtering:       options.UDPFiltering,
+			MaxSize:         options.UDPNATMax,
+			InterfaceFinder: options.InterfaceFinder,
+		})
+		ipStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
+		device.udpForwarder = udpForwarder
+		icmpForwarder := tun.NewICMPForwarder(ipStack, options.Handler, options.Logger)
+		ipStack.SetTransportProtocolHandler(icmp.ProtocolNumber4, icmpForwarder.HandlePacket)
+		ipStack.SetTransportProtocolHandler(icmp.ProtocolNumber6, icmpForwarder.HandlePacket)
+		device.icmpForwarder = icmpForwarder
+	}
+	return device, nil
+}
+
+func (d *stackDevice) Start() error {
+	if d.udpForwarder != nil {
+		return d.udpForwarder.Start()
+	}
+	return nil
+}
+
+func (d *stackDevice) SetPacketWriter(writer PacketWriter) {
+	d.packetWriter.Store(&writer)
+}
+
+func (d *stackDevice) SetMTU(mtu uint32) {
+	if mtu == 0 {
+		mtu = DefaultMTU
+	}
+	d.endpoint.mtu.Store(mtu)
+}
+
+func (d *stackDevice) MTU() uint32 {
+	return d.endpoint.mtu.Load()
+}
+
+func (d *stackDevice) Addresses() (netip.Addr, netip.Addr) {
+	d.stateAccess.RLock()
+	defer d.stateAccess.RUnlock()
+	return d.inet4Address, d.inet6Address
+}
+
+func (d *stackDevice) UpdateAddresses(addresses []netip.Prefix) error {
+	d.stateAccess.Lock()
+	defer d.stateAccess.Unlock()
+	for _, prefix := range d.addresses {
+		if slices.Contains(addresses, prefix) {
+			continue
+		}
+		gErr := d.stack.RemoveAddress(tun.DefaultNIC, tun.AddressFromAddr(prefix.Addr()))
+		if gErr != nil {
+			return E.New("remove local address ", prefix, ": ", gErr.String())
+		}
+	}
+	for _, prefix := range addresses {
+		if slices.Contains(d.addresses, prefix) {
+			continue
+		}
+		protocolAddress := tcpip.ProtocolAddress{
+			AddressWithPrefix: tcpip.AddressWithPrefix{
+				Address:   tun.AddressFromAddr(prefix.Addr()),
+				PrefixLen: prefix.Bits(),
+			},
+		}
+		if prefix.Addr().Is4() {
+			protocolAddress.Protocol = ipv4.ProtocolNumber
+		} else {
+			protocolAddress.Protocol = ipv6.ProtocolNumber
+		}
+		gErr := d.stack.AddProtocolAddress(tun.DefaultNIC, protocolAddress, stack.AddressProperties{})
+		if gErr != nil {
+			return E.New("add local address ", prefix, ": ", gErr.String())
+		}
+	}
+	d.addresses = slices.Clone(addresses)
+	d.inet4Address, d.inet6Address = firstAddresses(addresses)
+	return nil
+}
+
+func (d *stackDevice) WriteInboundBuffers(packetBuffers []*buf.Buffer) error {
+	networkProtocols := make([]tcpip.NetworkProtocolNumber, 0, len(packetBuffers))
+	stackPacketBuffers := make([]*stack.PacketBuffer, 0, len(packetBuffers))
+	var packetErr error
+	for _, packetBuffer := range packetBuffers {
+		packet := packetBuffer.Bytes()
+		var networkProtocol tcpip.NetworkProtocolNumber
+		switch header.IPVersion(packet) {
+		case header.IPv4Version:
+			networkProtocol = header.IPv4ProtocolNumber
+		case header.IPv6Version:
+			networkProtocol = header.IPv6ProtocolNumber
+		default:
+			if packetErr == nil {
+				packetErr = E.New("invalid IP packet")
+			}
+			continue
+		}
+		networkProtocols = append(networkProtocols, networkProtocol)
+		stackPacketBuffers = append(stackPacketBuffers, stack.NewPacketBuffer(stack.PacketBufferOptions{
+			Payload: buffer.MakeWithData(packet),
+		}))
+	}
+	d.endpoint.deliverNetworkPackets(networkProtocols, stackPacketBuffers)
+	for _, packetBuffer := range stackPacketBuffers {
+		packetBuffer.DecRef()
+	}
+	return packetErr
+}
+
+func (d *stackDevice) bind(destination M.Socksaddr) (tcpip.FullAddress, tcpip.NetworkProtocolNumber, error) {
+	inet4Address, inet6Address := d.Addresses()
+	bind := tcpip.FullAddress{NIC: tun.DefaultNIC}
+	if destination.IsIPv4() {
+		if !inet4Address.IsValid() {
+			return bind, 0, E.New("missing IPv4 local address")
+		}
+		bind.Addr = tun.AddressFromAddr(inet4Address)
+		return bind, header.IPv4ProtocolNumber, nil
+	}
+	if !inet6Address.IsValid() {
+		return bind, 0, E.New("missing IPv6 local address")
+	}
+	bind.Addr = tun.AddressFromAddr(inet6Address)
+	return bind, header.IPv6ProtocolNumber, nil
+}
+
+func (d *stackDevice) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	if !destination.IsIP() {
+		return nil, E.New("invalid destination: ", destination)
+	}
+	bind, networkProtocol, err := d.bind(destination)
+	if err != nil {
+		return nil, err
+	}
+	address := tcpip.FullAddress{
+		NIC:  tun.DefaultNIC,
+		Port: destination.Port,
+		Addr: tun.AddressFromAddr(destination.Addr),
+	}
+	switch N.NetworkName(network) {
+	case N.NetworkTCP:
+		return gonet.DialTCPWithBind(ctx, d.stack, bind, address, networkProtocol)
+	case N.NetworkUDP:
+		return gonet.DialUDP(d.stack, &bind, &address, networkProtocol)
+	default:
+		return nil, E.Extend(N.ErrUnknownNetwork, network)
+	}
+}
+
+func (d *stackDevice) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	bind, networkProtocol, err := d.bind(destination)
+	if err != nil {
+		return nil, err
+	}
+	return gonet.DialUDP(d.stack, &bind, nil, networkProtocol)
+}
+
+func (d *stackDevice) writeOutbound(packetBuffers []*buf.Buffer) error {
+	writer := d.packetWriter.Load()
+	if writer == nil {
+		buf.ReleaseMulti(packetBuffers)
+		return E.New("missing packet writer")
+	}
+	return (*writer)(packetBuffers)
+}
+
+func (d *stackDevice) Close() error {
+	d.closeOnce.Do(func() {
+		close(d.endpoint.done)
+		if d.udpForwarder != nil {
+			d.udpForwarder.Close()
+		}
+		if d.icmpForwarder != nil {
+			d.icmpForwarder.Close()
+		}
+		d.stack.Close()
+		for _, endpoint := range d.stack.CleanupEndpoints() {
+			endpoint.Abort()
+		}
+		d.stack.Wait()
+	})
+	return nil
+}
+
+type stackEndpoint struct {
+	device           *stackDevice
+	mtu              atomic.Uint32
+	done             chan struct{}
+	dispatcherAccess sync.RWMutex
+	dispatcher       stack.NetworkDispatcher
+}
+
+func (e *stackEndpoint) MTU() uint32 {
+	return e.mtu.Load()
+}
+
+func (e *stackEndpoint) SetMTU(mtu uint32) {
+	e.mtu.Store(mtu)
+}
+
+func (e *stackEndpoint) MaxHeaderLength() uint16 {
+	return 0
+}
+
+func (e *stackEndpoint) LinkAddress() tcpip.LinkAddress {
+	return ""
+}
+
+func (e *stackEndpoint) SetLinkAddress(addr tcpip.LinkAddress) {
+}
+
+func (e *stackEndpoint) Capabilities() stack.LinkEndpointCapabilities {
+	return stack.CapabilityRXChecksumOffload
+}
+
+func (e *stackEndpoint) Attach(dispatcher stack.NetworkDispatcher) {
+	e.dispatcherAccess.Lock()
+	defer e.dispatcherAccess.Unlock()
+	e.dispatcher = dispatcher
+}
+
+func (e *stackEndpoint) IsAttached() bool {
+	e.dispatcherAccess.RLock()
+	defer e.dispatcherAccess.RUnlock()
+	return e.dispatcher != nil
+}
+
+func (e *stackEndpoint) deliverNetworkPackets(networkProtocols []tcpip.NetworkProtocolNumber, packetBuffers []*stack.PacketBuffer) {
+	e.dispatcherAccess.RLock()
+	defer e.dispatcherAccess.RUnlock()
+	if e.dispatcher == nil {
+		return
+	}
+	for i, packetBuffer := range packetBuffers {
+		e.dispatcher.DeliverNetworkPacket(networkProtocols[i], packetBuffer)
+	}
+}
+
+func (e *stackEndpoint) Wait() {
+}
+
+func (e *stackEndpoint) ARPHardwareType() header.ARPHardwareType {
+	return header.ARPHardwareNone
+}
+
+func (e *stackEndpoint) AddHeader(packetBuffer *stack.PacketBuffer) {
+}
+
+func (e *stackEndpoint) ParseHeader(packetBuffer *stack.PacketBuffer) bool {
+	return true
+}
+
+func (e *stackEndpoint) WritePackets(list stack.PacketBufferList) (int, tcpip.Error) {
+	headroom := e.device.options.PacketHeadroom
+	packetBuffers := make([]*buf.Buffer, 0, list.Len())
+	for _, packetBuffer := range list.AsSlice() {
+		packetSlices := packetBuffer.AsSlices()
+		packetLength := 0
+		for _, packetSlice := range packetSlices {
+			packetLength += len(packetSlice)
+		}
+		outboundBuffer := buf.NewSize(headroom + packetLength)
+		outboundBuffer.Resize(headroom, 0)
+		for _, packetSlice := range packetSlices {
+			_, _ = outboundBuffer.Write(packetSlice)
+		}
+		packetBuffers = append(packetBuffers, outboundBuffer)
+	}
+	err := e.device.writeOutbound(packetBuffers)
+	if err != nil {
+		return 0, &tcpip.ErrClosedForSend{}
+	}
+	return list.Len(), nil
+}
+
+func (e *stackEndpoint) Close() {
+}
+
+func (e *stackEndpoint) SetOnCloseAction(action func()) {
+}

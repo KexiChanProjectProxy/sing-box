@@ -2,6 +2,12 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.0
+
+* Integrate upstream [v1.14.2](https://github.com/SagerNet/sing-box/releases/tag/v1.14.2), including the 1.14.0 and 1.14.1 fixes
+* Merge upstream sing-quic port hopping fix: Hysteria2 port hopping no longer connects to a different resolved server address
+* **Breaking:** [`naive`](/configuration/inbound/naive/#quic_congestion_control) `quic_congestion_control` no longer accepts `bbr_standard`, `bbr2` or `bbr2_variant`, following upstream; use `bbr`
+
 #### 1.14.0.18
 
 * Add [`cloudflare-warp`](/configuration/outbound/cloudflare-warp/) outbound: connect to Cloudflare WARP over MASQUE (HTTP/3 CONNECT-IP) with TCP and UDP, using static credentials or a device registered automatically and kept in the cache file

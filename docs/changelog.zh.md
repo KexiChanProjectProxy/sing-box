@@ -2,6 +2,17 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.0
+
+* 合入上游 [v1.14.2](https://github.com/SagerNet/sing-box/releases/tag/v1.14.2)，包含 1.14.0 与 1.14.1 的修复
+* 合并上游 sing-quic 端口跳跃修复：Hysteria2 端口跳跃不再连接到另一个解析出的服务器地址
+* **不兼容变更：**[`naive`](/zh/configuration/inbound/naive/#quic_congestion_control) 的 `quic_congestion_control` 跟随上游不再接受 `bbr_standard`、`bbr2` 与 `bbr2_variant`，请改用 `bbr`
+
+#### 1.14.0.18
+
+* 新增 [`cloudflare-warp`](/zh/configuration/outbound/cloudflare-warp/) 出站：通过 MASQUE（HTTP/3 CONNECT-IP）连接 Cloudflare WARP，支持 TCP 与 UDP，可使用静态凭据，也可自动注册设备并保存在缓存文件中
+* 新增 `sing-box generate warp-registration`：注册 WARP 设备并输出可直接使用的出站配置
+
 #### 1.14.0.17
 
 * 新增 [`direct.source_bind`](/zh/configuration/outbound/direct/#source_bind)：按客户端源 IP 选择出站绑定地址，支持按源 CIDR 配置规则，未匹配的客户端从地址池中随机分配一个地址，并在其持续于 `ttl` 内新建连接期间保持不变

@@ -52,15 +52,16 @@ func (r *RuleSetItem) Close() error {
 }
 
 func (r *RuleSetItem) Match(metadata *adapter.InboundContext) bool {
+	snapshot := snapshotRuleMatch(metadata)
 	for _, ruleSet := range r.setList {
-		nestedMetadata := r.nestedMetadata(metadata)
-		if ruleSet.Match(&nestedMetadata) {
-			if metadata.MatchedRuleSetTag == "" {
-				metadata.MatchedRuleSetTag = ruleSet.Name()
-			}
+		r.prepareNestedMatch(metadata)
+		if ruleSet.Match(metadata) {
+			snapshot.restore(metadata)
+			recordMatchedRuleSet(metadata, ruleSet.Name())
 			return true
 		}
 	}
+	snapshot.restore(metadata)
 	return false
 }
 
@@ -69,26 +70,27 @@ func (r *RuleSetItem) matchWithOuterGroups(metadata *adapter.InboundContext, out
 	var (
 		matched        bool
 		deferredGroups uint8
+		matchedTag     string
 	)
+	snapshot := snapshotRuleMatch(metadata)
 	for _, ruleSet := range r.setList {
-		nestedMetadata := r.nestedMetadata(metadata)
+		r.prepareNestedMatch(metadata)
 		if provider, isProvider := ruleSet.(mergeableRuleProvider); isProvider {
 			branch := provider.mergeableRule()
 			if branch != nil {
-				branchGroups, branchMatched := branch.evaluateForMerge(&nestedMetadata)
+				branchGroups, branchMatched := branch.evaluateForMerge(metadata)
 				if branchMatched {
 					merged := outerGroups.mergeWith(branchGroups)
 					if merged.done() {
-						branchDeferredGroups := nestedMetadata.DeferredIPCIDRMatchGroups &^ uint8(merged.satisfied)
+						branchDeferredGroups := metadata.DeferredIPCIDRMatchGroups &^ uint8(merged.satisfied)
 						if branchDeferredGroups == 0 {
-							if metadata.MatchedRuleSetTag == "" {
-								metadata.MatchedRuleSetTag = ruleSet.Name()
-							}
+							snapshot.restore(metadata)
+							recordMatchedRuleSet(metadata, ruleSet.Name())
 							metadata.DeferredIPCIDRMatchGroups &^= uint8(merged.satisfied)
 							return true
 						}
-						if metadata.MatchedRuleSetTag == "" {
-							metadata.MatchedRuleSetTag = ruleSet.Name()
+						if matchedTag == "" {
+							matchedTag = ruleSet.Name()
 						}
 						matched = true
 						deferredGroups |= branchDeferredGroups
@@ -97,32 +99,40 @@ func (r *RuleSetItem) matchWithOuterGroups(metadata *adapter.InboundContext, out
 				continue
 			}
 		}
-		if outerDone && ruleSet.Match(&nestedMetadata) {
-			if nestedMetadata.DeferredIPCIDRMatchGroups == 0 {
-				if metadata.MatchedRuleSetTag == "" {
-					metadata.MatchedRuleSetTag = ruleSet.Name()
-				}
+		if outerDone && ruleSet.Match(metadata) {
+			if metadata.DeferredIPCIDRMatchGroups == 0 {
+				snapshot.restore(metadata)
+				recordMatchedRuleSet(metadata, ruleSet.Name())
 				return true
 			}
-			if metadata.MatchedRuleSetTag == "" {
-				metadata.MatchedRuleSetTag = ruleSet.Name()
+			if matchedTag == "" {
+				matchedTag = ruleSet.Name()
 			}
 			matched = true
-			deferredGroups |= nestedMetadata.DeferredIPCIDRMatchGroups
+			deferredGroups |= metadata.DeferredIPCIDRMatchGroups
 		}
 	}
+	snapshot.restore(metadata)
 	if matched {
+		recordMatchedRuleSet(metadata, matchedTag)
 		metadata.DeferredIPCIDRMatchGroups |= deferredGroups
 	}
 	return matched
 }
 
-func (r *RuleSetItem) nestedMetadata(metadata *adapter.InboundContext) adapter.InboundContext {
-	nestedMetadata := *metadata
-	nestedMetadata.ResetRuleMatchCache()
-	nestedMetadata.IPCIDRMatchSource = r.ipCidrMatchSource
-	nestedMetadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
-	return nestedMetadata
+// recordMatchedRuleSet keeps the first matched rule-set tag for the
+// matched_ruleset hash keys of loadbalance. It must run after the match
+// snapshot is restored, which resets the tag.
+func recordMatchedRuleSet(metadata *adapter.InboundContext, tag string) {
+	if metadata.MatchedRuleSetTag == "" {
+		metadata.MatchedRuleSetTag = tag
+	}
+}
+
+func (r *RuleSetItem) prepareNestedMatch(metadata *adapter.InboundContext) {
+	metadata.ResetRuleMatchCache()
+	metadata.IPCIDRMatchSource = r.ipCidrMatchSource
+	metadata.IPCIDRAcceptEmpty = r.ipCidrAcceptEmpty
 }
 
 type mergeableRuleProvider interface {
@@ -145,17 +155,19 @@ func matchAnyHeadlessRule(rules []adapter.HeadlessRule, metadata *adapter.Inboun
 		matched        bool
 		deferredGroups uint8
 	)
+	snapshot := snapshotRuleMatch(metadata)
 	for _, rule := range rules {
-		nestedMetadata := *metadata
-		nestedMetadata.ResetRuleMatchCache()
-		if rule.Match(&nestedMetadata) {
-			if nestedMetadata.DeferredIPCIDRMatchGroups == 0 {
+		metadata.ResetRuleMatchCache()
+		if rule.Match(metadata) {
+			if metadata.DeferredIPCIDRMatchGroups == 0 {
+				snapshot.restore(metadata)
 				return true
 			}
 			matched = true
-			deferredGroups |= nestedMetadata.DeferredIPCIDRMatchGroups
+			deferredGroups |= metadata.DeferredIPCIDRMatchGroups
 		}
 	}
+	snapshot.restore(metadata)
 	if matched {
 		metadata.DeferredIPCIDRMatchGroups |= deferredGroups
 	}

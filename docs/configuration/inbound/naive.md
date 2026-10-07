@@ -50,17 +50,10 @@ QUIC congestion control algorithm.
 | Algorithm      | Description                     |
 |----------------|---------------------------------|
 | `bbr`          | BBR                             |
-| `bbr_standard` | BBR (Standard version)         |
-| `bbr2`         | BBRv2                           |
-| `bbr2_variant` | BBRv2 (An experimental variant) |
 | `cubic`        | CUBIC                           |
 | `reno`         | New Reno                        |
 
-`bbr` is used by default (the default of QUICHE, used by Chromium which NaiveProxy is based on).
-
-!!! note ""
-
-    Since sing-box 1.14.0.16 the BBR variants share one BBR implementation: `bbr`, `bbr_standard` and `bbr2` use its standard profile, and `bbr2_variant` uses its aggressive profile. The values remain valid, so existing configurations keep working.
+`bbr` is used by default.
 
 #### tls
 

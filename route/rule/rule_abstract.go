@@ -205,38 +205,44 @@ func (r *abstractLogicalRule) Match(metadata *adapter.InboundContext) bool {
 	var (
 		matched        bool
 		deferredGroups uint8
+		nestedTag      string
 	)
+	snapshot := snapshotRuleMatch(metadata)
 	if r.mode == C.LogicalTypeAnd {
 		matched = true
 		for _, rule := range r.rules {
-			nestedMetadata := *metadata
-			nestedMetadata.ResetRuleCache()
-			if !rule.Match(&nestedMetadata) {
+			metadata.ResetRuleCache()
+			if !rule.Match(metadata) {
 				matched = false
 				deferredGroups = 0
 				break
 			}
-			if metadata.MatchedRuleSetTag == "" && nestedMetadata.MatchedRuleSetTag != "" {
-				metadata.MatchedRuleSetTag = nestedMetadata.MatchedRuleSetTag
+			if nestedTag == "" {
+				nestedTag = metadata.MatchedRuleSetTag
 			}
-			deferredGroups |= nestedMetadata.DeferredIPCIDRMatchGroups
+			deferredGroups |= metadata.DeferredIPCIDRMatchGroups
 		}
 	} else {
 		for _, rule := range r.rules {
-			nestedMetadata := *metadata
-			nestedMetadata.ResetRuleCache()
-			if rule.Match(&nestedMetadata) {
-				if metadata.MatchedRuleSetTag == "" && nestedMetadata.MatchedRuleSetTag != "" {
-					metadata.MatchedRuleSetTag = nestedMetadata.MatchedRuleSetTag
+			metadata.ResetRuleCache()
+			if rule.Match(metadata) {
+				if nestedTag == "" {
+					nestedTag = metadata.MatchedRuleSetTag
 				}
 				matched = true
-				if nestedMetadata.DeferredIPCIDRMatchGroups == 0 {
+				if metadata.DeferredIPCIDRMatchGroups == 0 {
 					deferredGroups = 0
 					break
 				}
-				deferredGroups |= nestedMetadata.DeferredIPCIDRMatchGroups
+				deferredGroups |= metadata.DeferredIPCIDRMatchGroups
 			}
 		}
+	}
+	snapshot.restore(metadata)
+	// The first rule-set tag matched by a nested rule is kept for the
+	// matched_ruleset hash keys of loadbalance.
+	if metadata.MatchedRuleSetTag == "" {
+		metadata.MatchedRuleSetTag = nestedTag
 	}
 	if matched {
 		metadata.DeferredIPCIDRMatchGroups |= deferredGroups

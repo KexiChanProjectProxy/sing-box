@@ -1,5 +1,7 @@
 package rule
 
+import "github.com/sagernet/sing-box/adapter"
+
 type ruleMatchState uint8
 
 const (
@@ -23,4 +25,27 @@ func (g ruleGroupMatch) mergeWith(other ruleGroupMatch) ruleGroupMatch {
 		required:  g.required | other.required,
 		satisfied: g.satisfied | other.satisfied,
 	}
+}
+
+type ruleMatchSnapshot struct {
+	ipCidrMatchSource         bool
+	ipCidrAcceptEmpty         bool
+	deferredIPCIDRMatchGroups uint8
+	matchedRuleSetTag         string
+}
+
+func snapshotRuleMatch(metadata *adapter.InboundContext) ruleMatchSnapshot {
+	return ruleMatchSnapshot{
+		ipCidrMatchSource:         metadata.IPCIDRMatchSource,
+		ipCidrAcceptEmpty:         metadata.IPCIDRAcceptEmpty,
+		deferredIPCIDRMatchGroups: metadata.DeferredIPCIDRMatchGroups,
+		matchedRuleSetTag:         metadata.MatchedRuleSetTag,
+	}
+}
+
+func (s ruleMatchSnapshot) restore(metadata *adapter.InboundContext) {
+	metadata.IPCIDRMatchSource = s.ipCidrMatchSource
+	metadata.IPCIDRAcceptEmpty = s.ipCidrAcceptEmpty
+	metadata.DeferredIPCIDRMatchGroups = s.deferredIPCIDRMatchGroups
+	metadata.MatchedRuleSetTag = s.matchedRuleSetTag
 }

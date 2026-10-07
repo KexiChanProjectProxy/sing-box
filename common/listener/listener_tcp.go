@@ -85,24 +85,32 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 
 func (l *Listener) loopTCPIn() {
 	tcpListener := l.tcpListener
-	var metadata adapter.InboundContext
+	var (
+		metadata    adapter.InboundContext
+		acceptDelay time.Duration
+	)
 	for {
 		conn, err := tcpListener.Accept()
 		if err != nil {
-			//nolint:staticcheck
-			if netError, isNetError := err.(net.Error); isNetError && netError.Temporary() {
-				l.logger.ErrorEvent("listener.error", "listener error", log.Err(err))
-
-				continue
-			}
 			if l.shutdown.Load() && E.IsClosed(err) {
 				return
 			}
+			//nolint:staticcheck
+			if netError, isNetError := err.(net.Error); isNetError && netError.Temporary() {
+				if acceptDelay == 0 {
+					acceptDelay = 5 * time.Millisecond
+				} else {
+					acceptDelay = min(2*acceptDelay, time.Second)
+				}
+				l.logger.ErrorEvent("listener.error", "listener error", log.Err(err), log.Duration("retry_in", acceptDelay))
+				time.Sleep(acceptDelay)
+				continue
+			}
 			l.tcpListener.Close()
 			l.logger.ErrorEvent("listener.closed", "listener closed", log.Err(err))
-
-			continue
+			return
 		}
+		acceptDelay = 0
 		//nolint:staticcheck
 		metadata.InboundDetour = l.listenOptions.Detour
 		metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()

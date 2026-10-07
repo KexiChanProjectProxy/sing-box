@@ -191,7 +191,7 @@ func (t *Transport) updateTransports(link *TransportLink) error {
 				Enabled:    true,
 				ServerName: serverAddr.String(),
 			}))
-			transports = append(transports, transport.NewTLSRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, 53), tlsConfig))
+			transports = append(transports, transport.NewTLSRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, 853), tlsConfig))
 
 		} else {
 			transports = append(transports, transport.NewUDPRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, 53)))
@@ -202,7 +202,11 @@ func (t *Transport) updateTransports(link *TransportLink) error {
 		if !ok {
 			return os.ErrInvalid
 		}
+		serverPort := address.Port
 		if link.dnsOverTLS {
+			if serverPort == 0 {
+				serverPort = 853
+			}
 			var serverName string
 			if address.Name != "" {
 				serverName = address.Name
@@ -213,10 +217,13 @@ func (t *Transport) updateTransports(link *TransportLink) error {
 				Enabled:    true,
 				ServerName: serverName,
 			}))
-			transports = append(transports, transport.NewTLSRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, address.Port), tlsConfig))
+			transports = append(transports, transport.NewTLSRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, serverPort), tlsConfig))
 
 		} else {
-			transports = append(transports, transport.NewUDPRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, address.Port)))
+			if serverPort == 0 {
+				serverPort = 53
+			}
+			transports = append(transports, transport.NewUDPRaw(t.logger, t.TransportAdapter, serverDialer, M.SocksaddrFrom(serverAddr, serverPort)))
 		}
 	}
 	t.linkServers[link] = &LinkServers{
@@ -247,7 +254,7 @@ func (t *Transport) PreferredDomain(domain string) bool {
 			if linkDomain.Domain == "." {
 				continue
 			}
-			if mDNS.IsSubDomain(linkDomain.Domain, domain) {
+			if mDNS.IsSubDomain(mDNS.Fqdn(linkDomain.Domain), domain) {
 				return true
 			}
 		}
@@ -272,15 +279,25 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 
 func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
 	question := message.Question[0]
-	var selectedLink *TransportLink
+	var (
+		selectedLink   *TransportLink
+		selectedLabels int
+		names          []string
+	)
 	t.service.linkAccess.RLock()
 	for _, link := range t.service.links {
 		for _, domain := range link.domain {
 			if domain.Domain == "." && domain.RoutingOnly && !t.acceptDefaultResolvers {
 				continue
 			}
-			if mDNS.IsSubDomain(domain.Domain, question.Name) {
+			domainName := mDNS.Fqdn(domain.Domain)
+			if !mDNS.IsSubDomain(domainName, question.Name) {
+				continue
+			}
+			labels := mDNS.CountLabel(domainName)
+			if selectedLink == nil || labels > selectedLabels {
 				selectedLink = link
+				selectedLabels = labels
 			}
 		}
 	}
@@ -291,6 +308,9 @@ func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callba
 				break
 			}
 		}
+	}
+	if selectedLink != nil {
+		names = selectedLink.nameList(t.ndots, question.Name)
 	}
 	t.service.linkAccess.RUnlock()
 	if selectedLink == nil {
@@ -304,7 +324,6 @@ func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callba
 		callback(dns.FixedResponseStatus(message, mDNS.RcodeNameError), nil)
 		return
 	}
-	names := servers.Link.nameList(t.ndots, question.Name)
 	if len(names) == 0 {
 		callback(nil, E.New("invalid domain: ", question.Name))
 		return

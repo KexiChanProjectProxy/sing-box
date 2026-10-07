@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/sagernet/sing-box/adapter"
+	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/daemon"
 	"github.com/sagernet/sing-box/experimental/libbox"
 	"github.com/sagernet/sing-box/include"
@@ -32,6 +33,7 @@ type Daemon struct {
 	logger                  log.ContextLogger
 	startedService          *daemon.StartedService
 	powerManager            *powerreport.Manager
+	oomRecorder             *oomkiller.Recorder
 	server                  *grpc.Server
 	runtimeWorkingDirectory string
 	lifecycleAccess         sync.Mutex
@@ -62,14 +64,15 @@ func newDaemon() (*Daemon, error) {
 		Context:     ctx,
 		LogMaxLines: 3000,
 	})
-	reporter := libbox.NewOOMReporter(d.startedService)
-	service.MustRegister[oomkiller.OOMReporter](ctx, reporter)
+	d.oomRecorder = oomkiller.NewRecorder(libbox.OOMRecorderOptions(d.startedService))
+	service.MustRegister[*oomkiller.Recorder](ctx, d.oomRecorder)
+	d.oomRecorder.Start()
 	d.powerManager = powerreport.NewManager()
 	service.MustRegister[*powerreport.Manager](ctx, d.powerManager)
 	managedService := daemon.NewManagedService(daemon.ManagedServiceOptions{
 		Handler:     &managedHandler{d},
 		Debug:       debugEnabled,
-		OOMReporter: reporter,
+		OOMRecorder: d.oomRecorder,
 	})
 	authorizer := newAuthorizer(d)
 	serverOptions := []grpc.ServerOption{
@@ -194,6 +197,7 @@ func (d *Daemon) configureWorkingDirectoryLocked(directory string) error {
 		WorkingPath:       directory,
 		TempPath:          directory,
 		CrashReportSource: "Daemon",
+		AppVersion:        C.Version,
 	})
 	if err != nil {
 		return err
@@ -287,6 +291,7 @@ func (d *Daemon) Close() {
 	}
 	_ = d.startedService.CloseService()
 	d.startedService.Close()
+	_ = d.oomRecorder.Close()
 	if d.platform != nil {
 		_ = d.platform.Close()
 	}

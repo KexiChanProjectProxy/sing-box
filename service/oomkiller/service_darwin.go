@@ -34,16 +34,11 @@ import "C"
 
 import (
 	"sync"
-	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/common/byteformats"
-	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/service"
 )
-
-const oomDraftMinInterval = time.Hour
 
 var (
 	globalAccess   sync.Mutex
@@ -54,8 +49,11 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
+	err := s.startTimer()
+	if err != nil {
+		return err
+	}
 	if s.timerConfig.policyMode == policyModeNetworkExtension {
-		s.adaptiveTimer = newAdaptiveTimer(s.logger, s.network, s.timerConfig, nil)
 		globalAccess.Lock()
 		isFirst := len(globalServices) == 0
 		globalServices = append(globalServices, s)
@@ -63,20 +61,12 @@ func (s *Service) Start(stage adapter.StartStage) error {
 		if isFirst {
 			C.startMemoryPressureMonitor()
 		}
-		return nil
 	}
-	if !s.timerConfig.policyMode.hasTimerMode() {
-		return E.New("memory pressure monitoring is not available on this platform without memory_limit")
-	}
-	s.adaptiveTimer = newAdaptiveTimer(s.logger, s.network, s.timerConfig, s.writeOOMReport)
-	s.adaptiveTimer.start()
 	return nil
 }
 
 func (s *Service) Close() error {
-	if s.adaptiveTimer != nil {
-		s.adaptiveTimer.stop()
-	}
+	s.stopTimer()
 	if s.timerConfig.policyMode == policyModeNetworkExtension {
 		globalAccess.Lock()
 		for i, svc := range globalServices {
@@ -90,7 +80,6 @@ func (s *Service) Close() error {
 		if isLast {
 			C.stopMemoryPressureMonitor()
 		}
-		s.discardOOMDraft()
 	}
 	return nil
 }
@@ -107,45 +96,12 @@ func goMemoryPressureCallback(status C.ulong) {
 	sample := readMemorySample(policyModeNetworkExtension)
 	for _, s := range services {
 		s.logger.WarnEvent("oom.pressure.critical", "memory pressure critical", log.String("usage", byteformats.FormatMemoryBytes(sample.usage)))
-		s.writeOOMDraft(sample.usage)
+		if s.recorder != nil {
+			s.recorder.recordPressure(sample)
+		}
 		s.adaptiveTimer.notifyPressure()
-	}
-}
-
-func (s *Service) writeOOMDraft(memoryUsage uint64) {
-	if s.draftCancelled.Load() {
-		return
-	}
-	now := time.Now().UnixNano()
-	lastDraft := s.lastDraftTime.Load()
-	if time.Duration(now-lastDraft) < oomDraftMinInterval {
-		return
-	}
-	s.lastDraftTime.Store(now)
-	reporter := service.FromContext[OOMReporter](s.ctx)
-	if reporter == nil {
-		return
-	}
-	err := reporter.WriteDraft(memoryUsage)
-	if s.draftCancelled.Load() {
-		reporter.DiscardDraft()
-		return
-	}
-	if err != nil {
-		s.logger.ErrorEvent("oom.draft.error", "write OOM draft", log.Err(err))
-	} else {
-		s.logger.WarnEvent("oom.draft.saved", "OOM draft saved")
-	}
-}
-
-func (s *Service) discardOOMDraft() {
-	s.draftCancelled.Store(true)
-	reporter := service.FromContext[OOMReporter](s.ctx)
-	if reporter == nil {
-		return
-	}
-	err := reporter.DiscardDraft()
-	if err != nil {
-		s.logger.ErrorEvent("oom.draft.error", "discard OOM draft", log.Err(err))
+		if s.recorder != nil {
+			s.recorder.snapshot(SnapshotReasonPressure, sample, false)
+		}
 	}
 }

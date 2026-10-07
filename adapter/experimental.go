@@ -8,17 +8,8 @@ import (
 	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/observable"
 	"github.com/sagernet/sing/common/varbin"
 )
-
-type ClashServer interface {
-	LifecycleService
-	Mode() string
-	ModeList() []string
-	SetMode(mode string)
-	AddModeUpdateHook(hook *observable.Subscriber[struct{}])
-}
 
 type URLTestHistory struct {
 	Time  time.Time `json:"time"`
@@ -170,11 +161,4 @@ type URLTestGroup interface {
 	OutboundGroup
 	URLTest(ctx context.Context) (map[string]uint16, error)
 	PerformUpdateCheck()
-}
-
-func OutboundTag(detour Outbound) string {
-	if group, isGroup := detour.(OutboundGroup); isGroup {
-		return group.Now()
-	}
-	return detour.Tag()
 }

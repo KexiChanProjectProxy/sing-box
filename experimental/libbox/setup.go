@@ -31,6 +31,8 @@ var (
 	sLogMaxLines             int
 	sDebug                   bool
 	sCrashReportSource       string
+	sAppVersion              string
+	sAppMarketingVersion     string
 	sOOMKillerEnabled        bool
 	sOOMKillerDisabled       bool
 	sOOMMemoryLimit          int64
@@ -52,6 +54,8 @@ type SetupOptions struct {
 	LogMaxLines             int
 	Debug                   bool
 	CrashReportSource       string
+	AppVersion              string
+	AppMarketingVersion     string
 	OomKillerEnabled        bool
 	OomKillerDisabled       bool
 	OomMemoryLimit          int64
@@ -75,6 +79,8 @@ func applySetupOptions(options *SetupOptions) {
 	sLogMaxLines = options.LogMaxLines
 	sDebug = options.Debug
 	sCrashReportSource = options.CrashReportSource
+	sAppVersion = options.AppVersion
+	sAppMarketingVersion = options.AppMarketingVersion
 	ReloadSetupOptions(options)
 }
 
@@ -86,9 +92,10 @@ func ReloadSetupOptions(options *SetupOptions) {
 	if sOOMKillerEnabled {
 		if sOOMMemoryLimit == 0 && C.IsIos {
 			sOOMMemoryLimit = oomkiller.DefaultAppleNetworkExtensionMemoryLimit
+			debug.SetGCPercent(oomkiller.DefaultAppleNetworkExtensionGCPercent)
 		}
 		if sOOMMemoryLimit > 0 {
-			debug.SetMemoryLimit(sOOMMemoryLimit * 3 / 4)
+			debug.SetMemoryLimit(sOOMMemoryLimit * 4 / 5)
 		} else {
 			debug.SetMemoryLimit(math.MaxInt64)
 		}

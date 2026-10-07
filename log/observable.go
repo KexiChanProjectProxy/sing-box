@@ -25,6 +25,7 @@ type defaultFactory struct {
 	file              *os.File
 	filePath          string
 	platformWriters   atomic.Pointer[[]PlatformWriter]
+	needConsole       bool
 	needObservable    bool
 	level             Level
 	subscriber        *observable.Subscriber[Entry]
@@ -60,6 +61,7 @@ func NewDefaultFactory(
 		},
 		writer:         writer,
 		filePath:       filePath,
+		needConsole:    writer != io.Discard || filePath != "",
 		needObservable: needObservable,
 		level:          LevelTrace,
 		subscriber:     observable.NewSubscriber[Entry](128),
@@ -86,6 +88,7 @@ func (f *defaultFactory) Start() error {
 			f.writer = logFile
 			f.file = logFile
 		}
+		f.needConsole = f.writer != io.Discard
 	}
 	if f.needObservable && f.observer == nil {
 		f.observer = observable.NewObserver[Entry](f.subscriber, 64)
@@ -184,7 +187,9 @@ func (l *observableLogger) writeRecord(ctx context.Context, level Level, event s
 	rec := l.recordFromContext(ctx, level, event, message, timestamp, fields)
 	formatted := l.formatter.FormatRecordJSON(rec)
 	if level <= l.level {
-		l.writer.Write([]byte(formatted))
+		if l.needConsole || level == LevelPanic || level == LevelFatal {
+			l.writer.Write([]byte(formatted))
+		}
 		if l.needObservable {
 			l.subscriber.Emit(Entry{level, strings.TrimRight(formatted, "\n")})
 		}

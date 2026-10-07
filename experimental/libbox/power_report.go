@@ -3,6 +3,7 @@
 package libbox
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/sagernet/sing-box/daemon"
@@ -26,6 +27,11 @@ func PowerReportOptions(startedService *daemon.StartedService) powerreport.Optio
 		OwnerCallback: chownReport,
 		LogCallback: func() []byte {
 			return formatLogEntries(startedService.SavedLog())
+		},
+		ProfileCallback: func(path string) {
+			for _, name := range oomReportProfiles {
+				writeOOMProfile(filepath.Join(path, name+".pb"), name)
+			}
 		},
 	}
 }

@@ -41,13 +41,13 @@ type Factory interface {
 	SetLevel(level Level)
 	Logger() StructuredLogger
 	NewLogger(tag string) StructuredLogger
+	AttachPlatformWriter(writer PlatformWriter)
 }
 
 // ObservableFactory extends Factory with observable log subscription.
 type ObservableFactory interface {
 	Factory
 	observable.Observable[Entry]
-	AttachPlatformWriter(writer PlatformWriter)
 }
 
 // Entry represents a log entry for observable subscription.

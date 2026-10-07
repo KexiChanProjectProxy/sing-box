@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/common/listener"
@@ -15,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/auth"
+	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/protocol/socks"
 )
@@ -90,6 +90,7 @@ func (h *Inbound) newUserConnection(ctx context.Context, conn net.Conn, metadata
 func (h *Inbound) streamUserPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
+	metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 	if user, loaded := auth.UserFromContext[string](ctx); loaded {
 		metadata.User = user
 	}

@@ -473,7 +473,7 @@ func (l *LoadBalance) dialAttempts(ctx context.Context, attempts []Candidate, di
 		if err == nil {
 			return candidate, tried, nil
 		}
-		realTag := RealTag(candidate.Outbound)
+		realTag := l.realTag(candidate.Outbound)
 		l.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", realTag))
 		l.history.DeleteURLTestHistory(realTag)
 		l.resetWindow(candidate.Tag)
@@ -931,18 +931,30 @@ func (l *LoadBalance) memberProbe(detour adapter.Outbound) (uint16, probeAction)
 		}
 		return 0, probeSkip
 	case *URLTest:
-		history := l.history.LoadURLTestHistory(RealTag(member))
+		history := l.history.LoadURLTestHistory(l.realTag(member))
 		if history != nil && history.Delay != 0 {
 			return history.Delay, probeUseCache
 		}
 		return 0, probeSkip
 	default:
-		history := l.history.LoadURLTestHistory(RealTag(detour))
+		history := l.history.LoadURLTestHistory(l.realTag(detour))
 		if history != nil && history.Delay != 0 && time.Since(history.Time) < l.probeInterval() {
 			return history.Delay, probeUseCache
 		}
 		return 0, probeHTTP
 	}
+}
+
+// realTag resolves the outbound a member currently routes through. Without an
+// outbound manager (as in unit tests) it falls back to the group's selection.
+func (l *LoadBalance) realTag(detour adapter.Outbound) string {
+	if l.outbound == nil {
+		if group, isGroup := detour.(adapter.OutboundGroup); isGroup {
+			return group.Now()
+		}
+		return detour.Tag()
+	}
+	return RealTag(l.outbound, detour)
 }
 
 func nestedMinDelay(nested *LoadBalance, history *urltest.HistoryStorage) (uint16, bool) {
@@ -973,7 +985,7 @@ func nestedMinDelay(nested *LoadBalance, history *urltest.HistoryStorage) (uint1
 		if detour == nil {
 			continue
 		}
-		stored := history.LoadURLTestHistory(RealTag(detour))
+		stored := history.LoadURLTestHistory(nested.realTag(detour))
 		if stored == nil || stored.Delay == 0 {
 			continue
 		}
@@ -990,13 +1002,13 @@ func (l *LoadBalance) liveMemberDelay(tag string, detour adapter.Outbound) (uint
 	case *LoadBalance:
 		return nestedMinDelay(member, l.history)
 	case *URLTest:
-		history := l.history.LoadURLTestHistory(RealTag(member))
+		history := l.history.LoadURLTestHistory(l.realTag(member))
 		if history == nil || history.Delay == 0 {
 			return 0, false
 		}
 		return history.Delay, true
 	default:
-		history := l.history.LoadURLTestHistory(RealTag(detour))
+		history := l.history.LoadURLTestHistory(l.realTag(detour))
 		if history == nil || history.Delay == 0 {
 			return 0, false
 		}

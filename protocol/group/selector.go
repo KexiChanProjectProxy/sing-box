@@ -201,7 +201,7 @@ func (s *Selector) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 	if outboundHandler, isHandler := selected.(adapter.ConnectionHandler); isHandler {
 		outboundHandler.NewConnection(ctx, conn, metadata, onClose)
 	} else {
-		s.connection.NewConnection(ctx, selected, conn, metadata, onClose)
+		s.connection.NewConnection(ctx, s, conn, metadata, onClose)
 	}
 }
 
@@ -224,13 +224,22 @@ func (s *Selector) NewPacketConnection(ctx context.Context, conn N.PacketConn, m
 	if outboundHandler, isHandler := selected.(adapter.PacketConnectionHandler); isHandler {
 		outboundHandler.NewPacketConnection(ctx, conn, metadata, onClose)
 	} else {
-		s.connection.NewPacketConnection(ctx, selected, conn, metadata, onClose)
+		s.connection.NewPacketConnection(ctx, s, conn, metadata, onClose)
 	}
 }
 
-func RealTag(detour adapter.Outbound) string {
-	if group, isGroup := detour.(adapter.OutboundGroup); isGroup {
-		return group.Now()
+func RealTag(outboundManager adapter.OutboundManager, detour adapter.Outbound) string {
+	tag := detour.Tag()
+	for {
+		group, isGroup := detour.(adapter.OutboundGroup)
+		if !isGroup {
+			return tag
+		}
+		tag = group.Now()
+		var loaded bool
+		detour, loaded = outboundManager.Outbound(tag)
+		if !loaded {
+			return tag
+		}
 	}
-	return detour.Tag()
 }

@@ -42,19 +42,11 @@ func init() {
 		if timeFunc == nil {
 			timeFunc = time.Now
 		}
-		// sing-quic keeps a single BBR implementation with tunable profiles, so
-		// the BBR variants map onto its profiles: the standard ones onto the
-		// standard profile, and the experimental variant onto the aggressive one.
-		newBBR := func(profile congestion_meta2.Profile) func(conn *quic.Conn) congestion.CongestionControl {
-			return func(conn *quic.Conn) congestion.CongestionControl {
-				return congestion_meta2.NewBbrSenderWithProfile(conn.InitialPacketSize(), profile)
-			}
-		}
 		switch options.QUICCongestionControl {
-		case "", "bbr", "bbr_standard", "bbr2":
-			congestionControl = newBBR(congestion_meta2.ProfileStandard)
-		case "bbr2_variant":
-			congestionControl = newBBR(congestion_meta2.ProfileAggressive)
+		case "", "bbr":
+			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
+				return congestion_meta2.NewBbrSenderWithProfile(conn.InitialPacketSize(), congestion_meta2.ProfileStandard)
+			}
 		case "cubic":
 			congestionControl = func(conn *quic.Conn) congestion.CongestionControl {
 				return congestion_meta1.NewCubicSender(
@@ -78,6 +70,7 @@ func init() {
 		quicListener, err := qtls.ListenEarly(udpConn, tlsConfig, &quic.Config{
 			MaxIncomingStreams: 1 << 60,
 			Allow0RTT:          true,
+			DisablePathManager: true,
 		})
 		if err != nil {
 			udpConn.Close()
@@ -97,7 +90,6 @@ func init() {
 			udpConn.Close()
 			if sErr != nil && !E.IsClosedOrCanceled(sErr) {
 				logger.ErrorEvent("listener.closed", "listener closed", log.Err(sErr))
-
 			}
 		}()
 

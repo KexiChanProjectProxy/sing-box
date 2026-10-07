@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.1
+
+* 新增 [`cloudflare-warp.ephemeral`](/zh/configuration/outbound/cloudflare-warp/#ephemeral)：每次启动注册一个仅保存在内存中的设备，并在退出时从 Cloudflare 删除，适用于没有缓存文件的无状态节点
+
 #### 1.14.2.0
 
 * 合入上游 [v1.14.2](https://github.com/SagerNet/sing-box/releases/tag/v1.14.2)，包含 1.14.0 与 1.14.1 的修复

@@ -11558,6 +11558,9 @@
             "device_name": {
               "type": "string"
             },
+            "ephemeral": {
+              "type": "boolean"
+            },
             "api_detour": {
               "type": "string"
             },

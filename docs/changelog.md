@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.1
+
+* Add [`cloudflare-warp.ephemeral`](/configuration/outbound/cloudflare-warp/#ephemeral): register a device at every start, keep it only in memory, and delete it from Cloudflare on shutdown, for stateless nodes without a cache file
+
 #### 1.14.2.0
 
 * Integrate upstream [v1.14.2](https://github.com/SagerNet/sing-box/releases/tag/v1.14.2), including the 1.14.0 and 1.14.1 fixes

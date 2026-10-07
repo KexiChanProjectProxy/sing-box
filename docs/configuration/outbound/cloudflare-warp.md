@@ -4,6 +4,10 @@ icon: material/new-box
 
 # Cloudflare WARP
 
+!!! quote "Changes in sing-box 1.14.2.1"
+
+    :material-plus: [ephemeral](#ephemeral)
+
 !!! question "Since sing-box 1.14.0.18"
 
 Connects to Cloudflare WARP over MASQUE: an HTTP/3 CONNECT-IP tunnel that carries IP packets, served to sing-box through a user-space network stack. TCP and UDP are supported.
@@ -29,6 +33,7 @@ Connects to Cloudflare WARP over MASQUE: an HTTP/3 CONNECT-IP tunnel that carrie
   "license": "",
   "access_jwt": "",
   "device_name": "",
+  "ephemeral": false,
   "api_detour": "",
   "network": "",
   "mtu": 1280,
@@ -42,7 +47,7 @@ Connects to Cloudflare WARP over MASQUE: an HTTP/3 CONNECT-IP tunnel that carrie
 
 ### Registration modes
 
-A WARP device must be registered with Cloudflare before it can connect. Two modes are available.
+A WARP device must be registered with Cloudflare before it can connect. Three modes are available.
 
 **Static credentials.** Run the command below and paste its output into `outbounds`. It registers a new device and prints `private_key`, `address`, `endpoint_public_key`, `device_id` and `access_token`.
 
@@ -53,6 +58,8 @@ sing-box generate warp-registration
 The command accepts `--license`, `--access-jwt`, `--name`, `--model`, `--locale`, `--tag`, `--ipv6` and `--raw`.
 
 **Automatic registration.** Leave `private_key` and `address` empty and enable [`experimental.cache_file`](/configuration/experimental/cache-file/). On first start the outbound registers a device and stores it in the cache file under the outbound tag. Later starts reuse it. If Cloudflare rejects the stored device, the outbound registers a new one once.
+
+**Ephemeral registration.** Leave `private_key` and `address` empty and set [`ephemeral`](#ephemeral). Every start registers a new device that is kept only in memory, so no cache file or other state is needed. This suits stateless nodes.
 
 !!! danger ""
 
@@ -109,6 +116,16 @@ A Zero Trust team token sent as `CF-Access-Jwt-Assertion` during automatic regis
 #### device_name
 
 The device name shown in the Cloudflare dashboard, set during automatic registration.
+
+#### ephemeral
+
+!!! question "Since sing-box 1.14.2.1"
+
+Register a new device at every start, keep it only in memory, and delete it from Cloudflare when sing-box shuts down. No cache file is needed.
+
+Deletion is best effort. A device left behind by a crash or a forced kill stays registered, which matters when `license` is set, since a license allows a limited number of devices.
+
+Only used for automatic registration.
 
 #### api_detour
 

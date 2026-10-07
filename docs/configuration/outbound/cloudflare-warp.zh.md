@@ -4,6 +4,10 @@ icon: material/new-box
 
 # Cloudflare WARP
 
+!!! quote "sing-box 1.14.2.1 中的更改"
+
+    :material-plus: [ephemeral](#ephemeral)
+
 !!! question "自 sing-box 1.14.0.18 起"
 
 通过 MASQUE 连接 Cloudflare WARP：一条承载 IP 数据包的 HTTP/3 CONNECT-IP 隧道，经由用户态网络栈提供给 sing-box。支持 TCP 和 UDP。
@@ -29,6 +33,7 @@ icon: material/new-box
   "license": "",
   "access_jwt": "",
   "device_name": "",
+  "ephemeral": false,
   "api_detour": "",
   "network": "",
   "mtu": 1280,
@@ -42,7 +47,7 @@ icon: material/new-box
 
 ### 注册模式
 
-WARP 设备必须先在 Cloudflare 注册才能连接。有两种模式。
+WARP 设备必须先在 Cloudflare 注册才能连接。有三种模式。
 
 **静态凭据。** 运行以下命令并将输出粘贴到 `outbounds`。它会注册一个新设备并输出 `private_key`、`address`、`endpoint_public_key`、`device_id` 和 `access_token`。
 
@@ -53,6 +58,8 @@ sing-box generate warp-registration
 该命令支持 `--license`、`--access-jwt`、`--name`、`--model`、`--locale`、`--tag`、`--ipv6` 和 `--raw`。
 
 **自动注册。** 留空 `private_key` 和 `address` 并启用 [`experimental.cache_file`](/zh/configuration/experimental/cache-file/)。首次启动时出站会注册设备，并以出站标签为键存入缓存文件。之后的启动会复用它。若 Cloudflare 拒绝已存储的设备，出站会重新注册一次。
+
+**临时注册。** 留空 `private_key` 和 `address` 并设置 [`ephemeral`](#ephemeral)。每次启动都会注册一个只保存在内存中的新设备，无需缓存文件或其他状态，适合无状态节点。
 
 !!! danger ""
 
@@ -109,6 +116,16 @@ sing-box generate warp-registration
 #### device_name
 
 自动注册时设置的设备名称，显示在 Cloudflare 控制台中。
+
+#### ephemeral
+
+!!! question "自 sing-box 1.14.2.1 起"
+
+每次启动注册一个新设备，仅保存在内存中，并在 sing-box 退出时从 Cloudflare 删除。无需缓存文件。
+
+删除为尽力而为。因崩溃或强制终止而遗留的设备会保持注册状态；设置了 `license` 时需要注意，因为一个许可证只能绑定有限数量的设备。
+
+仅用于自动注册。
 
 #### api_detour
 

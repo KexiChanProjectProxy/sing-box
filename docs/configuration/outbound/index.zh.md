@@ -41,6 +41,7 @@
 | `loadbalance`  | [LoadBalance](./loadbalance/)   |
 | `naive`        | [NaiveProxy](./naive/)          |
 | `firefox-vpn`  | [Firefox VPN](./firefox-vpn/)   |
+| `cloudflare-warp` | [Cloudflare WARP](./cloudflare-warp/) |
 
 #### tag
 

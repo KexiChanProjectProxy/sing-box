@@ -1,0 +1,28 @@
+{
+  "experimental": {
+    "cache_file": {
+      "enabled": true
+    }
+  },
+  "outbounds": [
+    {
+      "type": "cloudflare-warp",
+      "tag": "warp",
+      "license": "",
+      "device_name": "sing-box",
+      "mtu": 1280,
+      "keep_alive_period": "30s"
+    },
+    {
+      "type": "cloudflare-warp",
+      "tag": "warp-static",
+      "server": "162.159.198.1",
+      "server_port": 443,
+      "private_key": "MHcCAQEEIBmnfZWmF8OQfFdd6qMHoZ1pBDRh3KFdTySW5DK9RHMboAoGCCqGSM49AwEHoUQDQgAEPWl8TqUN1Yu3zrdFAf8Tf7k8SL8Tgxwuw3bdqNHcZ7HZkgIHtpYWGoUWV8vsg8KyF6H7IoQqC2uTDvA2RNqkvQ==",
+      "address": ["172.16.0.2/32", "2606:4700:110:8a36::1/128"],
+      "tls": {
+        "server_name": "consumer-masque.cloudflareclient.com"
+      }
+    }
+  ]
+}

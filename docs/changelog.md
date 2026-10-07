@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0.18
+
+* Add [`cloudflare-warp`](/configuration/outbound/cloudflare-warp/) outbound: connect to Cloudflare WARP over MASQUE (HTTP/3 CONNECT-IP) with TCP and UDP, using static credentials or a device registered automatically and kept in the cache file
+* Add `sing-box generate warp-registration` to register a WARP device and print a ready-to-use outbound
+
 #### 1.14.0.17
 
 * Add [`direct.source_bind`](/configuration/outbound/direct/#source_bind): choose the outbound bind address by client source IP, with source CIDR rules and a random per-client address from a pool that is kept while the client keeps connecting within `ttl`

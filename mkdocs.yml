@@ -201,6 +201,7 @@ nav:
           - AnyTLS: configuration/outbound/anytls.md
           - Snell: configuration/outbound/snell.md
           - Noisy-Shuttle: configuration/outbound/noisy-shuttle.md
+          - Cloudflare WARP: configuration/outbound/cloudflare-warp.md
           - Tor: configuration/outbound/tor.md
           - SSH: configuration/outbound/ssh.md
           - DNS: configuration/outbound/dns.md

@@ -216,6 +216,15 @@ func (c *Client) GetDevice(ctx context.Context, deviceID string, token string) (
 	return &device, nil
 }
 
+// DeleteDevice removes the device registration from Cloudflare.
+func (c *Client) DeleteDevice(ctx context.Context, deviceID string, token string) error {
+	err := c.do(ctx, http.MethodDelete, "/reg/"+deviceID, token, nil, nil, nil)
+	if err != nil {
+		return E.Cause(err, "delete device")
+	}
+	return nil
+}
+
 // NewRegistration builds a Registration from an enrolled device object.
 func NewRegistration(deviceID string, token string, key *ecdsa.PrivateKey, device *AccountData, now time.Time) (*Registration, error) {
 	encodedKey, err := EncodePrivateKey(key)

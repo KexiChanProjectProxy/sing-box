@@ -139,6 +139,24 @@ func TestAPIError(t *testing.T) {
 	require.NotContains(t, err.Error(), "secret-token")
 }
 
+func TestDeleteDevice(t *testing.T) {
+	t.Parallel()
+
+	var deleted atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		require.Equal(t, http.MethodDelete, request.Method)
+		require.Equal(t, "/reg/device-1", request.URL.Path)
+		require.Equal(t, "Bearer secret-token", request.Header.Get("Authorization"))
+		deleted.Store(true)
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.Client(), server.URL)
+	require.NoError(t, client.DeleteDevice(context.Background(), "device-1", "secret-token"))
+	require.True(t, deleted.Load())
+}
+
 func TestKeyFormats(t *testing.T) {
 	t.Parallel()
 

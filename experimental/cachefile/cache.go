@@ -28,6 +28,8 @@ var (
 	bucketMode     = []byte("clash_mode")
 	bucketRuleSet  = []byte("rule_set")
 
+	bucketCloudflareWARP = []byte("cloudflare_warp")
+
 	bucketNameList = []string{
 		string(bucketSelected),
 		string(bucketExpand),
@@ -35,6 +37,7 @@ var (
 		string(bucketRuleSet),
 		string(bucketRDRC),
 		string(bucketDNSCache),
+		string(bucketCloudflareWARP),
 	}
 
 	cacheIDDefault = []byte("default")

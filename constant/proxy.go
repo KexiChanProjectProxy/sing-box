@@ -47,6 +47,7 @@ const (
 	TypeCloudflareOriginCA = "cloudflare-origin-ca"
 	TypeNoisyShuttle       = "noisy-shuttle"
 	TypeFirefoxVPN         = "firefox-vpn"
+	TypeCloudflareWARP     = "cloudflare-warp"
 )
 
 const (
@@ -121,6 +122,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "Cloudflared"
 	case TypeNoisyShuttle:
 		return "NoisyShuttle"
+	case TypeCloudflareWARP:
+		return "Cloudflare WARP"
 	case TypeSelector:
 		return "Selector"
 	case TypeURLTest:

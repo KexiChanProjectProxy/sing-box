@@ -7,6 +7,7 @@ type AnyTLSInboundOptions struct {
 	InboundTLSOptionsContainer
 	Users         []AnyTLSUser               `json:"users,omitempty"`
 	PaddingScheme badoption.Listable[string] `json:"padding_scheme,omitempty"`
+	Fallback      *ServerOptions             `json:"fallback,omitempty"`
 }
 
 type AnyTLSUser struct {

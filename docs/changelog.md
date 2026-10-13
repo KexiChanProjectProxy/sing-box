@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.2
+
+* Add [`anytls.fallback`](/configuration/inbound/anytls/#fallback): forward connections that fail AnyTLS authentication to a backend server, like the trojan inbound
+* Document that the [`anytls`](/configuration/inbound/anytls/#tls) inbound accepts plaintext connections when `tls` is empty, for use behind a TLS-terminating reverse proxy
+
 #### 1.14.2.1
 
 * Add [`cloudflare-warp.ephemeral`](/configuration/outbound/cloudflare-warp/#ephemeral): register a device at every start, keep it only in memory, and delete it from Cloudflare on shutdown, for stateless nodes without a cache file

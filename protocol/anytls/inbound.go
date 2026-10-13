@@ -15,6 +15,7 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
+	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -28,11 +29,12 @@ func RegisterInbound(registry *inbound.Registry) {
 
 type Inbound struct {
 	inbound.Adapter
-	tlsConfig tls.ServerConfig
-	router    adapter.ConnectionRouterEx
-	logger    log.StructuredLogger
-	listener  *listener.Listener
-	service   *anytls.Service
+	tlsConfig    tls.ServerConfig
+	router       adapter.ConnectionRouterEx
+	logger       log.StructuredLogger
+	listener     *listener.Listener
+	service      *anytls.Service
+	fallbackAddr M.Socksaddr
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSInboundOptions) (adapter.Inbound, error) {
@@ -55,14 +57,24 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		paddingScheme = []byte(strings.Join(options.PaddingScheme, "\n"))
 	}
 
+	var fallbackHandler N.TCPConnectionHandlerEx
+	if options.Fallback != nil && options.Fallback.Server != "" {
+		inbound.fallbackAddr = options.Fallback.Build()
+		if !inbound.fallbackAddr.IsValid() {
+			return nil, E.New("invalid fallback address: ", inbound.fallbackAddr)
+		}
+		fallbackHandler = adapter.NewUpstreamContextHandler(inbound.fallbackConnection, nil)
+	}
+
 	service, err := anytls.NewService(anytls.ServiceConfig{
 		Users: common.Map(options.Users, func(it option.AnyTLSUser) anytls.User {
 			return anytls.User(it)
 		}),
-		PaddingScheme: paddingScheme,
-		Handler:       (*inboundHandler)(inbound),
-		Logger:        logger,
-		StatsProvider: serverStats,
+		PaddingScheme:   paddingScheme,
+		Handler:         (*inboundHandler)(inbound),
+		FallbackHandler: fallbackHandler,
+		Logger:          logger,
+		StatsProvider:   serverStats,
 	})
 	if err != nil {
 		return nil, err
@@ -112,6 +124,16 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
 
 	}
+}
+
+func (h *Inbound) fallbackConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+	metadata.Inbound = h.Tag()
+	metadata.InboundType = h.Type()
+	//nolint:staticcheck
+	metadata.InboundDetour = h.listener.ListenOptions().Detour
+	metadata.Destination = h.fallbackAddr
+	adapter.LogInboundConnection(h.logger, ctx, metadata)
+	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
 
 type inboundHandler Inbound

@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.2
+
+* 新增 [`anytls.fallback`](/zh/configuration/inbound/anytls/#fallback)：将 AnyTLS 认证失败的连接转发到后端服务器，与 trojan 入站相同
+* 说明 [`anytls`](/zh/configuration/inbound/anytls/#tls) 入站在 `tls` 为空时接受明文连接，用于前置终止 TLS 的反向代理
+
 #### 1.14.2.1
 
 * 新增 [`cloudflare-warp.ephemeral`](/zh/configuration/outbound/cloudflare-warp/#ephemeral)：每次启动注册一个仅保存在内存中的设备，并在退出时从 Cloudflare 删除，适用于没有缓存文件的无状态节点

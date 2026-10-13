@@ -2,6 +2,10 @@
 icon: material/new-box
 ---
 
+!!! quote "sing-box 1.14.2.2 中的更改"
+
+    :material-plus: [fallback](#fallback)
+
 !!! question "自 sing-box 1.12.0 起"
 
 ### 结构
@@ -20,7 +24,11 @@ icon: material/new-box
     }
   ],
   "padding_scheme": [],
-  "tls": {}
+  "tls": {},
+  "fallback": {
+    "server": "127.0.0.1",
+    "server_port": 8080
+  }
 }
 ```
 
@@ -59,3 +67,15 @@ AnyTLS 填充方案行数组。
 #### tls
 
 TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#入站)。
+
+如果为空，入站接受明文 AnyTLS 连接。仅应在 sing-box 前置了终止 TLS 的反向代理时使用，例如 nginx `stream` 或 TCP 模式的 HAProxy。
+
+#### fallback
+
+!!! question "自 sing-box 1.14.2.2 起"
+
+回退服务器配置。如果为空，则禁用回退。
+
+AnyTLS 认证失败的连接（包括未知密码或首包格式错误）将携带原始数据转发到此服务器。启用 `tls` 时，服务器收到解密后的数据流。
+
+TLS 握手失败的连接不会被转发。

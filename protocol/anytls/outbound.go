@@ -118,6 +118,7 @@ func (h *Outbound) Start(stage adapter.StartStage) error {
 	h.statsAccess.Lock()
 	h.client = client
 	h.statsAccess.Unlock()
+	client.SetSelectHandler(h.logSelectedSession)
 	h.applyServerStatsHandler()
 	h.uotClient = &uot.Client{
 		Dialer:  anytlsDialer(client.CreateProxy),

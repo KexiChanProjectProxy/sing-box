@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.7
+
+* Fix [`anytls.connection_lifetime_jitter`](/configuration/outbound/anytls/#connection_lifetime_jitter) having almost no effect: every session got `max_connection_lifetime` minus half the jitter, so sessions created together expired together. Lifetimes are now drawn uniformly within the jitter on either side
+
 #### 1.14.2.6
 
 * Add [`anytls.close_after_idle`](/configuration/outbound/anytls/#close_after_idle): close sessions idle for longer than this regardless of the pool settings, so slow sessions that are almost never selected are replaced

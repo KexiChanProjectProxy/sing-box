@@ -84,7 +84,7 @@ AnyTLS 密码。
 
 #### connection_lifetime_jitter
 
-添加到 max_connection_lifetime 的随机抖动，用于避免雷鸣般的群体效应。
+应用于 `max_connection_lifetime` 的随机抖动。每个会话的生命周期在 `max_connection_lifetime` 减去与加上此值之间均匀随机选取，且不小于一秒，避免同时建立的会话同时到期。
 
 #### ensure_idle_session_create_rate
 

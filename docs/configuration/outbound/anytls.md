@@ -84,7 +84,7 @@ Maximum lifetime of a connection before it is recycled.
 
 #### connection_lifetime_jitter
 
-Random jitter added to max_connection_lifetime to avoid thundering herd.
+Random jitter applied to `max_connection_lifetime`. Each session's lifetime is drawn uniformly between `max_connection_lifetime` minus and plus this value, and is at least one second, so sessions created together do not expire together.
 
 #### ensure_idle_session_create_rate
 

@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.7
+
+* 修复 [`anytls.connection_lifetime_jitter`](/zh/configuration/outbound/anytls/#connection_lifetime_jitter) 几乎不起作用的问题：此前每个会话的生命周期都是 `max_connection_lifetime` 减去一半抖动，同时建立的会话会同时到期。现在生命周期在正负抖动范围内均匀随机选取
+
 #### 1.14.2.6
 
 * 新增 [`anytls.close_after_idle`](/zh/configuration/outbound/anytls/#close_after_idle)：关闭空闲超过此值的会话，不受连接池设置限制，用于替换几乎不会被选中的高延迟会话

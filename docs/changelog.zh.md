@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.4
+
+* 每个新的 anytls 连接都会记录一条 [`anytls.session.selected`](/zh/configuration/outbound/anytls/#会话选择) 调试事件，包含会话的延迟、使用次数、创建与到期时间以及剩余生命周期
+* 修复 AnyTLS 接收循环与打开流之间对对端版本的数据竞争
+
 #### 1.14.2.3
 
 * [`anytls`](/zh/configuration/outbound/anytls/#会话选择) 出站在客户端测量每个会话的端到端延迟，来源为设置帧交换和每次心跳，无需修改服务端

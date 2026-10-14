@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.4
+
+* Log an [`anytls.session.selected`](/configuration/outbound/anytls/#session-selection) debug event for every new anytls connection, with the session's latency, use count, creation and expiry time, and lifetime left
+* Fix a data race on the AnyTLS peer version between the receive loop and opening a stream
+
 #### 1.14.2.3
 
 * [`anytls`](/configuration/outbound/anytls/#session-selection) outbound measures the end-to-end latency of every session on the client, from the settings exchange and each heartbeat, and needs no server change

@@ -110,6 +110,19 @@ The client measures the end-to-end latency of every session itself, so no server
 
 Pre-created sessions from `ensure_idle_session` are measured right after they connect, before they carry any traffic. Without `heartbeat`, a session's latency is only measured once.
 
+At `debug` level every new connection logs an `anytls.session.selected` event describing its session. Durations are in milliseconds and times in UTC.
+
+| Field | Meaning |
+|---|---|
+| `session` | Session number, from 1 |
+| `source` | `pool` for an idle session reused, `new` for one dialed for this connection |
+| `streams` | Connections opened on the session, this one included |
+| `created_at`, `age` | When the session was created, and its age |
+| `idle_for` | How long a reused session was idle |
+| `latency`, `latency_last`, `latency_samples` | Smoothed and latest latency, and the number of samples; the first two are omitted until measured |
+| `max_lifetime`, `expires_at`, `lifetime_left` | The session's lifetime with jitter, when it expires, and the time left, negative once expired; omitted without `max_connection_lifetime` |
+| `idle_sessions`, `total_sessions` | Idle and total sessions after the pick |
+
 ### Dial Fields
 
 See [Dial Fields](/configuration/shared/dial/) for details.

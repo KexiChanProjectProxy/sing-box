@@ -110,6 +110,19 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#出站)。
 
 `ensure_idle_session` 预建的会话在连接后立即测量，无需先承载流量。未设置 `heartbeat` 时，每个会话只测量一次。
 
+日志级别为 `debug` 时，每个新连接都会记录一条 `anytls.session.selected` 事件，描述所用的会话。时长单位为毫秒，时间为 UTC。
+
+| 字段 | 含义 |
+|---|---|
+| `session` | 会话编号，从 1 开始 |
+| `source` | `pool` 表示复用的空闲会话，`new` 表示为此连接新建的会话 |
+| `streams` | 该会话上已打开的连接数，包括本次 |
+| `created_at`、`age` | 会话的创建时间和已存在时长 |
+| `idle_for` | 复用的会话在此前空闲的时长 |
+| `latency`、`latency_last`、`latency_samples` | 平滑延迟、最近一次延迟和样本数；未测量前省略前两项 |
+| `max_lifetime`、`expires_at`、`lifetime_left` | 含抖动的会话生命周期、到期时间和剩余时间（到期后为负）；未设置 `max_connection_lifetime` 时省略 |
+| `idle_sessions`、`total_sessions` | 选取后的空闲会话数和会话总数 |
+
 ### 拨号字段
 
 参阅 [拨号字段](/zh/configuration/shared/dial/)。

@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -143,6 +144,20 @@ func (h *Outbound) dialOut(ctx context.Context) (net.Conn, error) {
 		return nil, err
 	}
 	return h.conns.track(conn), nil
+}
+
+var _ adapter.OutboundWithSessionLatency = (*Outbound)(nil)
+
+// SessionLatency is the smoothed latency of the idle session a new connection
+// would be placed on, the lowest among measured idle sessions.
+func (h *Outbound) SessionLatency() (time.Duration, bool) {
+	h.statsAccess.Lock()
+	client := h.client
+	h.statsAccess.Unlock()
+	if client == nil {
+		return 0, false
+	}
+	return client.IdleLatency()
 }
 
 func (h *Outbound) MultiplexEnabled() bool {

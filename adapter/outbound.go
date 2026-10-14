@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"net/netip"
+	"time"
 
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -80,6 +81,14 @@ type OutboundWithOverrideIP interface {
 type OutboundWithMultiplex interface {
 	Outbound
 	MultiplexEnabled() bool
+}
+
+// OutboundWithSessionLatency is implemented by outbounds that measure the
+// connections they reuse. SessionLatency is the latency of the connection a
+// new dial would use right now, or false when none is measured.
+type OutboundWithSessionLatency interface {
+	Outbound
+	SessionLatency() (time.Duration, bool)
 }
 
 type FlowOutbound interface {

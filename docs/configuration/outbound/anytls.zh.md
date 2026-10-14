@@ -54,19 +54,19 @@ AnyTLS 密码。
 
 #### idle_session_check_interval
 
-检查空闲会话的时间间隔。默认值：30秒。
+连接池维护的时间间隔，每次维护对空闲会话应用 `idle_session_timeout`、`max_connection_lifetime`、`ensure_idle_session`、`close_after_idle` 和 `close_after_lifetime`。默认值：30秒。小于等于 5 秒的值会被替换为默认值。
 
 #### idle_session_timeout
 
-在检查中，关闭闲置时间超过此值的会话。默认值：30秒。
+在检查中，关闭闲置时间超过此值的会话，`min_idle_session` 保留的除外。默认值：30秒。小于等于 5 秒的值会被替换为默认值。
 
 #### min_idle_session
 
-在检查中，至少前 `n` 个空闲会话保持打开状态。默认值：`n`=0
+在检查中，至少保持 `n` 个空闲会话打开，未超过 `idle_session_timeout` 的会话也计入其中。被保留的超时会话是延迟最低的那些，参阅 [会话选择](#会话选择)。默认值：`0`。
 
 #### ensure_idle_session
 
-维护在连接池中的目标空闲会话数量。
+维护在连接池中的目标空闲会话数量。每次检查补建缺少的会话，每次最多 `ensure_idle_session_create_rate` 个。
 
 #### heartbeat
 
@@ -76,11 +76,11 @@ AnyTLS 密码。
 
 #### min_idle_session_for_age
 
-受基于时间的清理保护的最小空闲会话数。
+`max_connection_lifetime` 至少保留的空闲会话数。需要取舍时保留延迟最低的会话。
 
 #### max_connection_lifetime
 
-连接被回收前的最大生命周期。
+会话的最大存在时间。每次检查中，超过此值的空闲会话会被关闭，延迟最高的优先，同时至少保留 `min_idle_session_for_age` 个空闲会话。正在承载连接的会话不受影响，超过此值后仍可能被复用；如需停止复用旧会话，请使用 [`close_after_lifetime`](#close_after_lifetime)。
 
 #### connection_lifetime_jitter
 

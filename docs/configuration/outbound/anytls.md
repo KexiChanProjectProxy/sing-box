@@ -54,19 +54,19 @@ The AnyTLS password.
 
 #### idle_session_check_interval
 
-Interval checking for idle sessions. Default: 30s.
+Interval of the pool maintenance that applies `idle_session_timeout`, `max_connection_lifetime`, `ensure_idle_session`, `close_after_idle` and `close_after_lifetime` to idle sessions. Default: 30s. A value of 5s or less is replaced by the default.
 
 #### idle_session_timeout
 
-In the check, close sessions that have been idle for longer than this. Default: 30s.
+In the check, close sessions that have been idle for longer than this, except those kept by `min_idle_session`. Default: 30s. A value of 5s or less is replaced by the default.
 
 #### min_idle_session
 
-In the check, at least the first `n` idle sessions are kept open. Default value: `n`=0
+In the check, keep at least `n` idle sessions open, counting those not yet past `idle_session_timeout`. The expired sessions kept are the lowest-latency ones, see [Session selection](#session-selection). Default: `0`.
 
 #### ensure_idle_session
 
-Target number of idle sessions to maintain in the pool.
+Target number of idle sessions to maintain in the pool. Each check dials the missing ones, at most `ensure_idle_session_create_rate` at a time.
 
 #### heartbeat
 
@@ -76,11 +76,11 @@ Each heartbeat round trip also refreshes the session's latency, see [Session sel
 
 #### min_idle_session_for_age
 
-Minimum idle sessions protected from age-based cleanup.
+Minimum number of idle sessions that `max_connection_lifetime` leaves open. When it has to choose, it keeps the lowest-latency ones.
 
 #### max_connection_lifetime
 
-Maximum lifetime of a connection before it is recycled.
+Maximum age of a session. In each check, idle sessions past it are closed, the highest-latency ones first, while at least `min_idle_session_for_age` idle sessions stay open. A session carrying a connection is not affected and can still be reused after it is past this age; use [`close_after_lifetime`](#close_after_lifetime) to stop reusing old sessions.
 
 #### connection_lifetime_jitter
 

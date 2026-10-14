@@ -219,7 +219,7 @@ require (
 	zombiezen.com/go/capnproto2 v2.18.2+incompatible // indirect
 )
 
-replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.14-kexi.1
+replace github.com/anytls/sing-anytls => github.com/KexiChanProjectProxy/sing-anytls v0.0.14-kexi.2
 
 replace github.com/sagernet/sing-quic => github.com/KexiChanProjectProxy/sing-quic v0.7.1-kexi.2
 

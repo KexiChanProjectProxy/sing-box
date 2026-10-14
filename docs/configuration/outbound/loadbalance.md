@@ -359,7 +359,7 @@ Attempt order is fixed when the connection starts:
 2. Every other configured `primary_outbounds` member.
 3. Every other configured `backup_outbounds` member, only after all primaries have failed.
 
-Within steps 2 and 3, members are ordered by their last measured raw latency, lowest first, with ties broken by tag. Members without a measurement come last, ordered by tag. `sorter`, `top_n`, `tolerance`, and health filtering do not apply here: a dial that is already failing falls back on the simplest signal available, and unhealthy members are still tried as long as they are configured. A backup is never tried before an untried primary, even when it is faster.
+Within steps 2 and 3, members are ordered by their last measured raw latency, lowest first, with ties broken by tag. With [`latency_mode`](#latency_mode) `session`, a member that measures its connections is ordered on its live session latency instead. Members without a measurement come last, ordered by tag. `sorter`, `top_n`, `tolerance`, and health filtering do not apply here: a dial that is already failing falls back on the simplest signal available, and unhealthy members are still tried as long as they are configured. A backup is never tried before an untried primary, even when it is faster.
 
 Each member is tried at most once per connection. Members that do not support the connection's network are skipped. A nested `loadbalance`, `urltest`, or `selector` counts as one member and handles its own members. When every member fails, the error of the last attempt is returned.
 

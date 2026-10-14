@@ -2,6 +2,12 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.6
+
+* 新增 [`anytls.close_after_idle`](/zh/configuration/outbound/anytls/#close_after_idle)：关闭空闲超过此值的会话，不受连接池设置限制，用于替换几乎不会被选中的高延迟会话
+* 新增 [`anytls.close_after_lifetime`](/zh/configuration/outbound/anytls/#close_after_lifetime)：会话超过此值（含抖动）后不再复用，并在其连接结束后关闭，不会打断连接
+* `anytls.session.selected` 调试事件新增 `retire_at` 和 `retire_left` 字段
+
 #### 1.14.2.5
 
 * 为 [`urltest`](/zh/configuration/outbound/urltest/#latency_mode) 和 [`loadbalance`](/zh/configuration/outbound/loadbalance/#latency_mode) 新增 `latency_mode: "session"`：按新连接将要使用的会话延迟为 `anytls` 成员排序，并按连接选择成员；其他成员回退到 URL 测试结果

@@ -23,6 +23,8 @@ icon: material/new-box
 	"max_connection_lifetime": "300s",
 	"connection_lifetime_jitter": "10s",
 	"ensure_idle_session_create_rate": 5,
+	"close_after_idle": "",
+	"close_after_lifetime": "",
 	"client_metadata": "",
   "tls": {},
 
@@ -88,6 +90,22 @@ AnyTLS 密码。
 
 每个时间间隔内创建新空闲会话的最大速率。
 
+#### close_after_idle
+
+关闭空闲时间超过此值的会话。为空时禁用。
+
+与 `idle_session_timeout` 不同，它不受 `min_idle_session` 和 `ensure_idle_session` 保护的限制，因此新连接一直不选用的会话（例如延迟高的会话）总会被替换；`ensure_idle_session` 会补建新的会话。每隔 `idle_session_check_interval` 检查一次。
+
+没有流量时，`ensure_idle_session` 保留的会话每隔 `close_after_idle` 轮换一次。
+
+#### close_after_lifetime
+
+会话存在时间超过此值后不再复用，并将其关闭。为空时禁用。
+
+每个会话的期限在此值的 90% 到 100% 之间随机选取，避免同时建立的会话同时退役。到期后该会话不再分配新连接：空闲时立即关闭，否则在其承载的连接结束后立即关闭，不会打断任何连接。一直保持打开的连接会让其会话存活到连接结束。
+
+与 `max_connection_lifetime` 不同，它不受 `min_idle_session_for_age` 保护的限制。
+
 #### client_metadata
 
 !!! question "自 sing-box 1.13.16 起"
@@ -121,6 +139,7 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#出站)。
 | `idle_for` | 复用的会话在此前空闲的时长 |
 | `latency`、`latency_last`、`latency_samples` | 平滑延迟、最近一次延迟和样本数；未测量前省略前两项 |
 | `max_lifetime`、`expires_at`、`lifetime_left` | 含抖动的会话生命周期、到期时间和剩余时间（到期后为负）；未设置 `max_connection_lifetime` 时省略 |
+| `retire_at`、`retire_left` | 会话因 `close_after_lifetime` 停止复用的时间及剩余时间；未设置时省略 |
 | `idle_sessions`、`total_sessions` | 选取后的空闲会话数和会话总数 |
 
 ### 拨号字段

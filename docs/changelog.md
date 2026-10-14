@@ -2,6 +2,12 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.6
+
+* Add [`anytls.close_after_idle`](/configuration/outbound/anytls/#close_after_idle): close sessions idle for longer than this regardless of the pool settings, so slow sessions that are almost never selected are replaced
+* Add [`anytls.close_after_lifetime`](/configuration/outbound/anytls/#close_after_lifetime): stop reusing sessions older than this, with jitter, and close them once their connection ends, without interrupting it
+* Report `retire_at` and `retire_left` in the `anytls.session.selected` debug event
+
 #### 1.14.2.5
 
 * Add `latency_mode: "session"` to [`urltest`](/configuration/outbound/urltest/#latency_mode) and [`loadbalance`](/configuration/outbound/loadbalance/#latency_mode): rank `anytls` members on the latency of the session a new connection would use and choose the member per connection; other members fall back to their URL test result

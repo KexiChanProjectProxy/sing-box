@@ -23,6 +23,8 @@ icon: material/new-box
 	"max_connection_lifetime": "300s",
 	"connection_lifetime_jitter": "10s",
 	"ensure_idle_session_create_rate": 5,
+	"close_after_idle": "",
+	"close_after_lifetime": "",
 	"client_metadata": "",
   "tls": {},
 
@@ -88,6 +90,22 @@ Random jitter added to max_connection_lifetime to avoid thundering herd.
 
 Maximum rate at which new idle sessions are created per interval.
 
+#### close_after_idle
+
+Close a session that has been idle for longer than this. Disabled when empty.
+
+Unlike `idle_session_timeout`, it ignores `min_idle_session` and `ensure_idle_session`, so a session that new connections keep passing over, such as a slow one, is always replaced; `ensure_idle_session` dials a fresh session in its place. Sessions are checked every `idle_session_check_interval`.
+
+Without traffic, the sessions kept by `ensure_idle_session` are replaced once per `close_after_idle`.
+
+#### close_after_lifetime
+
+Stop reusing a session older than this, and close it. Disabled when empty.
+
+Each session's limit is drawn between 90% and 100% of this value, so sessions created together do not all retire at once. From then on the session is never given a new connection. It closes at once when idle, and otherwise as soon as the connection it carries ends, so no connection is interrupted. A connection that stays open keeps its session alive until it ends.
+
+Unlike `max_connection_lifetime`, it ignores `min_idle_session_for_age`.
+
 #### client_metadata
 
 !!! question "Since sing-box 1.13.16"
@@ -121,6 +139,7 @@ At `debug` level every new connection logs an `anytls.session.selected` event de
 | `idle_for` | How long a reused session was idle |
 | `latency`, `latency_last`, `latency_samples` | Smoothed and latest latency, and the number of samples; the first two are omitted until measured |
 | `max_lifetime`, `expires_at`, `lifetime_left` | The session's lifetime with jitter, when it expires, and the time left, negative once expired; omitted without `max_connection_lifetime` |
+| `retire_at`, `retire_left` | When the session stops being reused under `close_after_lifetime`, and the time left; omitted without it |
 | `idle_sessions`, `total_sessions` | Idle and total sessions after the pick |
 
 ### Dial Fields

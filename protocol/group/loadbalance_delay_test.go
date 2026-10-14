@@ -100,7 +100,7 @@ func TestWeightedDelayScoreMatchesOldBlend(t *testing.T) {
 	lb.observeDelay("a", 10)
 
 	candidates := []Candidate{{Tag: "a", Latency: 10}}
-	lb.scoreCandidates(candidates)
+	lb.scoreCandidates(candidates, false)
 	// (70 + 10) / 2 = 40, the value the old sample window produced.
 	require.InDelta(t, 40, candidates[0].Score, 1e-9)
 }

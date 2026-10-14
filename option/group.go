@@ -25,6 +25,26 @@ type URLTestOutboundOptions struct {
 	InterruptExistConnections bool               `json:"interrupt_exist_connections,omitempty"`
 	PreferDomain              bool               `json:"prefer_domain,omitempty"`
 	OverrideIP                *OverrideIPOptions `json:"override_ip,omitempty"`
+	LatencyMode               string             `json:"latency_mode,omitempty"`
+}
+
+// Values of LatencyMode in the urltest and loadbalance groups. URL test
+// latency, the default, comes from periodic HTTP probes. Session latency is
+// the live latency of the connection an outbound would use for a new dial,
+// read at every dial, so the member is chosen per connection.
+const (
+	LatencyModeURLTest = "url_test"
+	LatencyModeSession = "session"
+)
+
+// CheckLatencyMode rejects an unknown latency_mode.
+func CheckLatencyMode(mode string) error {
+	switch mode {
+	case "", LatencyModeURLTest, LatencyModeSession:
+		return nil
+	default:
+		return E.New("unsupported latency_mode: ", mode)
+	}
 }
 
 // LoadBalanceWeightedDelayOptions is deprecated in favour of Sorter, which
@@ -85,6 +105,7 @@ type LoadBalanceOutboundOptions struct {
 	InterruptExistConnections bool                             `json:"interrupt_exist_connections,omitempty"`
 	PreferDomain              bool                             `json:"prefer_domain,omitempty"`
 	OverrideIP                *OverrideIPOptions               `json:"override_ip,omitempty"`
+	LatencyMode               string                           `json:"latency_mode,omitempty"`
 }
 
 type LoadBalanceTopNOptions struct {
@@ -105,6 +126,9 @@ func (o LoadBalanceOutboundOptions) Check() error {
 	}
 	if len(o.PrimaryOutbounds) == 0 {
 		return E.New("missing primary_outbounds")
+	}
+	if err := CheckLatencyMode(o.LatencyMode); err != nil {
+		return err
 	}
 	if o.Strategy != "" && o.Strategy != "consistent_hash" && o.Strategy != "random" {
 		return E.New("unsupported strategy: ", o.Strategy)

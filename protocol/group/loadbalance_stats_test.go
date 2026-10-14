@@ -198,7 +198,7 @@ func TestScoreCandidatesReadsTheRequestedDirection(t *testing.T) {
 	lb.enableTransportStats()
 
 	candidates := []Candidate{{Tag: "a", Outbound: member, Latency: 5}}
-	lb.scoreCandidates(candidates)
+	lb.scoreCandidates(candidates, false)
 	require.InDelta(t, 11, candidates[0].Score, 1e-9, "client_rtt must read the client reader")
 }
 
@@ -221,11 +221,11 @@ func TestScoreCandidatesResolvesNestedGroupSelection(t *testing.T) {
 	lb.enableTransportStats()
 
 	candidates := []Candidate{{Tag: "nested", Outbound: nested, Latency: 5}}
-	lb.scoreCandidates(candidates)
+	lb.scoreCandidates(candidates, false)
 	require.InDelta(t, 20, candidates[0].Score, 1e-9, "a nested group is scored on its current selection")
 
 	nested.current = "leaf-b"
-	lb.scoreCandidates(candidates)
+	lb.scoreCandidates(candidates, false)
 	require.InDelta(t, 80, candidates[0].Score, 1e-9, "the selection is re-resolved on each scoring round")
 }
 
@@ -236,7 +236,7 @@ func TestScoreCandidatesWithoutStatsEnabledReadsNothing(t *testing.T) {
 	lb := newStatsBalance(t, map[string]float64{MetricLatency: 1}, map[string]adapter.Outbound{"a": member})
 	lb.enableTransportStats()
 	candidates := []Candidate{{Tag: "a", Outbound: member, Latency: 42}}
-	lb.scoreCandidates(candidates)
+	lb.scoreCandidates(candidates, false)
 	require.InDelta(t, 42, candidates[0].Score, 1e-9)
 }
 
@@ -324,7 +324,7 @@ func TestResetWindowThenScoreUsesLatestOnly(t *testing.T) {
 	lb.observeDelay("a", 40)
 
 	candidates := []Candidate{{Tag: "a", Latency: 40}}
-	lb.scoreCandidates(candidates)
+	lb.scoreCandidates(candidates, false)
 	require.InDelta(t, 40, candidates[0].Score, 1e-9, "the pre-reset samples must not survive")
 }
 
@@ -345,7 +345,7 @@ func TestLatencyWindowKeysCoverDifferentSpans(t *testing.T) {
 		clock.advance(4 * time.Minute)
 		lb.observeDelay("a", 20)
 		candidates := []Candidate{{Tag: "a", Latency: 20}}
-		lb.scoreCandidates(candidates)
+		lb.scoreCandidates(candidates, false)
 		return candidates[0].Score
 	}
 	require.InDelta(t, 20, scoreWithKey("latency_avg_1m"), 1e-9,
@@ -409,7 +409,7 @@ func TestLoadBalanceLatencyStatsConcurrent(t *testing.T) {
 				for _, tag := range tags {
 					candidates = append(candidates, Candidate{Tag: tag, Latency: 50})
 				}
-				lb.scoreCandidates(candidates)
+				lb.scoreCandidates(candidates, false)
 			}
 		}()
 	}
@@ -422,7 +422,7 @@ func TestLoadBalanceLatencyStatsConcurrent(t *testing.T) {
 func TestHealthyCandidatesNeverEmitsZeroLatency(t *testing.T) {
 	t.Parallel()
 	lb := newHealthFixture(t, map[string]uint16{"a": 0, "b": 120, "c": 0, "d": 30})
-	got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true)
+	got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true, false)
 	require.Len(t, got, 2)
 	for _, candidate := range got {
 		require.NotZero(t, candidate.Latency)
@@ -444,7 +444,7 @@ func TestDefaultSorterMatchesLatencyRankingProperty(t *testing.T) {
 			delays[string(rune('a'+i))] = uint16(random.Intn(4)*random.Intn(65535) + 1)
 		}
 		lb := newHealthFixture(t, delays)
-		got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true)
+		got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true, false)
 
 		want := make([]Candidate, len(got))
 		copy(want, got)
@@ -647,12 +647,12 @@ func TestScoreCandidatesLogsBreakdownOnlyForConfiguredSorter(t *testing.T) {
 	t.Parallel()
 	logger, events := newCapturingLogger()
 	lb := &LoadBalance{sorter: mustSorter(t, map[string]float64{MetricLatency: 1, "client_rtt": 1}), logger: logger}
-	lb.scoreCandidates([]Candidate{{Tag: "a", Latency: 10}})
+	lb.scoreCandidates([]Candidate{{Tag: "a", Latency: 10}}, false)
 	require.True(t, events.has("loadbalance.score"))
 
 	defaultLogger, defaultEvents := newCapturingLogger()
 	plain := &LoadBalance{sorter: defaultSorter(), logger: defaultLogger}
-	plain.scoreCandidates([]Candidate{{Tag: "a", Latency: 10}})
+	plain.scoreCandidates([]Candidate{{Tag: "a", Latency: 10}}, false)
 	require.False(t, defaultEvents.has("loadbalance.score"), "the default sorter has nothing to explain")
 }
 

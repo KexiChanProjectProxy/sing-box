@@ -52,10 +52,14 @@ type URLTest struct {
 	interruptExternalConnections bool
 	preferDomain                 bool
 	overrideIP                   *option.OverrideIPOptions
+	sessionLatency               bool
 }
 
 func NewURLTest(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.URLTestOutboundOptions) (adapter.Outbound, error) {
 	if err := option.CheckDestinationOverride(options.PreferDomain, options.OverrideIP); err != nil {
+		return nil, err
+	}
+	if err := option.CheckLatencyMode(options.LatencyMode); err != nil {
 		return nil, err
 	}
 	outbound := &URLTest{
@@ -72,6 +76,7 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.Structure
 		interruptExternalConnections: options.InterruptExistConnections,
 		preferDomain:                 options.PreferDomain,
 		overrideIP:                   options.OverrideIP,
+		sessionLatency:               options.LatencyMode == option.LatencyModeSession,
 	}
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
@@ -100,6 +105,7 @@ func (s *URLTest) Start() error {
 	if err != nil {
 		return err
 	}
+	group.sessionLatency = s.sessionLatency
 	s.group = group
 	return nil
 }
@@ -173,7 +179,9 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	default:
 		return nil, E.Extend(N.ErrUnknownNetwork, network)
 	}
-	if outbound == nil {
+	if s.group.sessionLatency {
+		outbound = s.selectForConnection(ctx, N.NetworkName(network))
+	} else if outbound == nil {
 		outbound, _ = s.group.Select(network)
 	}
 	if outbound == nil {
@@ -189,6 +197,21 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	return nil, err
 }
 
+// selectForConnection chooses the member for one connection in session latency
+// mode: the lowest latency right now, with no tolerance towards the member
+// chosen before. It falls back to the group's usual choice when no member has
+// a latency.
+func (s *URLTest) selectForConnection(ctx context.Context, network string) adapter.Outbound {
+	outbound, delay, source := s.group.selectLowest(network)
+	if outbound == nil {
+		outbound, _ = s.group.Select(network)
+		return outbound
+	}
+	s.logger.DebugEventContext(ctx, "urltest.select", "urltest member selected",
+		log.String("tag", outbound.Tag()), log.Int64("latency_ms", int64(delay)), log.String("source", source))
+	return outbound
+}
+
 func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	s.group.Touch()
 	if s.preferDomain || adapter.PreferDomainFromContext(ctx) {
@@ -196,7 +219,9 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	}
 	ctx = withOverrideIPContext(ctx, s.overrideIP)
 	outbound := s.group.selectedOutboundUDP
-	if outbound == nil {
+	if s.group.sessionLatency {
+		outbound = s.selectForConnection(ctx, N.NetworkUDP)
+	} else if outbound == nil {
 		outbound, _ = s.group.Select(N.NetworkUDP)
 	}
 	if outbound == nil {
@@ -270,16 +295,19 @@ type URLTestGroup struct {
 	selectedOutboundUDP          adapter.Outbound
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
-	updateCallback               func()
-	dataPathLatency              bool
-	memberProbe                  func(detour adapter.Outbound) (uint16, probeAction)
-	afterProbe                   func(memberTag string, delay uint16, ok bool)
-	access                       sync.Mutex
-	updateAccess                 sync.Mutex
-	ticker                       *time.Ticker
-	close                        chan struct{}
-	started                      bool
-	lastActive                   common.TypedValue[time.Time]
+	// sessionLatency ranks members on their live session latency, falling
+	// back to URL test results, and chooses a member per connection.
+	sessionLatency  bool
+	updateCallback  func()
+	dataPathLatency bool
+	memberProbe     func(detour adapter.Outbound) (uint16, probeAction)
+	afterProbe      func(memberTag string, delay uint16, ok bool)
+	access          sync.Mutex
+	updateAccess    sync.Mutex
+	ticker          *time.Ticker
+	close           chan struct{}
+	started         bool
+	lastActive      common.TypedValue[time.Time]
 }
 
 func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.StructuredLogger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
@@ -354,7 +382,35 @@ func (g *URLTestGroup) Close() error {
 	return nil
 }
 
+// selectLowest returns the member with the lowest latency for network, read
+// live in session latency mode, or nil when no member has a latency.
+func (g *URLTestGroup) selectLowest(network string) (adapter.Outbound, uint16, string) {
+	var (
+		best      adapter.Outbound
+		bestDelay uint16
+		bestFrom  string
+	)
+	for _, detour := range g.outbounds {
+		if !common.Contains(detour.Network(), network) {
+			continue
+		}
+		delay, source, ok := memberLatency(g.outbound, g.history, detour, g.sessionLatency)
+		if !ok {
+			continue
+		}
+		if best == nil || delay < bestDelay {
+			best, bestDelay, bestFrom = detour, delay, source
+		}
+	}
+	return best, bestDelay, bestFrom
+}
+
 func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
+	if g.sessionLatency {
+		if outbound, _, _ := g.selectLowest(network); outbound != nil {
+			return outbound, true
+		}
+	}
 	var minDelay uint16
 	var minOutbound adapter.Outbound
 	switch network {

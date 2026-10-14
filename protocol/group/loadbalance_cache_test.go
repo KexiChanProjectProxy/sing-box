@@ -142,7 +142,7 @@ func TestHealthyCandidatesScoresWithLatencyWindow(t *testing.T) {
 	lb.observeDelay("b", 100)
 	lb.observeDelay("b", 100)
 	lb.observeDelay("b", 10)
-	got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true)
+	got := lb.healthyCandidates(lb.primaryTags, lb.primaryOutbounds, true, false)
 
 	var candidateB *Candidate
 	for i := range got {

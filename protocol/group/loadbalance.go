@@ -74,6 +74,9 @@ type LoadBalance struct {
 	latencyRecorderFactory func() *transportstats.Recorder
 	// statsEnabled is set once in Start and read without locking afterwards.
 	statsEnabled bool
+	// sessionLatency ranks members on their live session latency, falling
+	// back to URL test results, and ranks again for every connection.
+	sessionLatency bool
 }
 
 func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
@@ -108,6 +111,7 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 		interruptExternalConnections: options.InterruptExistConnections,
 		preferDomain:                 options.PreferDomain,
 		overrideIP:                   options.OverrideIP,
+		sessionLatency:               options.LatencyMode == option.LatencyModeSession,
 	}
 	if lb.timeout == 0 {
 		lb.timeout = C.TCPTimeout
@@ -546,6 +550,11 @@ func (l *LoadBalance) selectCandidate(metadata adapter.InboundContext) (Candidat
 // errors such as an empty hash key are returned as errors.
 func (l *LoadBalance) pickCandidate(metadata adapter.InboundContext) (Candidate, bool, error) {
 	snapshot := l.snapshot.Load()
+	if l.sessionLatency {
+		if live := l.liveSnapshot(snapshot); live != nil {
+			snapshot = live
+		}
+	}
 	if snapshot == nil || len(snapshot.Candidates) == 0 {
 		if l.emptyPoolAction == "random" {
 			candidate, err := l.selectEmptyPoolFallback()
@@ -605,18 +614,12 @@ func (l *LoadBalance) computeHashKey(metadata adapter.InboundContext) string {
 func (l *LoadBalance) rebuildSnapshot() {
 	l.rebuildMu.Lock()
 	defer l.rebuildMu.Unlock()
-	primaryCandidates := l.healthyCandidates(l.primaryTags, l.primaryOutbounds, true)
 	snap := l.snapshot.Load()
 	var previous []Candidate
 	if snap != nil {
 		previous = snap.Candidates
 	}
-	var candidates []Candidate
-	if len(primaryCandidates) > 0 {
-		candidates = selectTopNWithTolerance(primaryCandidates, l.topNPrimary, l.tolerance, previous)
-	} else {
-		candidates = l.healthyCandidates(l.backupTags, l.backupOutbounds, false)
-	}
+	candidates := l.computeCandidates(previous, false)
 	if len(candidates) == 0 && snap != nil && snapshotAllZeroLatency(snap) && l.hasPendingSelfTestingMember() {
 		return
 	}
@@ -638,6 +641,37 @@ func (l *LoadBalance) rebuildSnapshot() {
 	if snap != nil {
 		l.interruptGroup.Interrupt(l.interruptExternalConnections)
 	}
+}
+
+// computeCandidates ranks the members and returns the pool: the top primaries,
+// kept within tolerance of previous, or the backups when no primary is
+// healthy. quiet leaves out the per-member score events, for rankings made
+// per connection.
+func (l *LoadBalance) computeCandidates(previous []Candidate, quiet bool) []Candidate {
+	primaryCandidates := l.healthyCandidates(l.primaryTags, l.primaryOutbounds, true, quiet)
+	if len(primaryCandidates) > 0 {
+		return selectTopNWithTolerance(primaryCandidates, l.topNPrimary, l.tolerance, previous)
+	}
+	return l.healthyCandidates(l.backupTags, l.backupOutbounds, false, quiet)
+}
+
+// liveSnapshot ranks the members again for one connection in session latency
+// mode, so that the pool follows the live latency of each member's connections
+// between health checks. It is neither published nor counted as a pool
+// change, and returns nil when no member is healthy, leaving the published
+// snapshot to decide.
+func (l *LoadBalance) liveSnapshot(published *CandidateSnapshot) *CandidateSnapshot {
+	var previous []Candidate
+	var generation uint64
+	if published != nil {
+		previous = published.Candidates
+		generation = published.Generation
+	}
+	candidates := l.computeCandidates(previous, true)
+	if len(candidates) == 0 {
+		return nil
+	}
+	return &CandidateSnapshot{Candidates: candidates, Generation: generation}
 }
 
 func (l *LoadBalance) seedInitialSnapshot() {
@@ -670,7 +704,7 @@ func (l *LoadBalance) seedInitialSnapshot() {
 	})
 }
 
-func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adapter.Outbound, isPrimary bool) []Candidate {
+func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adapter.Outbound, isPrimary bool, quiet bool) []Candidate {
 	candidates := make([]Candidate, 0, len(tags))
 	for _, tag := range tags {
 		detour := outbounds[tag]
@@ -689,7 +723,7 @@ func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adap
 			IsPrimary: isPrimary,
 		})
 	}
-	l.scoreCandidates(candidates)
+	l.scoreCandidates(candidates, quiet)
 	sortCandidatesByScore(candidates)
 	return candidates
 }
@@ -706,7 +740,7 @@ func (l *LoadBalance) memberSorter() *sorter {
 }
 
 // scoreCandidates fills in Score on every candidate from the configured sorter.
-func (l *LoadBalance) scoreCandidates(candidates []Candidate) {
+func (l *LoadBalance) scoreCandidates(candidates []Candidate, quiet bool) {
 	breakdowns := l.memberSorter().score(candidates, func(candidate Candidate) metricSource {
 		source := metricSource{
 			latency:       candidate.Latency,
@@ -720,7 +754,9 @@ func (l *LoadBalance) scoreCandidates(candidates []Candidate) {
 		}
 		return source
 	})
-	l.logScores(breakdowns)
+	if !quiet {
+		l.logScores(breakdowns)
+	}
 }
 
 // logScores explains each member's score, which is how a weight is tuned. The
@@ -1008,6 +1044,11 @@ func (l *LoadBalance) liveMemberDelay(tag string, detour adapter.Outbound) (uint
 		}
 		return history.Delay, true
 	default:
+		if l.sessionLatency {
+			if delay, ok := liveSessionDelay(realOutbound(l.outbound, detour)); ok {
+				return delay, true
+			}
+		}
 		history := l.history.LoadURLTestHistory(l.realTag(detour))
 		if history == nil || history.Delay == 0 {
 			return 0, false

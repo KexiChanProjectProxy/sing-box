@@ -19,6 +19,7 @@ func (h *Outbound) logSelectedSession(ctx context.Context, info session.SessionI
 // Latency fields are left out until the session has been measured, and
 // lifetime fields when max_connection_lifetime is not set; lifetime_left is
 // negative for an expired session that age cleanup has not closed yet.
+// retire_at and retire_left appear with close_after_lifetime.
 func sessionFields(info session.SessionInfo, now time.Time) []log.Field {
 	source := "new"
 	if info.Reused {
@@ -47,6 +48,12 @@ func sessionFields(info session.SessionInfo, now time.Time) []log.Field {
 			log.Duration("max_lifetime", info.MaxLifetime),
 			log.String("expires_at", info.ExpiresAt.UTC().Format(time.RFC3339Nano)),
 			log.Duration("lifetime_left", left),
+		)
+	}
+	if !info.RetireAt.IsZero() {
+		fields = append(fields,
+			log.String("retire_at", info.RetireAt.UTC().Format(time.RFC3339Nano)),
+			log.Duration("retire_left", info.RetireAt.Sub(now)),
 		)
 	}
 	fields = append(fields,

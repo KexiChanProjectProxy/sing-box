@@ -99,6 +99,8 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 		ConnectionLifetimeJitter:    options.ConnectionLifetimeJitter.Build(),
 		EnsureIdleSessionCreateRate: options.EnsureIdleSessionCreateRate,
 		ClientMetadata:              options.ClientMetadata,
+		CloseAfterIdle:              options.CloseAfterIdle.Build(),
+		CloseAfterLifetime:          options.CloseAfterLifetime.Build(),
 		DialOut:                     outbound.dialOut,
 		Logger:                      logger,
 	}

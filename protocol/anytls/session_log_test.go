@@ -30,6 +30,7 @@ func TestSessionFieldsReusedMeasuredLimited(t *testing.T) {
 		CreatedAt:     created,
 		MaxLifetime:   2 * time.Minute,
 		ExpiresAt:     created.Add(2 * time.Minute),
+		RetireAt:      created.Add(100 * time.Second),
 		IdleSessions:  2,
 		TotalSessions: 4,
 	}, now))
@@ -45,6 +46,8 @@ func TestSessionFieldsReusedMeasuredLimited(t *testing.T) {
 	require.Equal(t, float64(120000), fields["max_lifetime"])
 	require.Equal(t, created.Add(2*time.Minute).UTC().Format(time.RFC3339Nano), fields["expires_at"])
 	require.Equal(t, float64(30000), fields["lifetime_left"])
+	require.Equal(t, created.Add(100*time.Second).UTC().Format(time.RFC3339Nano), fields["retire_at"])
+	require.Equal(t, float64(10000), fields["retire_left"])
 	require.Equal(t, 2, fields["idle_sessions"])
 	require.Equal(t, 4, fields["total_sessions"])
 }
@@ -54,7 +57,7 @@ func TestSessionFieldsNewUnmeasuredUnlimited(t *testing.T) {
 	fields := fieldMap(sessionFields(session.SessionInfo{Seq: 1, Streams: 1, CreatedAt: now, TotalSessions: 1}, now))
 	require.Equal(t, "new", fields["source"])
 	require.Equal(t, uint64(0), fields["latency_samples"])
-	for _, key := range []string{"idle_for", "latency", "latency_last", "max_lifetime", "expires_at", "lifetime_left"} {
+	for _, key := range []string{"idle_for", "latency", "latency_last", "max_lifetime", "expires_at", "lifetime_left", "retire_at", "retire_left"} {
 		require.NotContains(t, fields, key)
 	}
 }

@@ -30,4 +30,6 @@ type AnyTLSOutboundOptions struct {
 	MaxConnectionLifetime       badoption.Duration `json:"max_connection_lifetime,omitempty"`
 	ConnectionLifetimeJitter    badoption.Duration `json:"connection_lifetime_jitter,omitempty"`
 	ClientMetadata              string             `json:"client_metadata,omitempty"`
+	CloseAfterIdle              badoption.Duration `json:"close_after_idle,omitempty"`
+	CloseAfterLifetime          badoption.Duration `json:"close_after_lifetime,omitempty"`
 }

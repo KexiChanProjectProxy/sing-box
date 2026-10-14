@@ -35,7 +35,8 @@
   "empty_pool_action": "error",
   "interrupt_exist_connections": false,
   "prefer_domain": false,
-  "override_ip": ""
+  "override_ip": "",
+  "latency_mode": "url_test"
 }
 ```
 
@@ -299,6 +300,18 @@ Salt prepended to the hash key and to virtual-node names. Default: `""`.
 ==Optional==
 
 Action when no healthy candidate exists. Supported values: `error`, `random`. `error` picks no first choice and the connection goes straight to [connection fail-over](#connection-fail-over), walking every configured primary and then every configured backup; the dial fails only when all of them fail, or immediately when no outbound is configured. `random` picks a random first choice from all configured primary and backup outbounds without health filtering, then fails over through the rest. Default: `error`.
+
+#### latency_mode
+
+==Optional==
+
+Where member latency comes from. Default: `url_test`.
+
+With `session`, members that measure their connections, currently [`anytls`](/configuration/outbound/anytls/#session-selection), are ranked on the latency of the connection a new dial would use, the lowest-latency idle session, instead of their last health check. The ranking is redone for every connection, so the pool follows those latencies between health checks. Other members, and members with no measured idle session, are ranked on their health check result.
+
+The ranking decides which primaries enter the pool only when [`top_n.primary`](#top_nprimary) limits it, still within [`tolerance`](#tolerance) of the pool published by the last health check. It also orders [connection fail-over](#connection-fail-over). With `top_n.primary` at `0` every healthy primary is in the pool and `strategy` picks among them as before. A pool that changes per connection can move a hash key to another member. The `latency` sorter keyword reads the session latency, while `latency_avg_*` still average health check results.
+
+A session latency covers only the hop to the proxy server, while a health check covers the whole path to `url`, so a group that mixes both compares different measures. Set [`heartbeat`](/configuration/outbound/anytls/#heartbeat) on `anytls` members to keep their latency current.
 
 #### interrupt_exist_connections
 

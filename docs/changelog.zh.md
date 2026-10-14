@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.5
+
+* 为 [`urltest`](/zh/configuration/outbound/urltest/#latency_mode) 和 [`loadbalance`](/zh/configuration/outbound/loadbalance/#latency_mode) 新增 `latency_mode: "session"`：按新连接将要使用的会话延迟为 `anytls` 成员排序，并按连接选择成员；其他成员回退到 URL 测试结果
+* `urltest` 在 session 模式下为每个连接记录一条 `urltest.select` 调试事件
+
 #### 1.14.2.4
 
 * 每个新的 anytls 连接都会记录一条 [`anytls.session.selected`](/zh/configuration/outbound/anytls/#会话选择) 调试事件，包含会话的延迟、使用次数、创建与到期时间以及剩余生命周期

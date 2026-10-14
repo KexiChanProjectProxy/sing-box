@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.5
+
+* Add `latency_mode: "session"` to [`urltest`](/configuration/outbound/urltest/#latency_mode) and [`loadbalance`](/configuration/outbound/loadbalance/#latency_mode): rank `anytls` members on the latency of the session a new connection would use and choose the member per connection; other members fall back to their URL test result
+* Log a `urltest.select` debug event for each connection in `urltest` session mode
+
 #### 1.14.2.4
 
 * Log an [`anytls.session.selected`](/configuration/outbound/anytls/#session-selection) debug event for every new anytls connection, with the session's latency, use count, creation and expiry time, and lifetime left

@@ -35,7 +35,8 @@
   "empty_pool_action": "error",
   "interrupt_exist_connections": false,
   "prefer_domain": false,
-  "override_ip": ""
+  "override_ip": "",
+  "latency_mode": "url_test"
 }
 ```
 
@@ -299,6 +300,18 @@ score = Σ 权重 × 指标
 ==可选==
 
 没有健康候选时的行为。支持的值：`error`、`random`。`error` 不产生首选，连接直接进入[连接级故障转移](#连接级故障转移)，依次尝试全部已配置的主出站、再尝试全部已配置的备用出站；只有全部失败才报错，未配置任何出站时立即报错。`random` 从所有已配置的主出站和备用出站中随机选一个作为首选（不进行健康过滤），失败后再按故障转移尝试其余成员。默认：`error`。
+
+#### latency_mode
+
+==可选==
+
+成员延迟的来源。默认值：`url_test`。
+
+为 `session` 时，能测量自身连接的成员（目前为 [`anytls`](/zh/configuration/outbound/anytls/#会话选择)）按新连接将要使用的那条连接的延迟排序，即延迟最低的空闲会话，而不是上一次健康检查的结果。每个连接都会重新排序，因此候选池会在两次健康检查之间跟随这些延迟变化。其他成员以及没有已测量空闲会话的成员按健康检查结果排序。
+
+只有当 [`top_n.primary`](#top_nprimary) 限制了候选池时，排序才决定哪些主出站进入候选池，且仍受相对上次健康检查所发布候选池的 [`tolerance`](#tolerance) 约束。排序同样决定[连接级故障转移](#连接级故障转移)的顺序。`top_n.primary` 为 `0` 时，所有健康主出站都在候选池中，`strategy` 照旧在其中选择。按连接变化的候选池可能使同一个哈希键映射到其他成员。`sorter` 的 `latency` 键读取会话延迟，而 `latency_avg_*` 仍然平均健康检查结果。
+
+会话延迟只覆盖到代理服务器这一段，健康检查覆盖到 `url` 的完整路径，因此混合两种成员的组比较的是不同的量。建议为 `anytls` 成员设置 [`heartbeat`](/zh/configuration/outbound/anytls/#heartbeat)，使其延迟保持最新。
 
 #### interrupt_exist_connections
 

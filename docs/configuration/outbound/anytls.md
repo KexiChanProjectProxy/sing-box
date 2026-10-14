@@ -70,6 +70,8 @@ Target number of idle sessions to maintain in the pool.
 
 Interval for sending heartbeat packets to keep sessions alive.
 
+Each heartbeat round trip also refreshes the session's latency, see [Session selection](#session-selection).
+
 #### min_idle_session_for_age
 
 Minimum idle sessions protected from age-based cleanup.
@@ -97,6 +99,16 @@ Check [AnyTLS client metadata](/manual/misc/anytls-client-metadata/).
 ==Required==
 
 TLS configuration, see [TLS](/configuration/shared/tls/#outbound).
+
+### Session selection
+
+The client measures the end-to-end latency of every session itself, so no server support is needed. A session sends its settings as soon as it is opened and is timed by the server's reply, and every [heartbeat](#heartbeat) adds another sample to a smoothed average.
+
+* A new connection uses the idle session with the lowest latency. Sessions not yet measured come after measured ones, newest first.
+* Sessions closed by `max_connection_lifetime` are the highest-latency ones first, with unmeasured ones before them; `min_idle_session_for_age` keeps the lowest-latency ones.
+* `min_idle_session` likewise keeps the lowest-latency idle sessions open.
+
+Pre-created sessions from `ensure_idle_session` are measured right after they connect, before they carry any traffic. Without `heartbeat`, a session's latency is only measured once.
 
 ### Dial Fields
 

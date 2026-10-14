@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.3
+
+* [`anytls`](/zh/configuration/outbound/anytls/#会话选择) 出站在客户端测量每个会话的端到端延迟，来源为设置帧交换和每次心跳，无需修改服务端
+* 新的 anytls 连接使用延迟最低的空闲会话；`max_connection_lifetime` 优先关闭延迟最高的会话，`min_idle_session` 和 `min_idle_session_for_age` 保留延迟最低的会话
+* AnyTLS 会话现在在建立连接时即发送设置帧，而非随第一个请求发送，因此预建的空闲会话也能被测量，其心跳也会真正发往服务端
+* 修复 AnyTLS 服务端在流打开后立即发送的数据被丢弃的问题
+
 #### 1.14.2.2
 
 * 新增 [`anytls.fallback`](/zh/configuration/inbound/anytls/#fallback)：将 AnyTLS 认证失败的连接转发到后端服务器，与 trojan 入站相同

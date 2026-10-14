@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.3
+
+* [`anytls`](/configuration/outbound/anytls/#session-selection) outbound measures the end-to-end latency of every session on the client, from the settings exchange and each heartbeat, and needs no server change
+* New anytls connections use the lowest-latency idle session; `max_connection_lifetime` closes the highest-latency sessions first, and `min_idle_session` and `min_idle_session_for_age` keep the lowest-latency ones
+* AnyTLS sessions now send their settings when they connect instead of with the first request, so pre-created idle sessions are measured and their heartbeats reach the server
+* Fix AnyTLS data sent by the server right after a stream opens being dropped
+
 #### 1.14.2.2
 
 * Add [`anytls.fallback`](/configuration/inbound/anytls/#fallback): forward connections that fail AnyTLS authentication to a backend server, like the trojan inbound

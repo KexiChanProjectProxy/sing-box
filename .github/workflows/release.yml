@@ -10,15 +10,15 @@ permissions:
 
 jobs:
   build:
-    name: Build Linux ${{ matrix.arch }}
+    name: Build ${{ matrix.os }} ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - arch: amd64
-            goarch: amd64
-          - arch: arm64
-            goarch: arm64
+          - { os: linux, arch: amd64 }
+          - { os: linux, arch: arm64 }
+          - { os: windows, arch: amd64 }
+          - { os: windows, arch: arm64 }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,33 +37,76 @@ jobs:
 
       - name: Set build tags and ldflags
         run: |
-          echo "BUILD_TAGS=$(cat release/DEFAULT_BUILD_TAGS)" >> "${GITHUB_ENV}"
+          if [[ "${{ matrix.os }}" == "windows" ]]; then
+            # Same tag set as DEFAULT_BUILD_TAGS plus with_purego, as upstream uses for Windows.
+            echo "BUILD_TAGS=$(cat release/DEFAULT_BUILD_TAGS_WINDOWS)" >> "${GITHUB_ENV}"
+            echo "BIN_NAME=sing-box.exe" >> "${GITHUB_ENV}"
+            echo "CRONET_LIB=libcronet.dll" >> "${GITHUB_ENV}"
+          else
+            echo "BUILD_TAGS=$(cat release/DEFAULT_BUILD_TAGS),with_purego" >> "${GITHUB_ENV}"
+            echo "BIN_NAME=sing-box" >> "${GITHUB_ENV}"
+            echo "CRONET_LIB=libcronet.so" >> "${GITHUB_ENV}"
+          fi
           echo "LDFLAGS_SHARED=$(cat release/LDFLAGS)" >> "${GITHUB_ENV}"
 
       - name: Build
         run: |
           set -xeuo pipefail
           mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
-          go build -v -trimpath -o dist/sing-box \
-          -tags "${BUILD_TAGS},with_purego" \
+          CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} \
+          go build -v -trimpath -o "dist/${BIN_NAME}" \
+          -tags "${BUILD_TAGS}" \
           -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=${VERSION}' ${LDFLAGS_SHARED} -s -w -buildid=" \
           ./cmd/sing-box
 
-      - name: Package
+      # with_purego loads the naive outbound's cronet library at runtime from
+      # next to the binary, so ship it in the archive like upstream does.
+      - name: Fetch cronet library
         run: |
+          set -xeuo pipefail
+          CRONET_GO_VERSION="$(cat .github/CRONET_GO_VERSION)"
+          LIBRARY_PATH="lib/${{ matrix.os }}_${{ matrix.arch }}/${CRONET_LIB}"
+          git init "$RUNNER_TEMP/cronet-go-lib"
+          git -C "$RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
+          git -C "$RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
+          git -C "$RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
+          git -C "$RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
+          cp "$RUNNER_TEMP/cronet-go-lib/$LIBRARY_PATH" dist/
+
+      - name: Package (linux)
+        if: matrix.os == 'linux'
+        run: |
+          set -xeuo pipefail
           cd dist
           DIR_NAME="sing-box-${VERSION}-linux-${{ matrix.arch }}"
           mkdir -p "${DIR_NAME}"
-          mv sing-box "${DIR_NAME}/"
+          mv sing-box "${CRONET_LIB}" "${DIR_NAME}/"
           cp -r ../release/config/ "${DIR_NAME}/config/" 2>/dev/null || true
           tar czf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
+          rm -r "${DIR_NAME}"
+
+      # The zip holds only the binary, the cronet library and LICENSE: v2rayN
+      # flattens archive entries by file name into its bin/sing_box folder.
+      - name: Package (windows)
+        if: matrix.os == 'windows'
+        run: |
+          set -xeuo pipefail
+          cd dist
+          DIR_NAME="sing-box-${VERSION}-windows-${{ matrix.arch }}"
+          mkdir -p "${DIR_NAME}"
+          mv sing-box.exe "${CRONET_LIB}" "${DIR_NAME}/"
+          cp ../LICENSE "${DIR_NAME}/"
+          zip -r "${DIR_NAME}.zip" "${DIR_NAME}"
+          rm -r "${DIR_NAME}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-linux-${{ matrix.arch }}
-          path: dist/*.tar.gz
+          name: binary-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
 
   release:
     name: Create GitHub Release

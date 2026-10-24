@@ -122,12 +122,62 @@ func mergeOptionsList(optionsList []*OptionsEntry) (option.Options, error) {
 			return option.Options{}, E.Cause(err, "merge config at ", options.path)
 		}
 	}
+	mergedMessage, err = overrideDuplicateOutbounds(mergedMessage)
+	if err != nil {
+		return option.Options{}, E.Cause(err, "merge outbounds")
+	}
 	var mergedOptions option.Options
 	err = mergedOptions.UnmarshalJSONContext(globalCtx, mergedMessage)
 	if err != nil {
 		return option.Options{}, E.Cause(err, "unmarshal merged config")
 	}
 	return mergedOptions, nil
+}
+
+// overrideDuplicateOutbounds lets an outbound from a later config file replace
+// an earlier one with the same tag, keeping the position of the first definition.
+func overrideDuplicateOutbounds(content json.RawMessage) (json.RawMessage, error) {
+	decoded, err := badjson.Decode(globalCtx, content)
+	if err != nil {
+		return nil, err
+	}
+	object, isObject := decoded.(*badjson.JSONObject)
+	if !isObject {
+		return content, nil
+	}
+	rawOutbounds, loaded := object.Get("outbounds")
+	if !loaded {
+		return content, nil
+	}
+	outbounds, isArray := rawOutbounds.(badjson.JSONArray)
+	if !isArray {
+		return content, nil
+	}
+	var (
+		merged     badjson.JSONArray
+		indexByTag = make(map[string]int)
+		overridden bool
+	)
+	for _, outbound := range outbounds {
+		if outboundObject, isObject := outbound.(*badjson.JSONObject); isObject {
+			if rawTag, loaded := outboundObject.Get("tag"); loaded {
+				if tag, isString := rawTag.(string); isString && tag != "" {
+					if index, exists := indexByTag[tag]; exists {
+						merged[index] = outbound
+						overridden = true
+						continue
+					}
+					indexByTag[tag] = len(merged)
+				}
+			}
+		}
+		merged = append(merged, outbound)
+	}
+	if !overridden {
+		return content, nil
+	}
+	object.Put("outbounds", merged)
+	return json.MarshalContext(globalCtx, object)
 }
 
 func create(options option.Options) (*box.Box, context.CancelFunc, error) {

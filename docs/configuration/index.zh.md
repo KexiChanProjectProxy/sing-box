@@ -89,3 +89,7 @@ sing-box format -w -c config.json -D config_directory
 sing-box merge output.json -c config.json -D config_directory
 ```
 
+所有配置文件（来自 `-c` 和 `-D` 目录）按路径字典序合并。对象递归合并，数组拼接。
+在 `outbounds` 中，若某个出站的标签已在之前的文件中出现过，它会整体替换之前的定义并保留其位置。
+其他位置的重复标签，包括 `outbounds` 与 `endpoints` 之间或同一文件内的重复，仍会报错。
+

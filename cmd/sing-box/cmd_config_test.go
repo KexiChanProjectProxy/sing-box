@@ -77,6 +77,47 @@ func TestReadConfigDirectoryMixesJSONAndYAML(t *testing.T) {
 	require.Equal(t, "time.apple.com", options.NTP.Server)
 }
 
+func useConfigDirectory(t *testing.T, files map[string]string) {
+	t.Helper()
+	globalCtx = include.Context(context.Background())
+	dir := t.TempDir()
+	for name, content := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
+	}
+	oldPaths, oldDirs := configPaths, configDirectories
+	t.Cleanup(func() {
+		configPaths, configDirectories = oldPaths, oldDirs
+	})
+	configPaths = nil
+	configDirectories = []string{dir}
+}
+
+func TestReadConfigDirectoryOverridesOutbounds(t *testing.T) {
+	useConfigDirectory(t, map[string]string{
+		"10-a.json": `{"outbounds":[{"type":"direct","tag":"x"},{"type":"block","tag":"y"}]}`,
+		"20-b.yaml": "outbounds:\n  - type: block\n    tag: x\n",
+		"30-c.json": `{"outbounds":[{"type":"direct","tag":"z"},{"type":"direct","tag":"x"}]}`,
+	})
+
+	options, err := readConfigAndMerge()
+	require.NoError(t, err)
+	require.Len(t, options.Outbounds, 3)
+	require.Equal(t, "x", options.Outbounds[0].Tag)
+	require.Equal(t, "direct", options.Outbounds[0].Type)
+	require.Equal(t, "y", options.Outbounds[1].Tag)
+	require.Equal(t, "z", options.Outbounds[2].Tag)
+}
+
+func TestReadConfigDirectoryKeepsOtherDuplicateTags(t *testing.T) {
+	useConfigDirectory(t, map[string]string{
+		"10-a.json": `{"outbounds":[{"type":"direct","tag":"x"}]}`,
+		"20-b.json": `{"endpoints":[{"type":"wireguard","tag":"x","address":["10.0.0.1/32"],"private_key":"YNXtAzepDqRv9H52osJVDQnznT5AL11eVK3Es0htpXs=","peers":[{"address":"127.0.0.1","port":51820,"public_key":"YNXtAzepDqRv9H52osJVDQnznT5AL11eVK3Es0htpXs=","allowed_ips":["0.0.0.0/0"]}]}]}`,
+	})
+
+	_, err := readConfigAndMerge()
+	require.ErrorContains(t, err, "duplicate outbound/endpoint tag: x")
+}
+
 func TestEncodeConfigYAML(t *testing.T) {
 	globalCtx = include.Context(context.Background())
 	dir := t.TempDir()

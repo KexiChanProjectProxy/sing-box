@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.9
+
+* 加载多个配置文件时，若某个出站的标签已在之前的文件中（按路径字典序）出现过，现在会原位替换之前的定义，而不再报错 `duplicate outbound/endpoint tag`。参阅 [合并](/zh/configuration/#合并)
+
 #### 1.14.2.7
 
 * 修复 [`anytls.connection_lifetime_jitter`](/zh/configuration/outbound/anytls/#connection_lifetime_jitter) 几乎不起作用的问题：此前每个会话的生命周期都是 `max_connection_lifetime` 减去一半抖动，同时建立的会话会同时到期。现在生命周期在正负抖动范围内均匀随机选取

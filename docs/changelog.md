@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.9
+
+* When several configuration files are loaded, an outbound whose tag already exists in an earlier file (in lexical path order) now replaces that definition in place instead of failing with `duplicate outbound/endpoint tag`. See [Merge](/configuration/#merge)
+
 #### 1.14.2.7
 
 * Fix [`anytls.connection_lifetime_jitter`](/configuration/outbound/anytls/#connection_lifetime_jitter) having almost no effect: every session got `max_connection_lifetime` minus half the jitter, so sessions created together expired together. Lifetimes are now drawn uniformly within the jitter on either side

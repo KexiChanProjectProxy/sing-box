@@ -89,3 +89,10 @@ sing-box format -w -c config.json -D config_directory
 ```bash
 sing-box merge output.json -c config.json -D config_directory
 ```
+
+All configuration files, from `-c` and from `-D` directories, are merged in
+lexical order of their paths. Objects are merged recursively and arrays are
+concatenated. In `outbounds`, an outbound whose tag already appeared in an
+earlier file replaces that earlier definition entirely and keeps its position.
+Duplicate tags anywhere else, including between `outbounds` and `endpoints` or
+within a single file, are still an error.

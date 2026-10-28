@@ -18,6 +18,7 @@ type AnyTLSUser struct {
 type AnyTLSOutboundOptions struct {
 	DialerOptions
 	ServerOptions
+	ServerUnixOptions
 	OutboundTLSOptionsContainer
 	Password                    string             `json:"password,omitempty"`
 	IdleSessionCheckInterval    badoption.Duration `json:"idle_session_check_interval,omitempty"`

@@ -32,6 +32,7 @@ icon: material/new-box
 {
   "listen": "",
   "listen_port": 0,
+  "listen_unix": "",
   "bind_interface": "",
   "routing_mark": 0,
   "reuse_addr": false,
@@ -63,9 +64,27 @@ icon: material/new-box
 
 监听地址。
 
+设置 [listen_unix](#listen_unix) 时不需要。
+
 #### listen_port
 
 监听端口。
+
+#### listen_unix
+
+!!! quote ""
+
+    仅支持 Linux。
+
+要监听的 Unix 域套接字路径，用于替代 `listen`:`listen_port`。
+
+不能与 `listen` 或 `listen_port` 同时使用。启动时会替换该路径上已有的套接字文件，入站关闭时会删除该文件。如果该路径已存在且不是套接字，则会报错。套接字文件按进程的 umask 创建。
+
+只接受 TCP。原本还会监听 UDP 的入站（例如 `shadowsocks`）只监听 TCP 并输出警告。不支持仅 UDP 的入站（例如 `hysteria`、`hysteria2` 和 `tuic`）以及 SOCKS `UDP ASSOCIATE`。如果协议在 TCP 连接内传输 UDP，UDP 仍可使用。
+
+连接没有来源地址，因此 `source_ip_cidr`、`source_port` 和进程相关的规则不会匹配这些连接。
+
+不能与 `tcp_fast_open`、`tcp_multi_path`、`bind_interface`、`routing_mark`、`reuse_addr` 或 `set_system_proxy` 同时使用。支持 `netns`。
 
 #### bind_interface
 

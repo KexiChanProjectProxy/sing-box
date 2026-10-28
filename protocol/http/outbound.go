@@ -33,7 +33,7 @@ type Outbound struct {
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.HTTPOutboundOptions) (adapter.Outbound, error) {
-	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
+	outboundDialer, err := dialer.NewForServer(ctx, options.DialerOptions, options.ServerOptions, options.ServerUnixOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ type DynamicOutbound struct {
 }
 
 func NewDynamicOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.HTTPDynamicOutboundOptions) (adapter.Outbound, error) {
-	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
+	outboundDialer, err := dialer.NewForServer(ctx, options.DialerOptions, options.ServerOptions, options.ServerUnixOptions)
 	if err != nil {
 		return nil, err
 	}

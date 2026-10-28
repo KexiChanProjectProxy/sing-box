@@ -45,7 +45,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	if err != nil {
 		return nil, err
 	}
-	outboundDialer, err := dialer.New(ctx, options.DialerOptions, options.ServerIsDomain())
+	outboundDialer, err := dialer.NewForServer(ctx, options.DialerOptions, options.ServerOptions, options.ServerUnixOptions)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,8 @@ icon: material/alert-decagram
 
 #### 1.14.2.9
 
+* 入站新增 [`listen_unix`](/zh/configuration/shared/listen/#listen_unix)：监听 Unix 域套接字而非 TCP 端口（仅 Linux，仅 TCP）
+* socks、http、http-dynamic、shadowsocks、vmess、trojan、vless、anytls、shadowtls、ssh、snell 和 noisy-shuttle 出站以及 shadowtls 入站握手新增 [`server_unix`](/zh/configuration/outbound/socks/#server_unix)：通过 Unix 域套接字连接服务器（仅 Linux，仅 TCP）。`server` 和 `server_port` 变为可选，仅用于默认的 TLS 服务器名称和传输层 `Host`
 * 加载多个配置文件时，若某个出站的标签已在之前的文件中（按路径字典序）出现过，现在会原位替换之前的定义，而不再报错 `duplicate outbound/endpoint tag`。参阅 [合并](/zh/configuration/#合并)
 
 #### 1.14.2.7

@@ -3,6 +3,7 @@ package listener
 import (
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"syscall"
 	"time"
@@ -24,6 +25,9 @@ func (l *Listener) ListenTCP() (net.Listener, error) {
 	//nolint:staticcheck
 	if l.listenOptions.ProxyProtocol || l.listenOptions.ProxyProtocolAcceptNoHeader {
 		return nil, E.New("Proxy Protocol is deprecated and removed in sing-box 1.6.0")
+	}
+	if l.listenOptions.ListenUnix != "" {
+		return l.listenUnix()
 	}
 	var err error
 	bindAddr := M.SocksaddrFrom(l.listenOptions.Listen.Build(netip.AddrFrom4([4]byte{127, 0, 0, 1})), l.listenOptions.ListenPort)
@@ -113,11 +117,65 @@ func (l *Listener) loopTCPIn() {
 		acceptDelay = 0
 		//nolint:staticcheck
 		metadata.InboundDetour = l.listenOptions.Detour
-		metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
-		metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
 		ctx := log.ContextWithNewID(l.ctx)
-		l.logger.InfoEventContext(ctx, "inbound.accepted", "inbound accepted", log.Addr("source", metadata.Source))
+		if l.listenOptions.ListenUnix != "" {
+			// A Unix socket peer has no network address.
+			metadata.Source = M.Socksaddr{}
+			metadata.OriginDestination = M.Socksaddr{}
+			l.logger.InfoEventContext(ctx, "inbound.accepted", "inbound accepted", log.String("listen", l.listenOptions.ListenUnix), log.String("network", C.NetworkUnix))
+		} else {
+			metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
+			metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
+			l.logger.InfoEventContext(ctx, "inbound.accepted", "inbound accepted", log.Addr("source", metadata.Source))
+		}
 
 		go l.connHandler.NewConnection(ctx, conn, metadata, nil)
 	}
+}
+
+func (l *Listener) listenUnix() (net.Listener, error) {
+	path := l.listenOptions.ListenUnix
+	if l.listenOptions.Listen != nil || l.listenOptions.ListenPort != 0 {
+		return nil, E.New("listen_unix is mutually exclusive with listen and listen_port")
+	}
+	if l.tproxy {
+		return nil, E.New("listen_unix is not supported by tproxy")
+	}
+	if l.listenOptions.TCPFastOpen {
+		return nil, E.New("tcp_fast_open is not supported with listen_unix")
+	}
+	if l.listenOptions.TCPMultiPath {
+		return nil, E.New("tcp_multi_path is not supported with listen_unix")
+	}
+	if l.listenOptions.BindInterface != "" {
+		return nil, E.New("bind_interface is not supported with listen_unix")
+	}
+	if l.listenOptions.RoutingMark != 0 {
+		return nil, E.New("routing_mark is not supported with listen_unix")
+	}
+	if l.listenOptions.ReuseAddr {
+		return nil, E.New("reuse_addr is not supported with listen_unix")
+	}
+	unixListener, err := ListenNetworkNamespace[net.Listener](l.ctx, l.listenOptions.NetNs, func() (net.Listener, error) {
+		info, err := os.Lstat(path)
+		if err == nil {
+			if info.Mode()&os.ModeSocket == 0 {
+				return nil, E.New("listen_unix: ", path, " exists and is not a socket")
+			}
+			err = os.Remove(path)
+			if err != nil {
+				return nil, E.Cause(err, "remove stale socket ", path)
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, E.Cause(err, "stat ", path)
+		}
+		var listenConfig net.ListenConfig
+		return listenConfig.Listen(l.ctx, C.NetworkUnix, path)
+	})
+	if err != nil {
+		return nil, err
+	}
+	l.logger.InfoEvent("listener.started", "server started", log.String("listen", path), log.String("network", C.NetworkUnix))
+	l.tcpListener = unixListener
+	return unixListener, nil
 }

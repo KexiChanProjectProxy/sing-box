@@ -4,6 +4,8 @@ icon: material/alert-decagram
 
 #### 1.14.2.9
 
+* Add [`listen_unix`](/configuration/shared/listen/#listen_unix) to inbounds: listen on a Unix domain socket instead of a TCP port (Linux only, TCP only)
+* Add [`server_unix`](/configuration/outbound/socks/#server_unix) to the socks, http, http-dynamic, shadowsocks, vmess, trojan, vless, anytls, shadowtls, ssh, snell and noisy-shuttle outbounds and to the shadowtls inbound handshake: connect to the server over a Unix domain socket (Linux only, TCP only). `server` and `server_port` become optional and only set the default TLS server name and transport `Host`
 * When several configuration files are loaded, an outbound whose tag already exists in an earlier file (in lexical path order) now replaces that definition in place instead of failing with `duplicate outbound/endpoint tag`. See [Merge](/configuration/#merge)
 
 #### 1.14.2.7

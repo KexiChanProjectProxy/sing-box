@@ -79,7 +79,8 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	outboundDialer, err := dialer.NewWithOptions(dialer.Options{
 		Context:        ctx,
 		Options:        options.DialerOptions,
-		RemoteIsDomain: options.ServerIsDomain(),
+		RemoteIsDomain: options.ServerUnix == "" && options.ServerIsDomain(),
+		ServerUnix:     options.ServerUnix,
 	})
 	if err != nil {
 		return nil, err

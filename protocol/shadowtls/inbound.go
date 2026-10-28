@@ -15,6 +15,7 @@ import (
 	shadowtls "github.com/sagernet/sing-shadowtls"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
+	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -47,7 +48,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		handshakeForServerName = make(map[string]shadowtls.HandshakeConfig)
 		if options.HandshakeForServerName != nil {
 			for _, entry := range options.HandshakeForServerName.Entries() {
-				handshakeDialer, err := dialer.New(ctx, entry.Value.DialerOptions, entry.Value.ServerIsDomain())
+				handshakeDialer, err := dialer.NewForServer(ctx, entry.Value.DialerOptions, entry.Value.ServerOptions, entry.Value.ServerUnixOptions)
 				if err != nil {
 					return nil, err
 				}
@@ -60,9 +61,17 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	}
 	serverIsDomain := options.Handshake.ServerIsDomain()
 	if options.WildcardSNI != option.ShadowTLSWildcardSNIOff {
+		if options.Handshake.ServerUnix != "" {
+			return nil, E.New("handshake.server_unix cannot be used with wildcard_sni")
+		}
 		serverIsDomain = true
 	}
-	handshakeDialer, err := dialer.New(ctx, options.Handshake.DialerOptions, serverIsDomain)
+	handshakeDialer, err := dialer.NewWithOptions(dialer.Options{
+		Context:        ctx,
+		Options:        options.Handshake.DialerOptions,
+		RemoteIsDomain: serverIsDomain && options.Handshake.ServerUnix == "",
+		ServerUnix:     options.Handshake.ServerUnix,
+	})
 	if err != nil {
 		return nil, err
 	}

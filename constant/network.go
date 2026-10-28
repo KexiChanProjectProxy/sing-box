@@ -5,6 +5,9 @@ import (
 	F "github.com/sagernet/sing/common/format"
 )
 
+// NetworkUnix is the network name of a stream Unix domain socket.
+const NetworkUnix = "unix"
+
 type InterfaceType uint8
 
 const (

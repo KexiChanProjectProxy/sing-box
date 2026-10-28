@@ -4225,6 +4225,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -5912,6 +5915,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -5980,6 +5986,9 @@
                   }
                 }
               ]
+            },
+            "fallback": {
+              "$ref": "#/$defs/ServerOptions"
             }
           },
           "required": [
@@ -6063,6 +6072,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -6163,6 +6175,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -6247,6 +6262,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -6394,6 +6412,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -6642,6 +6663,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -6726,6 +6750,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -6834,6 +6861,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -6947,6 +6977,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -7016,6 +7049,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -7143,6 +7179,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -7256,6 +7295,9 @@
                   "minimum": 0,
                   "maximum": 65535
                 },
+                "listen_unix": {
+                  "type": "string"
+                },
                 "bind_interface": {
                   "type": "string"
                 },
@@ -7347,6 +7389,9 @@
                   "minimum": 0,
                   "maximum": 65535
                 },
+                "listen_unix": {
+                  "type": "string"
+                },
                 "bind_interface": {
                   "type": "string"
                 },
@@ -7437,6 +7482,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -7515,6 +7563,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -7630,6 +7681,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -7723,6 +7777,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -8241,6 +8298,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -8325,6 +8385,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -11272,6 +11335,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "server_unix": {
+              "type": "string"
+            },
             "tls": {
               "$ref": "#/$defs/OutboundTLSOptions"
             },
@@ -11307,6 +11373,12 @@
             },
             "client_metadata": {
               "type": "string"
+            },
+            "close_after_idle": {
+              "$ref": "#/$defs/Duration"
+            },
+            "close_after_lifetime": {
+              "$ref": "#/$defs/Duration"
             }
           },
           "required": [
@@ -11987,6 +12059,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "server_unix": {
+              "type": "string"
+            },
             "username": {
               "type": "string"
             },
@@ -12129,6 +12204,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "server_unix": {
+              "type": "string"
             },
             "username": {
               "type": "string"
@@ -12745,6 +12823,9 @@
             },
             "override_ip": {
               "$ref": "#/$defs/OverrideIP"
+            },
+            "latency_mode": {
+              "type": "string"
             }
           },
           "required": [
@@ -13076,6 +13157,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "server_unix": {
+              "type": "string"
+            },
             "password": {
               "type": "string"
             },
@@ -13277,6 +13361,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "server_unix": {
+              "type": "string"
             },
             "method": {
               "type": "string",
@@ -13487,6 +13574,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "server_unix": {
+              "type": "string"
+            },
             "version": {
               "type": "integer",
               "enum": [
@@ -13633,6 +13723,9 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 65535
+                },
+                "server_unix": {
+                  "type": "string"
                 },
                 "psk": {
                   "type": "string"
@@ -13807,6 +13900,9 @@
                   "minimum": 0,
                   "maximum": 65535
                 },
+                "server_unix": {
+                  "type": "string"
+                },
                 "psk": {
                   "type": "string"
                 },
@@ -13975,6 +14071,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "server_unix": {
+              "type": "string"
             },
             "version": {
               "type": "string",
@@ -14163,6 +14262,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "server_unix": {
+              "type": "string"
             },
             "user": {
               "type": "string"
@@ -14523,6 +14625,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "server_unix": {
+              "type": "string"
+            },
             "password": {
               "type": "string"
             },
@@ -14819,6 +14924,9 @@
             },
             "override_ip": {
               "$ref": "#/$defs/OverrideIP"
+            },
+            "latency_mode": {
+              "type": "string"
             }
           },
           "required": [
@@ -14947,6 +15055,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "server_unix": {
+              "type": "string"
             },
             "uuid": {
               "type": "string"
@@ -15114,6 +15225,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "server_unix": {
+              "type": "string"
             },
             "uuid": {
               "type": "string"
@@ -16815,6 +16929,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -16945,6 +17062,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -17085,6 +17205,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -17574,6 +17697,9 @@
                       "minimum": 0,
                       "maximum": 65535
                     },
+                    "listen_unix": {
+                      "type": "string"
+                    },
                     "bind_interface": {
                       "type": "string"
                     },
@@ -17648,6 +17774,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -17758,6 +17887,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -17890,6 +18022,9 @@
               "minimum": 0,
               "maximum": 65535
             },
+            "listen_unix": {
+              "type": "string"
+            },
             "bind_interface": {
               "type": "string"
             },
@@ -17959,6 +18094,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 65535
+            },
+            "listen_unix": {
+              "type": "string"
             },
             "bind_interface": {
               "type": "string"
@@ -18185,6 +18323,9 @@
                   "minimum": 0,
                   "maximum": 65535
                 },
+                "listen_unix": {
+                  "type": "string"
+                },
                 "bind_interface": {
                   "type": "string"
                 },
@@ -18264,6 +18405,9 @@
                   "minimum": 0,
                   "maximum": 65535
                 },
+                "listen_unix": {
+                  "type": "string"
+                },
                 "bind_interface": {
                   "type": "string"
                 },
@@ -18332,6 +18476,9 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 65535
+        },
+        "server_unix": {
+          "type": "string"
         },
         "detour": {
           "type": "string",

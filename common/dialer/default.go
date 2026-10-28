@@ -35,6 +35,7 @@ type DefaultDialer struct {
 	dialer6                tfo.Dialer
 	udpDialer4             net.Dialer
 	udpDialer6             net.Dialer
+	unixDialer             net.Dialer
 	udpListener            net.ListenConfig
 	udpAddr4               string
 	udpAddr6               string
@@ -233,6 +234,7 @@ func NewDefault(ctx context.Context, options option.DialerOptions) (*DefaultDial
 		dialer6:                tcpDialer6,
 		udpDialer4:             udpDialer4,
 		udpDialer6:             udpDialer6,
+		unixDialer:             net.Dialer{Timeout: dialer.Timeout},
 		udpListener:            listener,
 		udpAddr4:               udpAddr4,
 		udpAddr6:               udpAddr6,
@@ -311,6 +313,15 @@ func setMarkWrapper(networkManager adapter.NetworkManager, mark uint32, isDefaul
 }
 
 func (d *DefaultDialer) DialContext(ctx context.Context, network string, address M.Socksaddr) (net.Conn, error) {
+	if N.NetworkName(network) == C.NetworkUnix {
+		if address.Fqdn == "" {
+			return nil, E.New("missing unix socket path")
+		}
+		conn, err := listener.ListenNetworkNamespace[net.Conn](ctx, d.netns, func() (net.Conn, error) {
+			return d.unixDialer.DialContext(ctx, C.NetworkUnix, address.Fqdn)
+		})
+		return d.trackConn(ctx, address, conn, err)
+	}
 	if !address.IsValid() {
 		return nil, E.New("invalid address")
 	} else if address.IsDomain() {

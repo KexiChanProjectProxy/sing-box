@@ -28,6 +28,20 @@ type Options struct {
 	DefaultOutbound             bool
 	DialerWrapper               func(ParallelInterfaceDialer) ParallelInterfaceDialer
 	ForceDomainStrategyIPv4Only bool
+	// ServerUnix makes the dialer connect every TCP dial to this Unix socket path.
+	ServerUnix string
+}
+
+// NewForServer creates the dialer an outbound uses to reach its server.
+// The dialer connects to unix.ServerUnix when it is set and never resolves
+// the server address in that case.
+func NewForServer(ctx context.Context, options option.DialerOptions, server option.ServerOptions, unix option.ServerUnixOptions) (N.Dialer, error) {
+	return NewWithOptions(Options{
+		Context:        ctx,
+		Options:        options,
+		RemoteIsDomain: unix.ServerUnix == "" && server.ServerIsDomain(),
+		ServerUnix:     unix.ServerUnix,
+	})
 }
 
 // TODO: merge with NewWithOptions
@@ -43,6 +57,9 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 	dialOptions := options.Options
 	if overrideErr := option.CheckDestinationOverride(dialOptions.PreferDomain, dialOptions.OverrideIP); overrideErr != nil {
 		return nil, overrideErr
+	}
+	if options.ServerUnix != "" {
+		return newUnixServerDialer(options)
 	}
 	var (
 		dialer N.Dialer

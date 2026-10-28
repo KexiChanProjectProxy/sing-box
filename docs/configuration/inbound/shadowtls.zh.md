@@ -76,6 +76,8 @@ ShadowTLS 用户。
 
 握手服务器地址和 [拨号参数](/zh/configuration/shared/dial/)。
 
+`server_unix` 改为通过 Unix 域套接字连接握手服务器，与 [shadowtls 出站](/zh/configuration/outbound/shadowtls/#server_unix) 相同。不能与 `wildcard_sni` 同时使用。
+
 #### handshake_for_server_name
 
 ==必填==

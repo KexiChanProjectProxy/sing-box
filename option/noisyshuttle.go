@@ -27,6 +27,7 @@ type NoisyShuttleUser struct {
 type NoisyShuttleOutboundOptions struct {
 	DialerOptions
 	ServerOptions
+	ServerUnixOptions
 	Password         string                         `json:"password"`
 	Network          NetworkList                    `json:"network,omitempty"`
 	OutboundTLSOptionsContainer
@@ -79,7 +80,7 @@ func (o *NoisyShuttleOutboundOptions) Validate() error {
 	if o.Password == "" {
 		return E.New("noisy-shuttle outbound: password is required")
 	}
-	if o.ServerOptions.ServerPort == 0 {
+	if o.ServerOptions.ServerPort == 0 && o.ServerUnix == "" {
 		return E.New("noisy-shuttle outbound: server_port is required and must be non-zero")
 	}
 	if o.Handshake.PaddingMin > 4096 {

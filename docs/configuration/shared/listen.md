@@ -32,6 +32,7 @@ icon: material/new-box
 {
   "listen": "",
   "listen_port": 0,
+  "listen_unix": "",
   "bind_interface": "",
   "routing_mark": 0,
   "reuse_addr": false,
@@ -63,9 +64,27 @@ icon: material/new-box
 
 Listen address.
 
+Not required when [listen_unix](#listen_unix) is set.
+
 #### listen_port
 
 Listen port.
+
+#### listen_unix
+
+!!! quote ""
+
+    Only supported on Linux.
+
+Path of a Unix domain socket to listen on instead of `listen`:`listen_port`.
+
+Cannot be used with `listen` or `listen_port`. An existing socket file at the path is replaced at startup, and the file is removed when the inbound closes. A path that exists and is not a socket is an error. The socket file is created with the process umask.
+
+Only TCP is accepted. An inbound that would also listen on UDP, such as `shadowsocks`, only listens on TCP and logs a warning. UDP-only inbounds such as `hysteria`, `hysteria2` and `tuic`, and SOCKS `UDP ASSOCIATE`, are not supported. UDP still works where the protocol carries it inside the TCP connection.
+
+Connections have no source address, so rules on `source_ip_cidr`, `source_port` or the process do not match them.
+
+Cannot be used with `tcp_fast_open`, `tcp_multi_path`, `bind_interface`, `routing_mark`, `reuse_addr` or `set_system_proxy`. `netns` is supported.
 
 #### bind_interface
 

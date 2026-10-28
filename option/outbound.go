@@ -204,3 +204,9 @@ func (o *ServerOptions) TakeServerOptions() ServerOptions {
 func (o *ServerOptions) ReplaceServerOptions(options ServerOptions) {
 	*o = options
 }
+
+// ServerUnixOptions is embedded next to ServerOptions by outbounds that can
+// reach their server over a stream Unix domain socket.
+type ServerUnixOptions struct {
+	ServerUnix string `json:"server_unix,omitempty"`
+}

@@ -74,12 +74,14 @@ type ShadowTLSUser struct {
 
 type ShadowTLSHandshakeOptions struct {
 	ServerOptions
+	ServerUnixOptions
 	DialerOptions
 }
 
 type ShadowTLSOutboundOptions struct {
 	DialerOptions
 	ServerOptions
+	ServerUnixOptions
 	Version  int    `json:"version,omitempty" enum:"1,2,3"`
 	Password string `json:"password,omitempty"`
 	OutboundTLSOptionsContainer

@@ -78,6 +78,8 @@ When `wildcard_sni` is configured to `all`, the server address is optional.
 
 Handshake server address and [Dial Fields](/configuration/shared/dial/).
 
+`server_unix` connects to the handshake server over a Unix domain socket instead, as in the [shadowtls outbound](/configuration/outbound/shadowtls/#server_unix). It cannot be used with `wildcard_sni`.
+
 #### handshake_for_server_name
 
 Handshake server address and [Dial Fields](/configuration/shared/dial/) for specific server name.

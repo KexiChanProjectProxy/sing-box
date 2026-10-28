@@ -80,6 +80,18 @@ func New(
 }
 
 func (l *Listener) Start() error {
+	if l.listenOptions.ListenUnix != "" {
+		if l.setSystemProxy {
+			return E.New("set_system_proxy is not supported with listen_unix")
+		}
+		if !common.Contains(l.network, N.NetworkTCP) {
+			return E.New("udp is not supported on a unix socket listener")
+		}
+		if common.Contains(l.network, N.NetworkUDP) {
+			l.network = common.Filter(l.network, func(it string) bool { return it != N.NetworkUDP })
+			l.logger.WarnEvent("listener.unix_udp", "udp is not supported on a unix socket listener, listening tcp only", log.String("listen", l.listenOptions.ListenUnix))
+		}
+	}
 	if common.Contains(l.network, N.NetworkTCP) {
 		_, err := l.ListenTCP()
 		if err != nil {

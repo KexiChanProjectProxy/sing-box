@@ -7,15 +7,17 @@ import (
 
 type SocksInboundOptions struct {
 	ListenOptions
-	Users          []auth.User           `json:"users,omitempty"`
-	DomainResolver *DomainResolveOptions `json:"domain_resolver,omitempty"`
+	Users          []auth.User                               `json:"users,omitempty"`
+	AuthBypass     badoption.Listable[*badoption.Prefixable] `json:"auth_bypass,omitempty"`
+	DomainResolver *DomainResolveOptions                     `json:"domain_resolver,omitempty"`
 }
 
 type HTTPMixedInboundOptions struct {
 	ListenOptions
-	Users          []auth.User           `json:"users,omitempty"`
-	DomainResolver *DomainResolveOptions `json:"domain_resolver,omitempty"`
-	SetSystemProxy bool                  `json:"set_system_proxy,omitempty"`
+	Users          []auth.User                               `json:"users,omitempty"`
+	AuthBypass     badoption.Listable[*badoption.Prefixable] `json:"auth_bypass,omitempty"`
+	DomainResolver *DomainResolveOptions                     `json:"domain_resolver,omitempty"`
+	SetSystemProxy bool                                      `json:"set_system_proxy,omitempty"`
 	InboundTLSOptionsContainer
 }
 

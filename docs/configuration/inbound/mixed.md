@@ -15,6 +15,10 @@
       "password": "admin"
     }
   ],
+  "auth_bypass": [
+    "127.0.0.1/32",
+    "192.168.0.0/16"
+  ],
   "set_system_proxy": false
 }
 ```
@@ -30,6 +34,12 @@ See [Listen Fields](/configuration/shared/listen/) for details.
 SOCKS and HTTP users.
 
 No authentication required if empty.
+
+#### auth_bypass
+
+List of source IP addresses or CIDR prefixes that skip authentication.
+
+Connections from a matching address are accepted without credentials even when `users` is set. IPv4-mapped IPv6 addresses are matched as IPv4.
 
 #### set_system_proxy
 

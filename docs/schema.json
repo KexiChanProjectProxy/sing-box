@@ -6231,6 +6231,19 @@
                 "$ref": "#/$defs/User"
               }
             },
+            "auth_bypass": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
             "domain_resolver": {
               "$ref": "#/$defs/DomainResolver"
             },
@@ -6718,6 +6731,19 @@
               "items": {
                 "$ref": "#/$defs/User"
               }
+            },
+            "auth_bypass": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
             },
             "domain_resolver": {
               "$ref": "#/$defs/DomainResolver"
@@ -7537,6 +7563,19 @@
               "items": {
                 "$ref": "#/$defs/User"
               }
+            },
+            "auth_bypass": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
             },
             "domain_resolver": {
               "$ref": "#/$defs/DomainResolver"

@@ -15,6 +15,10 @@
       "password": "admin"
     }
   ],
+  "auth_bypass": [
+    "127.0.0.1/32",
+    "192.168.0.0/16"
+  ],
   "set_system_proxy": false
 }
 ```
@@ -30,6 +34,12 @@
 SOCKS 和 HTTP 用户
 
 如果为空则不需要验证。
+
+#### auth_bypass
+
+跳过认证的来源 IP 地址或 CIDR 前缀列表。
+
+来自匹配地址的连接即使设置了 `users` 也无需凭据即可接入。IPv4 映射的 IPv6 地址按 IPv4 匹配。
 
 #### set_system_proxy
 

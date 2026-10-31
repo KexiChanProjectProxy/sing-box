@@ -8,6 +8,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
+	"github.com/sagernet/sing-box/common/authbypass"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing-box/common/uot"
@@ -32,7 +33,7 @@ type Inbound struct {
 	router        adapter.ConnectionRouterEx
 	logger        log.StructuredLogger
 	listener      *listener.Listener
-	authenticator *auth.Authenticator
+	authenticator *authbypass.Authenticator
 	tlsConfig     tls.ServerConfig
 }
 
@@ -41,7 +42,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		Adapter:       inbound.NewAdapter(C.TypeHTTP, tag),
 		router:        uot.NewRouter(router, logger),
 		logger:        logger,
-		authenticator: auth.NewAuthenticator(options.Users),
+		authenticator: authbypass.New(options.Users, options.AuthBypass),
 	}
 	if options.TLS != nil {
 		tlsConfig, err := tls.NewServerWithOptions(tls.ServerOptions{
@@ -98,7 +99,7 @@ func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata ada
 		}
 		conn = tlsConn
 	}
-	err := http.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), h.authenticator, adapter.NewUpstreamHandler(metadata, h.newUserConnection, h.streamUserPacketConnection), metadata.Source, onClose)
+	err := http.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), h.authenticator.For(metadata.Source), adapter.NewUpstreamHandler(metadata, h.newUserConnection, h.streamUserPacketConnection), metadata.Source, onClose)
 	if err != nil {
 		N.CloseOnHandshakeFailure(conn, onClose, err)
 		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)

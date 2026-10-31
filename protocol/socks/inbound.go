@@ -8,6 +8,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
+	"github.com/sagernet/sing-box/common/authbypass"
 	"github.com/sagernet/sing-box/common/listener"
 	"github.com/sagernet/sing-box/common/uot"
 	C "github.com/sagernet/sing-box/constant"
@@ -30,7 +31,7 @@ type Inbound struct {
 	router        adapter.ConnectionRouterEx
 	logger        log.StructuredLogger
 	listener      *listener.Listener
-	authenticator *auth.Authenticator
+	authenticator *authbypass.Authenticator
 	udpTimeout    time.Duration
 }
 
@@ -45,7 +46,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		Adapter:       inbound.NewAdapter(C.TypeSOCKS, tag),
 		router:        uot.NewRouter(router, logger),
 		logger:        logger,
-		authenticator: auth.NewAuthenticator(options.Users),
+		authenticator: authbypass.New(options.Users, options.AuthBypass),
 		udpTimeout:    udpTimeout,
 	}
 	inbound.listener = listener.New(listener.Options{
@@ -70,7 +71,7 @@ func (h *Inbound) Close() error {
 }
 
 func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
-	err := socks.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), h.authenticator, adapter.NewUpstreamHandler(metadata, h.newUserConnection, h.streamUserPacketConnection), h.listener, h.udpTimeout, metadata.Source, onClose)
+	err := socks.HandleConnectionEx(ctx, conn, std_bufio.NewReader(conn), h.authenticator.For(metadata.Source), adapter.NewUpstreamHandler(metadata, h.newUserConnection, h.streamUserPacketConnection), h.listener, h.udpTimeout, metadata.Source, onClose)
 	N.CloseOnHandshakeFailure(conn, onClose, err)
 	if err != nil {
 		adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)

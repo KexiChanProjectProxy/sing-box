@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.10
+
+* 修复配置重载后 [`anytls`](/zh/configuration/inbound/anytls/) 客户端在池化会话上失败的问题：关闭入站时现在会关闭空闲会话，此前这些会话仍回应心跳，但其上的每个流都会失败。带有流的会话在最后一个流结束时关闭，最长等待 10 分钟
+
 #### 1.14.2.9
 
 * 入站新增 [`listen_unix`](/zh/configuration/shared/listen/#listen_unix)：监听 Unix 域套接字而非 TCP 端口（仅 Linux，仅 TCP）

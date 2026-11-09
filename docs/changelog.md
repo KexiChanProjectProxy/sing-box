@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.2.10
+
+* Fix [`anytls`](/configuration/inbound/anytls/) clients failing on pooled sessions after a configuration reload: closing the inbound now closes idle sessions, which previously kept answering heartbeats while every stream on them failed. Sessions with streams close when their last stream ends, or after 10 minutes
+
 #### 1.14.2.9
 
 * Add [`listen_unix`](/configuration/shared/listen/#listen_unix) to inbounds: listen on a Unix domain socket instead of a TCP port (Linux only, TCP only)

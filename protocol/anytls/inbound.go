@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -22,6 +23,11 @@ import (
 	anytls "github.com/anytls/sing-anytls"
 	"github.com/anytls/sing-anytls/padding"
 )
+
+// drainTimeout limits how long sessions with streams outlive the inbound. A
+// stream left running would otherwise keep what it references alive for as long
+// as the client holds it open.
+const drainTimeout = 10 * time.Minute
 
 func RegisterInbound(registry *inbound.Registry) {
 	inbound.Register[option.AnyTLSInboundOptions](registry, C.TypeAnyTLS, NewInbound)
@@ -75,6 +81,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		FallbackHandler: fallbackHandler,
 		Logger:          logger,
 		StatsProvider:   serverStats,
+		DrainTimeout:    drainTimeout,
 	})
 	if err != nil {
 		return nil, err
@@ -104,7 +111,12 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 }
 
 func (h *Inbound) Close() error {
-	return common.Close(h.listener, h.tlsConfig)
+	err := common.Close(h.listener, h.tlsConfig)
+	// Sessions run on their own goroutines and would otherwise outlive the
+	// inbound, answering heartbeats while every stream on them fails on a closed
+	// router. Clients would keep such sessions pooled until they age out.
+	h.service.Drain()
+	return err
 }
 
 func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {

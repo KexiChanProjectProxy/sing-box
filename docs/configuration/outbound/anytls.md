@@ -161,6 +161,13 @@ At `debug` level every new connection logs an `anytls.session.selected` event de
 | `retire_at`, `retire_left` | When the session stops being reused under `close_after_lifetime`, and the time left; omitted without it |
 | `idle_sessions`, `total_sessions` | Idle and total sessions after the pick |
 
+### DNS
+
+!!! question "Since sing-box 1.14.2.11"
+
+The outbound can also carry DNS queries to its server inside its sessions, without opening a stream.
+Use it from an [AnyTLS DNS server](/configuration/dns/server/anytls/); the server must enable [`dns`](/configuration/inbound/anytls/#dns) on its inbound.
+
 ### Dial Fields
 
 See [Dial Fields](/configuration/shared/dial/) for details.

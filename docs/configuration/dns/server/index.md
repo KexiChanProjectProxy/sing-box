@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+!!! quote "Changes in sing-box 1.14.2.11"
+
+    :material-plus: [anytls](./anytls/)  
+    :material-plus: [group](./group/)
+
 !!! quote "Changes in sing-box 1.14.0"
 
     :material-plus: [mdns](./mdns/)
@@ -49,6 +54,8 @@ The type of the DNS server.
 | `openconnect`   | [OpenConnect](./openconnect/) |
 | `openvpn`       | [OpenVPN](./openvpn/)         |
 | `resolved`      | [Resolved](./resolved/)   |
+| `anytls`        | [AnyTLS](./anytls/)       |
+| `group`         | [Group](./group/)         |
 
 #### tag
 

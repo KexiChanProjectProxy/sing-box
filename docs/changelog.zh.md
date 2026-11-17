@@ -7,7 +7,7 @@ icon: material/alert-decagram
 * AnyTLS 入站新增 [`anytls.dns`](/zh/configuration/inbound/anytls/#dns)：应答客户端在会话内以独立帧（而非流）发送的 DNS 查询。查询发往 `dns.server` 指定的 DNS 服务器并与 sing-box 自身的查询共享缓存，或经过 DNS 规则。服务器只向支持此功能的客户端声明，其他 AnyTLS 客户端不受影响
 * 新增 [`anytls`](/zh/configuration/dns/server/anytls/) DNS 服务器：通过 AnyTLS 出站的会话把查询发往其服务器。服务器未启用 `dns` 时查询立即失败，代理连接不受影响
 * 新增 [`group`](/zh/configuration/dns/server/group/) DNS 服务器：以 `load_balance`、`parallel` 或 `sequential` 模式把查询分散到 `udp`、`tcp`、`tls` 和 `https` DNS 服务器，全部失败时尝试 `fallbacks`。组作为一个服务器缓存
-* 更新 sing-anytls 至 v0.0.14-kexi.7，新增会话内 DNS 帧
+* 更新 sing-anytls 至 v0.0.14-kexi.8，新增会话内 DNS 帧
 
 #### 1.14.2.9
 

@@ -107,6 +107,7 @@ TLS 握手失败的连接不会被转发。
 应答查询的 [DNS 服务器](/zh/configuration/dns/server/) 标签。
 
 查询直接发往此服务器，不经过 DNS 规则，但与发往该服务器的其他所有查询共享缓存，包括 sing-box 自身发出的查询。
+为此会先移除仅与客户端链路有关的 EDNS 选项（例如 cookie 和 padding），保留客户端子网。
 通常选择 [组 DNS 服务器](/zh/configuration/dns/server/group/)。
 
 如果为空，查询经过 [DNS 规则](/zh/configuration/dns/rule/)。

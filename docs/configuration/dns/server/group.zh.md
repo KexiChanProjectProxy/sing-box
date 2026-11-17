@@ -42,6 +42,9 @@ icon: material/new-box
 
 `servers` 中所有服务器都失败后，按顺序尝试的 DNS 服务器标签。
 
+`servers` 中的服务器只使用查询时间中属于它们的份额，其余留给备用服务器，因此完全不应答的服务器也不会耗尽尝试备用服务器的时间。
+`parallel` 模式下同时询问所有服务器计为一次尝试。
+
 接受的类型与 `servers` 相同。
 
 #### mode
@@ -56,7 +59,7 @@ icon: material/new-box
 
 依次尝试时，每个服务器分得剩余时间的相同份额，因此不应答的服务器不会耗尽整个查询的时间。
 
-服务器失败应答（`SERVFAIL`）与错误一样会转到下一个服务器。
+服务器失败（`SERVFAIL`）或拒绝（`REFUSED`）应答与错误一样会转到下一个服务器，并在负载均衡中计为失败。
 其他应答（例如 `NXDOMAIN`）即为最终结果。
 
 ### 缓存
@@ -65,6 +68,7 @@ icon: material/new-box
 发往成员的查询不会再次经过 DNS 缓存。
 
 发往该组的所有查询共享此缓存，无论来自 DNS 规则、sing-box 自身的域名解析，还是 [`dns.server`](/zh/configuration/inbound/anytls/#dnsserver) 为该组的 AnyTLS 入站的客户端。
+与其他查询一样，设置了 DNSSEC OK 位的查询不会被缓存。
 
 ### 示例
 

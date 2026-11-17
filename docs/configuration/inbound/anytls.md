@@ -107,6 +107,7 @@ Answer DNS queries inside sessions.
 The tag of the [DNS server](/configuration/dns/server/) that answers the queries.
 
 Queries go to this server directly and skip the DNS rules, but share its cache with every other query sent to it, including the ones sing-box makes for itself.
+EDNS options that only concern the client's link, such as cookies and padding, are removed first so that this works; a client subnet is kept.
 A [group DNS server](/configuration/dns/server/group/) is the usual choice.
 
 If empty, queries go through the [DNS rules](/configuration/dns/rule/).

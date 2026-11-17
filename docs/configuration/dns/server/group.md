@@ -42,6 +42,9 @@ Each keeps its own options, such as `detour`, `domain_resolver` and TLS.
 
 The tags of the DNS servers tried in order once every server in `servers` has failed.
 
+The servers in `servers` get their share of the query's time and leave the rest to the fallbacks, so that servers which do not answer at all still leave time to try them.
+Asking every server at once in `parallel` mode counts as one try.
+
 The same types are accepted as in `servers`.
 
 #### mode
@@ -56,7 +59,7 @@ How queries are spread over `servers`.
 
 Trying servers one after another gives each an equal share of the time left, so a server that does not answer cannot use up the whole query.
 
-A server failure answer (`SERVFAIL`) moves on to the next server like an error does.
+A server failure (`SERVFAIL`) or refusal (`REFUSED`) moves on to the next server like an error does, and counts as a failure for load balancing.
 Other answers, such as `NXDOMAIN`, are final.
 
 ### Cache
@@ -65,6 +68,7 @@ The group is cached as one DNS server, under its own tag.
 Queries to its members do not go through the DNS cache again.
 
 Every query sent to the group shares that cache, whether it comes from DNS rules, from sing-box resolving a domain for itself, or from clients of an AnyTLS inbound whose [`dns.server`](/configuration/inbound/anytls/#dnsserver) is the group.
+Like any query, one that sets the DNSSEC OK bit is not cached.
 
 ### Example
 

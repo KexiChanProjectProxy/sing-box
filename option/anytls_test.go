@@ -71,3 +71,22 @@ func TestAnyTLSOutboundOptionsJSONRoundTrip(t *testing.T) {
 	require.Equal(t, original.MaxConnectionLifetime.Build(), unmarshaled.MaxConnectionLifetime.Build())
 	require.Equal(t, original.ConnectionLifetimeJitter.Build(), unmarshaled.ConnectionLifetimeJitter.Build())
 }
+
+func TestAnyTLSInboundDNSOptions(t *testing.T) {
+	t.Parallel()
+
+	var options AnyTLSInboundOptions
+	err := json.Unmarshal([]byte(`{"dns": {"enabled": true, "server": "up"}}`), &options)
+	require.NoError(t, err)
+	require.NotNil(t, options.DNS)
+	require.True(t, options.DNS.Enabled)
+	require.Equal(t, "up", options.DNS.Server)
+
+	content, err := json.Marshal(options)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"dns": {"enabled": true, "server": "up"}}`, string(content))
+
+	var empty AnyTLSInboundOptions
+	require.NoError(t, json.Unmarshal([]byte(`{}`), &empty))
+	require.Nil(t, empty.DNS)
+}

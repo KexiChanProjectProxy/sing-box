@@ -14,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/dns/transport"
 	"github.com/sagernet/sing-box/dns/transport/fakeip"
+	dnsgroup "github.com/sagernet/sing-box/dns/transport/group"
 	"github.com/sagernet/sing-box/dns/transport/hosts"
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/dns/transport/mdns"
@@ -137,6 +138,8 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	mdns.RegisterTransport(registry)
 	fakeip.RegisterTransport(registry)
 	resolved.RegisterTransport(registry)
+	anytls.RegisterDNSTransport(registry)
+	dnsgroup.RegisterTransport(registry)
 
 	registerQUICTransports(registry)
 	registerDHCPTransport(registry)

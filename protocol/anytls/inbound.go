@@ -18,6 +18,7 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing/service"
 
 	anytls "github.com/anytls/sing-anytls"
 	"github.com/anytls/sing-anytls/padding"
@@ -35,6 +36,14 @@ type Inbound struct {
 	listener     *listener.Listener
 	service      *anytls.Service
 	fallbackAddr M.Socksaddr
+
+	// dnsRouter is set when clients may send DNS queries inside their
+	// session, and dnsServer when they go to one server rather than through
+	// the DNS rules.
+	dnsRouter           adapter.DNSRouter
+	dnsTransportManager adapter.DNSTransportManager
+	dnsServerTag        string
+	dnsServer           adapter.DNSTransport
 }
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSInboundOptions) (adapter.Inbound, error) {
@@ -66,7 +75,18 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		fallbackHandler = adapter.NewUpstreamContextHandler(inbound.fallbackConnection, nil)
 	}
 
-	service, err := anytls.NewService(anytls.ServiceConfig{
+	var dnsHandler func(ctx context.Context, request []byte) ([]byte, error)
+	if options.DNS != nil && options.DNS.Enabled {
+		inbound.dnsRouter = service.FromContext[adapter.DNSRouter](ctx)
+		inbound.dnsTransportManager = service.FromContext[adapter.DNSTransportManager](ctx)
+		if inbound.dnsRouter == nil || inbound.dnsTransportManager == nil {
+			return nil, E.New("dns: missing DNS router")
+		}
+		inbound.dnsServerTag = options.DNS.Server
+		dnsHandler = inbound.exchangeDNS
+	}
+
+	anytlsService, err := anytls.NewService(anytls.ServiceConfig{
 		Users: common.Map(options.Users, func(it option.AnyTLSUser) anytls.User {
 			return anytls.User(it)
 		}),
@@ -75,11 +95,12 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		FallbackHandler: fallbackHandler,
 		Logger:          logger,
 		StatsProvider:   serverStats,
+		DNSHandler:      dnsHandler,
 	})
 	if err != nil {
 		return nil, err
 	}
-	inbound.service = service
+	inbound.service = anytlsService
 	inbound.listener = listener.New(listener.Options{
 		Context:           ctx,
 		Logger:            logger,
@@ -93,6 +114,14 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 func (h *Inbound) Start(stage adapter.StartStage) error {
 	if stage != adapter.StartStateStart {
 		return nil
+	}
+	if h.dnsServerTag != "" {
+		// DNS servers start before inbounds, so the tag resolves here.
+		transport, loaded := h.dnsTransportManager.Transport(h.dnsServerTag)
+		if !loaded {
+			return E.New("dns: DNS server not found: ", h.dnsServerTag)
+		}
+		h.dnsServer = transport
 	}
 	if h.tlsConfig != nil {
 		err := h.tlsConfig.Start()

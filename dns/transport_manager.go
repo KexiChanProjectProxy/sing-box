@@ -248,9 +248,12 @@ func (m *TransportManager) Create(ctx context.Context, logger log.StructuredLogg
 	if err != nil {
 		return err
 	}
+	// The transport starts outside the lock, as an outbound does, since
+	// starting may look up other transports.
 	m.access.Lock()
-	defer m.access.Unlock()
-	if m.started {
+	started := m.started
+	m.access.Unlock()
+	if started {
 		for _, stage := range adapter.ListStartStages {
 			err = adapter.LegacyStart(transport, stage)
 			if err != nil {
@@ -258,6 +261,8 @@ func (m *TransportManager) Create(ctx context.Context, logger log.StructuredLogg
 			}
 		}
 	}
+	m.access.Lock()
+	defer m.access.Unlock()
 	if existsTransport, loaded := m.transportByTag[tag]; loaded {
 		if m.started {
 			err = common.Close(existsTransport)

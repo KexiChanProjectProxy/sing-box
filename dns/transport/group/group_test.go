@@ -316,3 +316,62 @@ func TestGroupConcurrentQueries(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestGroupRefusedMovesOn(t *testing.T) {
+	a, b := member("a"), member("b")
+	a.rcode = mDNS.RcodeRefused
+	transport := newGroup(t, option.GroupDNSServerOptions{Servers: []string{"a", "b"}, Mode: ModeSequential}, a, b)
+	response, err := query(t, transport)
+	require.NoError(t, err)
+	require.Equal(t, "b", answeredBy(t, response))
+}
+
+// Servers that never answer still leave the fallbacks time to answer.
+func TestGroupFallbackAfterServersHang(t *testing.T) {
+	for _, mode := range []string{ModeLoadBalance, ModeParallel, ModeSequential} {
+		t.Run(mode, func(t *testing.T) {
+			a, b, fallback := member("a"), member("b"), member("fallback")
+			a.delay = time.Hour
+			b.delay = time.Hour
+			transport := newGroup(t, option.GroupDNSServerOptions{Servers: []string{"a", "b"}, Fallbacks: []string{"fallback"}, Mode: mode}, a, b, fallback)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			message := new(mDNS.Msg)
+			message.SetQuestion("example.org.", mDNS.TypeTXT)
+			response, err := transport.Exchange(ctx, message)
+			require.NoError(t, err)
+			require.Equal(t, "fallback", answeredBy(t, response))
+		})
+	}
+}
+
+// A server that fails fast must not look fast to load balancing.
+func TestGroupFastServerFailureIsPenalised(t *testing.T) {
+	broken, good := member("broken"), member("good")
+	broken.rcode = mDNS.RcodeServerFailure
+	transport := newGroup(t, option.GroupDNSServerOptions{Servers: []string{"broken", "good"}, Mode: ModeSequential}, broken, good)
+	_, err := query(t, transport)
+	require.NoError(t, err)
+	transport.rttAccess.Lock()
+	defer transport.rttAccess.Unlock()
+	require.Equal(t, failurePenalty, transport.rtt["broken"])
+	require.Less(t, transport.rtt["good"], time.Second)
+}
+
+// A server that runs out of its share of the time is recorded as slow by the
+// time it had, not as failed.
+func TestGroupShareTimeoutIsNotAFailure(t *testing.T) {
+	slow, good := member("slow"), member("good")
+	slow.delay = time.Hour
+	transport := newGroup(t, option.GroupDNSServerOptions{Servers: []string{"slow", "good"}, Mode: ModeSequential}, slow, good)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	message := new(mDNS.Msg)
+	message.SetQuestion("example.org.", mDNS.TypeTXT)
+	_, err := transport.Exchange(ctx, message)
+	require.NoError(t, err)
+	transport.rttAccess.Lock()
+	defer transport.rttAccess.Unlock()
+	require.Less(t, transport.rtt["slow"], time.Second)
+	require.Greater(t, transport.rtt["slow"], 50*time.Millisecond)
+}

@@ -22,3 +22,5 @@ CLAUDE.md
 AGENTS.md
 /.claude/
 /.sisyphus/
+
+/.worktrees/

@@ -112,16 +112,17 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 }
 
 func (h *Inbound) Start(stage adapter.StartStage) error {
-	if stage != adapter.StartStateStart {
-		return nil
-	}
-	if h.dnsServerTag != "" {
-		// DNS servers start before inbounds, so the tag resolves here.
+	if stage == adapter.StartStateInitialize && h.dnsServerTag != "" {
+		// DNS servers are all created by now, and no connection can arrive
+		// before the listeners start, so the field is set before any read.
 		transport, loaded := h.dnsTransportManager.Transport(h.dnsServerTag)
 		if !loaded {
 			return E.New("dns: DNS server not found: ", h.dnsServerTag)
 		}
 		h.dnsServer = transport
+	}
+	if stage != adapter.StartStateStart {
+		return nil
 	}
 	if h.tlsConfig != nil {
 		err := h.tlsConfig.Start()

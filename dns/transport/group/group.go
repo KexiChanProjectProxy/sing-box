@@ -132,18 +132,27 @@ func (t *Transport) Reset() {
 }
 
 func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
+	// The servers get their share of the time and leave the rest to the
+	// fallbacks, so that servers which do not answer at all still leave time
+	// to try them. Asking every server at once counts as one try.
+	primaryTries := len(t.servers)
+	if t.mode == ModeParallel {
+		primaryTries = 1
+	}
+	primaryCtx, cancel := shareDeadline(ctx, primaryTries, primaryTries+len(t.fallbacks))
 	var (
 		response *mDNS.Msg
 		err      error
 	)
 	switch t.mode {
 	case ModeParallel:
-		response, err = t.exchangeParallel(ctx, message, t.servers)
+		response, err = t.exchangeParallel(primaryCtx, message, t.servers)
 	case ModeSequential:
-		response, err = t.exchangeInOrder(ctx, message, t.servers)
+		response, err = t.exchangeInOrder(primaryCtx, message, t.servers)
 	default:
-		response, err = t.exchangeInOrder(ctx, message, t.weightedOrder(t.servers))
+		response, err = t.exchangeInOrder(primaryCtx, message, t.weightedOrder(t.servers))
 	}
+	cancel()
 	if accepted(response, err) || len(t.fallbacks) == 0 || ctx.Err() != nil {
 		return response, err
 	}
@@ -165,10 +174,11 @@ func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callba
 	}()
 }
 
-// accepted reports whether an answer ends the search: anything but an error or
-// a server failure, which another server may well not share.
+// accepted reports whether an answer ends the search: anything but an error, a
+// server failure or a refusal, which another server may well not share.
 func accepted(response *mDNS.Msg, err error) bool {
-	return err == nil && response != nil && response.Rcode != mDNS.RcodeServerFailure
+	return err == nil && response != nil &&
+		response.Rcode != mDNS.RcodeServerFailure && response.Rcode != mDNS.RcodeRefused
 }
 
 // exchangeInOrder tries servers one after another until one answers. Each try
@@ -184,7 +194,7 @@ func (t *Transport) exchangeInOrder(ctx context.Context, message *mDNS.Msg, serv
 			errs = append(errs, ctx.Err())
 			break
 		}
-		tryCtx, cancel := t.shareDeadline(ctx, len(servers)-index)
+		tryCtx, cancel := shareDeadline(ctx, 1, len(servers)-index)
 		response, err := t.exchangeOne(tryCtx, server, message)
 		cancel()
 		if accepted(response, err) {
@@ -202,12 +212,14 @@ func (t *Transport) exchangeInOrder(ctx context.Context, message *mDNS.Msg, serv
 	return nil, errors.Join(errs...)
 }
 
-func (t *Transport) shareDeadline(ctx context.Context, remainingTries int) (context.Context, context.CancelFunc) {
+// shareDeadline gives tries out of totalTries their share of the time left
+// before the deadline of ctx.
+func shareDeadline(ctx context.Context, tries int, totalTries int) (context.Context, context.CancelFunc) {
 	deadline, hasDeadline := ctx.Deadline()
-	if !hasDeadline || remainingTries <= 1 {
+	if !hasDeadline || tries >= totalTries {
 		return context.WithCancel(ctx)
 	}
-	share := time.Until(deadline) / time.Duration(remainingTries)
+	share := time.Until(deadline) * time.Duration(tries) / time.Duration(totalTries)
 	return context.WithTimeout(ctx, share)
 }
 
@@ -256,11 +268,20 @@ func (t *Transport) exchangeParallel(ctx context.Context, message *mDNS.Msg, ser
 func (t *Transport) exchangeOne(ctx context.Context, server adapter.DNSTransport, message *mDNS.Msg) (*mDNS.Msg, error) {
 	start := time.Now()
 	response, err := server.Exchange(ctx, message.Copy())
-	if err == nil {
-		t.recordRTT(server.Tag(), time.Since(start))
-	} else if !errors.Is(err, context.Canceled) {
+	elapsed := time.Since(start)
+	switch {
+	case accepted(response, err):
+		t.recordRTT(server.Tag(), elapsed)
+	case ctx.Err() != nil:
 		// A try cancelled because another server answered says nothing about
-		// this one.
+		// this one. One that ran out of its share of the time took at least
+		// that long, which is all that is known.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			t.recordRTT(server.Tag(), elapsed)
+		}
+	default:
+		// An error, a server failure or a refusal, however quick, must not
+		// make the server look fast.
 		t.recordRTT(server.Tag(), failurePenalty)
 	}
 	return response, err

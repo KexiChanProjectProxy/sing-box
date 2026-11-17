@@ -3,6 +3,7 @@ package anytls
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/netip"
 	"testing"
@@ -156,13 +157,55 @@ func TestExchangeDNSRouterFailureIsServerFailure(t *testing.T) {
 	require.Equal(t, "example.org.", response.Question[0].Name)
 }
 
-func TestExchangeDNSCancelledIsAnError(t *testing.T) {
+// An upstream timeout or a reset connection is a server failure for the
+// client, not a reason to leave it without an answer.
+func TestExchangeDNSUpstreamTimeoutIsServerFailure(t *testing.T) {
+	for _, upstreamErr := range []error{context.DeadlineExceeded, context.Canceled, io.EOF} {
+		router := &stubDNSRouter{respond: func(*mDNS.Msg) (*mDNS.Msg, error) {
+			return nil, upstreamErr
+		}}
+		inbound := newDNSTestInbound(router, nil)
+		raw, err := inbound.exchangeDNS(connectionContext(), packQuery(t, nil))
+		require.NoError(t, err)
+		require.Equal(t, mDNS.RcodeServerFailure, unpackResponse(t, raw).Rcode)
+	}
+}
+
+func TestExchangeDNSClosedSessionIsAnError(t *testing.T) {
+	ctx, cancel := context.WithCancel(connectionContext())
 	router := &stubDNSRouter{respond: func(*mDNS.Msg) (*mDNS.Msg, error) {
+		cancel()
 		return nil, context.Canceled
 	}}
 	inbound := newDNSTestInbound(router, nil)
-	_, err := inbound.exchangeDNS(connectionContext(), packQuery(t, nil))
+	_, err := inbound.exchangeDNS(ctx, packQuery(t, nil))
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+// Link-only EDNS options are removed so that the query can use the cache;
+// the client subnet and the DNSSEC OK bit are kept.
+func TestExchangeDNSStripsHopByHopOptions(t *testing.T) {
+	var forwarded *mDNS.Msg
+	router := &stubDNSRouter{respond: func(message *mDNS.Msg) (*mDNS.Msg, error) {
+		forwarded = message
+		return answer(message)
+	}}
+	inbound := newDNSTestInbound(router, nil)
+	_, err := inbound.exchangeDNS(connectionContext(), packQuery(t, func(message *mDNS.Msg) {
+		message.SetEdns0(1232, true)
+		opt := message.IsEdns0()
+		opt.Option = append(opt.Option,
+			&mDNS.EDNS0_COOKIE{Code: mDNS.EDNS0COOKIE, Cookie: "0123456789abcdef"},
+			&mDNS.EDNS0_SUBNET{Code: mDNS.EDNS0SUBNET, Family: 1, SourceNetmask: 24, Address: net.IPv4(198, 51, 100, 0)},
+			&mDNS.EDNS0_PADDING{Padding: make([]byte, 32)},
+		)
+	}))
+	require.NoError(t, err)
+	opt := forwarded.IsEdns0()
+	require.NotNil(t, opt)
+	require.True(t, opt.Do())
+	require.Len(t, opt.Option, 1)
+	require.Equal(t, uint16(mDNS.EDNS0SUBNET), opt.Option[0].Option())
 }
 
 // An answer too large for a frame is truncated with TC set rather than lost.

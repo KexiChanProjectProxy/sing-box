@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+!!! quote "sing-box 1.14.2.11 中的更改"
+
+    :material-plus: [anytls](./anytls/)  
+    :material-plus: [group](./group/)
+
 !!! quote "sing-box 1.14.0 中的更改"
 
     :material-plus: [mdns](./mdns/)
@@ -49,6 +54,8 @@ DNS 服务器的类型。
 | `openconnect`   | [OpenConnect](./openconnect/) |
 | `openvpn`       | [OpenVPN](./openvpn/)         |
 | `resolved`      | [Resolved](./resolved/)   |
+| `anytls`        | [AnyTLS](./anytls/)       |
+| `group`         | [组](./group/)         |
 
 #### tag
 

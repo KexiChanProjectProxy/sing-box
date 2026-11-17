@@ -161,6 +161,13 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#出站)。
 | `retire_at`、`retire_left` | 会话因 `close_after_lifetime` 停止复用的时间及剩余时间；未设置时省略 |
 | `idle_sessions`、`total_sessions` | 选取后的空闲会话数和会话总数 |
 
+### DNS
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+此出站还可以在会话内把 DNS 查询发往其服务器，不打开流。
+请通过 [AnyTLS DNS 服务器](/zh/configuration/dns/server/anytls/) 使用，服务器须在其入站上启用 [`dns`](/zh/configuration/inbound/anytls/#dns)。
+
 ### 拨号字段
 
 参阅 [拨号字段](/zh/configuration/shared/dial/)。

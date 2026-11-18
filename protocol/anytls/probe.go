@@ -29,9 +29,14 @@ const (
 	probeKeyPeakBandwidth = "peak_bw_bps"
 	probeKeySmoothedRTT   = "srtt_us"
 	probeKeyMinRTT        = "min_rtt_us"
+	probeKeyBusy          = "busy_us"
+	probeKeyRwndLimited   = "rwnd_limited_us"
+	probeKeySndbufLimited = "sndbuf_limited_us"
 	probeKeyNetLimited    = "net_limited_us"
 	probeKeyAckedBytes    = "acked_bytes"
 	probeKeyGoodput       = "goodput_bps"
+	probeKeyGoodputTime   = "goodput_us"
+	probeKeyAverageRate   = "avg_rate_bps"
 	probeKeySentBytes     = "sent_bytes"
 	probeKeyRetransBytes  = "retrans_bytes"
 	probeKeyDSACKDups     = "dsack_dups"
@@ -52,15 +57,21 @@ const probeRounds = 3
 // probeMinRound bounds how often the sender reads TCP_INFO.
 const probeMinRound = 5 * time.Millisecond
 
-// probeMinNetLimited is the network limited time below which no goodput is
-// reported, since a few packets say little about the path.
-const probeMinNetLimited = time.Millisecond
+// probeMinBusy is the busy time below which no average rate is reported,
+// since a few packets say little about the path.
+const probeMinBusy = time.Millisecond
+
+// probeMinWindow is the shortest window observe compares, several of the
+// kernel's ticks, in which the limited times are counted.
+const probeMinWindow = 50 * time.Millisecond
+
+// probeMinNetBusy is the network limited time goodput needs.
+const probeMinNetBusy = 100 * time.Millisecond
 
 // probeMeasure follows one end's TCP_INFO through a probe.
 type probeMeasure struct {
-	conn    net.Conn
-	sender  bool
-	account func(bytes int64)
+	conn   net.Conn
+	sender bool
 
 	start    tcpinfo.Info
 	hasStart bool
@@ -69,18 +80,35 @@ type probeMeasure struct {
 	fullBW    uint64
 	flat      int
 	peakBW    uint64
+	// startupDone is set once the delivery rate first stops growing fast,
+	// which ends the ramp up that would understate the path.
+	startupDone bool
+
+	// The last snapshot, and what was delivered in the windows between
+	// snapshots in which only the network held the sender back.
+	window     tcpinfo.Info
+	windowAt   time.Time
+	netAcked   uint64
+	netBusy    time.Duration
+	netWindows int
 }
 
-func newProbeMeasure(conn net.Conn, sender bool, account func(bytes int64)) *probeMeasure {
-	measure := &probeMeasure{conn: conn, sender: sender, account: account}
+func newProbeMeasure(conn net.Conn, sender bool) *probeMeasure {
+	measure := &probeMeasure{conn: conn, sender: sender}
 	measure.start, measure.hasStart = tcpinfo.Read(conn)
+	measure.window, measure.windowAt = measure.start, time.Now()
+	if measure.hasStart {
+		// The first look waits a round trip, so that it sees the probe's own
+		// delivery rate rather than what the connection carried before.
+		measure.nextRound = time.Now().Add(max(measure.start.RTT, probeMinRound))
+	}
 	return measure
 }
 
 // Converged reads TCP_INFO about once a round trip and reports whether the
-// bandwidth estimate has stopped growing: BBR's own estimate when the sender
-// runs BBR, and otherwise the delivery rate of samples the application did
-// not limit.
+// delivery rate has stopped growing. Only samples the application did not
+// limit count, and they are fresh, unlike BBR's bandwidth estimate, which is
+// a maximum over several rounds that may predate the probe.
 func (m *probeMeasure) Converged() bool {
 	if !m.sender || !m.hasStart {
 		return false
@@ -94,16 +122,11 @@ func (m *probeMeasure) Converged() bool {
 		return false
 	}
 	m.nextRound = now.Add(max(info.RTT, probeMinRound))
-	var bandwidth uint64
-	switch {
-	case info.BBR != nil:
-		bandwidth = info.BBR.Bandwidth
-	case !info.AppLimited:
-		bandwidth = info.DeliveryRate
-	}
-	if bandwidth == 0 {
+	m.observe(info, now)
+	if !info.HasDeliveryRate || info.AppLimited || info.DeliveryRate == 0 {
 		return false
 	}
+	bandwidth := info.DeliveryRate
 	m.peakBW = max(m.peakBW, bandwidth)
 	if bandwidth >= m.fullBW+m.fullBW/4 {
 		m.fullBW = bandwidth
@@ -111,13 +134,34 @@ func (m *probeMeasure) Converged() bool {
 		return false
 	}
 	m.flat++
+	m.startupDone = true
 	return m.flat >= probeRounds
 }
 
-func (m *probeMeasure) Finish(bytes int64) util.StringMap {
-	if m.account != nil && bytes > 0 {
-		m.account(bytes)
+// observe closes the current window once it has lasted a round trip, and
+// keeps what it delivered if only the network limited the sender during it:
+// it was busy throughout some of it, and neither the receiver's window nor the
+// send buffer held it back. Bytes acknowledged and busy time then cover the
+// same interval, so their ratio is the path's rate.
+func (m *probeMeasure) observe(info tcpinfo.Info, now time.Time) {
+	if !info.HasChrono || now.Sub(m.windowAt) < max(info.RTT, probeMinWindow) {
+		return
 	}
+	previous := m.window
+	m.window, m.windowAt = info, now
+	if !m.startupDone {
+		return
+	}
+	busy := info.BusyTime - previous.BusyTime
+	if busy <= 0 || info.RwndLimited != previous.RwndLimited || info.SndbufLimited != previous.SndbufLimited {
+		return
+	}
+	m.netAcked += info.BytesAcked - previous.BytesAcked
+	m.netBusy += busy
+	m.netWindows++
+}
+
+func (m *probeMeasure) Finish(bytes int64) util.StringMap {
 	if !m.hasStart {
 		return nil
 	}
@@ -126,7 +170,7 @@ func (m *probeMeasure) Finish(bytes int64) util.StringMap {
 		loaded  bool
 		drained = true
 	)
-	if m.sender {
+	if m.sender && bytes > 0 {
 		end, loaded, drained = m.drain()
 	} else {
 		end, loaded = tcpinfo.Read(m.conn)
@@ -136,7 +180,9 @@ func (m *probeMeasure) Finish(bytes int64) util.StringMap {
 	}
 	result := util.StringMap{
 		probeKeySmoothedRTT: formatMicroseconds(end.RTT),
-		probeKeyMinRTT:      formatMicroseconds(end.MinRTT),
+	}
+	if end.HasMinRTT {
+		result[probeKeyMinRTT] = formatMicroseconds(end.MinRTT)
 	}
 	if end.CongestionControl != "" {
 		result[probeKeyCongestion] = end.CongestionControl
@@ -144,7 +190,6 @@ func (m *probeMeasure) Finish(bytes int64) util.StringMap {
 	if end.BBR != nil {
 		result[probeKeyBBRBandwidth] = strconv.FormatUint(end.BBR.Bandwidth, 10)
 		result[probeKeyBBRMinRTT] = formatMicroseconds(end.BBR.MinRTT)
-		m.peakBW = max(m.peakBW, end.BBR.Bandwidth)
 	}
 	if !m.sender {
 		result[probeKeyReceived] = strconv.FormatUint(end.BytesReceived-m.start.BytesReceived, 10)
@@ -157,19 +202,27 @@ func (m *probeMeasure) Finish(bytes int64) util.StringMap {
 	}
 	acked := end.BytesAcked - m.start.BytesAcked
 	result[probeKeyAckedBytes] = strconv.FormatUint(acked, 10)
-	result[probeKeySentBytes] = strconv.FormatUint(end.BytesSent-m.start.BytesSent, 10)
 	if end.HasChrono && m.start.HasChrono {
-		limited := end.NetworkLimited() - m.start.NetworkLimited()
-		if limited < 0 {
-			limited = 0
+		busy := end.BusyTime - m.start.BusyTime
+		result[probeKeyBusy] = formatMicroseconds(busy)
+		result[probeKeyRwndLimited] = formatMicroseconds(end.RwndLimited - m.start.RwndLimited)
+		result[probeKeySndbufLimited] = formatMicroseconds(end.SndbufLimited - m.start.SndbufLimited)
+		result[probeKeyNetLimited] = formatMicroseconds(max(end.NetworkLimited()-m.start.NetworkLimited(), 0))
+		if busy >= probeMinBusy {
+			// The rate whenever the connection had data to move, whatever
+			// held it back, which the three limited times say.
+			result[probeKeyAverageRate] = strconv.FormatUint(uint64(float64(acked)/busy.Seconds()), 10)
 		}
-		result[probeKeyNetLimited] = formatMicroseconds(limited)
-		if limited >= probeMinNetLimited {
-			result[probeKeyGoodput] = strconv.FormatUint(uint64(float64(acked)/limited.Seconds()), 10)
+		if m.netBusy >= probeMinNetBusy {
+			result[probeKeyGoodput] = strconv.FormatUint(uint64(float64(m.netAcked)/m.netBusy.Seconds()), 10)
+			result[probeKeyGoodputTime] = formatMicroseconds(m.netBusy)
 		}
 	}
 	if end.HasRetransBytes && m.start.HasRetransBytes {
+		result[probeKeySentBytes] = strconv.FormatUint(end.BytesSent-m.start.BytesSent, 10)
 		result[probeKeyRetransBytes] = strconv.FormatUint(end.BytesRetrans-m.start.BytesRetrans, 10)
+	}
+	if end.HasDSACK && m.start.HasDSACK {
 		result[probeKeyDSACKDups] = strconv.FormatUint(end.DSACKDups-m.start.DSACKDups, 10)
 	}
 	if end.HasRTOStats && m.start.HasRTOStats {
@@ -188,6 +241,8 @@ func (m *probeMeasure) drain() (tcpinfo.Info, bool, bool) {
 		if !loaded {
 			return info, false, false
 		}
+		// The filler still queued is sent at the path's rate as well.
+		m.observe(info, time.Now())
 		if info.Unacked == 0 && info.NotSentBytes == 0 {
 			return info, true, true
 		}
@@ -228,7 +283,7 @@ func (*probeOutbound) ListenPacket(context.Context, M.Socksaddr) (net.PacketConn
 // probeServerConfig turns the inbound's probe options into the library's
 // limits, or nil when probes are disabled.
 func (h *Inbound) probeServerConfig(options *option.AnyTLSInboundProbeOptions) *anytls.ProbeConfig {
-	config := &anytls.ProbeConfig{Meter: h.probeMeter}
+	config := &anytls.ProbeConfig{Meter: probeServerMeter, Account: h.accountProbe}
 	if options != nil {
 		if options.Disabled {
 			return nil
@@ -241,12 +296,10 @@ func (h *Inbound) probeServerConfig(options *option.AnyTLSInboundProbeOptions) *
 	return config
 }
 
-// probeMeter measures a probe on the server, which sends a download and
-// receives an upload, and accounts its filler to the user.
-func (h *Inbound) probeMeter(ctx context.Context, conn net.Conn, direction anytls.ProbeDirection) anytls.ProbeRun {
-	return newProbeMeasure(conn, direction == anytls.ProbeDownload, func(bytes int64) {
-		h.accountProbe(ctx, direction, bytes)
-	})
+// probeServerMeter measures a probe on the server, which sends a download
+// and receives an upload.
+func probeServerMeter(_ context.Context, conn net.Conn, direction anytls.ProbeDirection) anytls.ProbeRun {
+	return newProbeMeasure(conn, direction == anytls.ProbeDownload)
 }
 
 // accountProbe passes a probe's filler through the router's connection
@@ -316,7 +369,7 @@ func (h *Outbound) Probe(ctx context.Context, options ProbeOptions) (anytls.Prob
 	}
 	if options.Meter == nil && tcpinfo.Supported && !h.localStatsUnavailable {
 		options.Meter = func(_ context.Context, conn net.Conn, direction anytls.ProbeDirection) anytls.ProbeRun {
-			return newProbeMeasure(conn, direction == anytls.ProbeUpload, nil)
+			return newProbeMeasure(conn, direction == anytls.ProbeUpload)
 		}
 	}
 	return client.Probe(ctx, options)

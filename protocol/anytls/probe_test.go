@@ -97,7 +97,7 @@ func probePair(t *testing.T, options *option.AnyTLSInboundProbeOptions) (*anytls
 }
 
 func localMeter(_ context.Context, conn net.Conn, direction anytls.ProbeDirection) anytls.ProbeRun {
-	return newProbeMeasure(conn, direction == anytls.ProbeUpload, nil)
+	return newProbeMeasure(conn, direction == anytls.ProbeUpload)
 }
 
 func probeContext(t *testing.T) context.Context {
@@ -129,7 +129,7 @@ func TestProbeDownloadMeasuresAndAccounts(t *testing.T) {
 	if !tcpinfo.Supported {
 		return
 	}
-	for _, key := range []string{probeKeyAckedBytes, probeKeySentBytes, probeKeyNetLimited, probeKeySmoothedRTT, probeKeyMinRTT, probeKeyCongestion} {
+	for _, key := range []string{probeKeyAckedBytes, probeKeySentBytes, probeKeyBusy, probeKeyNetLimited, probeKeySmoothedRTT, probeKeyMinRTT, probeKeyCongestion} {
 		require.Contains(t, result.Server, key)
 	}
 	sent, err := strconv.ParseInt(result.Server[probeKeySentBytes], 10, 64)
@@ -226,6 +226,35 @@ func TestServerReportsKeepTheLatestPerSession(t *testing.T) {
 	require.Len(t, list, 2)
 	require.EqualValues(t, 1, list[0].Seq)
 	require.Equal(t, "3", list[1].Stats["rtt_us"])
+	// A caller cannot change the stored report.
+	list[1].Stats["rtt_us"] = "changed"
+	require.Equal(t, "3", reports.list(now.Add(time.Second))[1].Stats["rtt_us"])
 	// A session that stopped reporting is dropped.
 	require.Len(t, reports.list(now.Add(serverReportTTL+500*time.Millisecond)), 1)
+}
+
+// Goodput only counts windows after the ramp up in which the network alone
+// held the sender back.
+func TestProbeMeasureCountsNetworkLimitedWindows(t *testing.T) {
+	t.Parallel()
+	start := time.Now()
+	m := &probeMeasure{sender: true, hasStart: true, windowAt: start}
+	snapshot := func(acked uint64, busy, rwnd time.Duration) tcpinfo.Info {
+		return tcpinfo.Info{RTT: 10 * time.Millisecond, HasChrono: true, BytesAcked: acked, BusyTime: busy, RwndLimited: rwnd}
+	}
+	at := func(ms int) time.Time { return start.Add(time.Duration(ms) * time.Millisecond) }
+	// The ramp up is not counted.
+	m.observe(snapshot(100_000, 100*time.Millisecond, 0), at(100))
+	m.startupDone = true
+	// A network limited window: 1 MB in 100 ms of busy time.
+	m.observe(snapshot(1_100_000, 200*time.Millisecond, 0), at(200))
+	// A window the receiver's window limited is left out.
+	m.observe(snapshot(1_500_000, 300*time.Millisecond, 20*time.Millisecond), at(300))
+	// Too soon after the last window: nothing happens yet.
+	m.observe(snapshot(2_000_000, 320*time.Millisecond, 20*time.Millisecond), at(310))
+	// Another network limited window: 1 MB in 100 ms.
+	m.observe(snapshot(2_500_000, 400*time.Millisecond, 20*time.Millisecond), at(400))
+	require.Equal(t, 2, m.netWindows)
+	require.EqualValues(t, 2_000_000, m.netAcked)
+	require.Equal(t, 200*time.Millisecond, m.netBusy)
 }

@@ -3,6 +3,7 @@ package anytls
 import (
 	"cmp"
 	"context"
+	"maps"
 	"net"
 	"slices"
 	"strconv"
@@ -64,13 +65,16 @@ func serverStats(conn net.Conn) util.StringMap {
 		statsKeySegmentsOut:  strconv.FormatUint(info.DataSegmentsOut, 10),
 		statsKeyRetransmits:  strconv.FormatUint(info.Retransmits, 10),
 		statsKeyDeliveryRate: strconv.FormatUint(info.DeliveryRate, 10),
-		probeKeyMinRTT:       formatMicroseconds(info.MinRTT),
-		statsKeyAppLimited:   formatBool(info.AppLimited),
 		statsKeyPacingRate:   strconv.FormatUint(info.PacingRate, 10),
 		statsKeyCwnd:         strconv.FormatUint(uint64(info.SndCwnd), 10),
 		statsKeyMSS:          strconv.FormatUint(uint64(info.SndMSS), 10),
-		statsKeyBytesSent:    strconv.FormatUint(info.BytesSent, 10),
 		statsKeyBytesAcked:   strconv.FormatUint(info.BytesAcked, 10),
+	}
+	if info.HasMinRTT {
+		stats[probeKeyMinRTT] = formatMicroseconds(info.MinRTT)
+	}
+	if info.HasDeliveryRate {
+		stats[statsKeyAppLimited] = formatBool(info.AppLimited)
 	}
 	if info.HasChrono {
 		stats[statsKeyBusy] = formatMicroseconds(info.BusyTime)
@@ -78,7 +82,10 @@ func serverStats(conn net.Conn) util.StringMap {
 		stats[statsKeySndbufLimited] = formatMicroseconds(info.SndbufLimited)
 	}
 	if info.HasRetransBytes {
+		stats[statsKeyBytesSent] = strconv.FormatUint(info.BytesSent, 10)
 		stats[statsKeyBytesRetrans] = strconv.FormatUint(info.BytesRetrans, 10)
+	}
+	if info.HasDSACK {
 		stats[statsKeyDSACKDups] = strconv.FormatUint(info.DSACKDups, 10)
 	}
 	if info.HasRTOStats {
@@ -141,6 +148,9 @@ func (r *serverReports) list(now time.Time) []ServerReport {
 	r.pruneLocked(now)
 	reports := make([]ServerReport, 0, len(r.reports))
 	for _, report := range r.reports {
+		// The stored map is shared with the stats handler, so the caller
+		// gets its own.
+		report.Stats = maps.Clone(report.Stats)
 		reports = append(reports, report)
 	}
 	slices.SortFunc(reports, func(a, b ServerReport) int {

@@ -91,6 +91,13 @@ func (m *Manager) newTrackerMetadata(metadata adapter.InboundContext, matchedRul
 		}
 		next = outboundGroup.Now()
 	}
+	if len(chain) == 0 && matchOutbound != nil {
+		// An outbound that is not registered, such as the one probe traffic
+		// is accounted to, still names the connection.
+		chain = []string{matchOutbound.Tag()}
+		outbound = matchOutbound.Tag()
+		outboundType = matchOutbound.Type()
+	}
 	return TrackerMetadata{
 		ID:           id,
 		Metadata:     metadata,

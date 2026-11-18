@@ -10,8 +10,9 @@ import "time"
 type Info struct {
 	RTT    time.Duration
 	RTTVar time.Duration
-	// MinRTT is the lowest RTT seen, the path without queueing.
-	MinRTT time.Duration
+	// MinRTT is the lowest RTT seen, the path without queueing (Linux 4.6).
+	HasMinRTT bool
+	MinRTT    time.Duration
 	// RcvRTT is the receiver's own RTT estimate.
 	RcvRTT time.Duration
 	// DataSegmentsOut counts data segments sent, retransmissions included.
@@ -21,9 +22,10 @@ type Info struct {
 	Retransmits uint64
 	// DeliveryRate is the kernel's most recent delivery rate estimate, in
 	// bytes per second. It is application limited most of the time, which
-	// AppLimited says of the most recent sample.
-	DeliveryRate uint64
-	AppLimited   bool
+	// AppLimited says of the most recent sample (Linux 4.9).
+	HasDeliveryRate bool
+	DeliveryRate    uint64
+	AppLimited      bool
 	// PacingRate is the current pacing rate in bytes per second.
 	PacingRate uint64
 	SndCwnd    uint32
@@ -33,7 +35,6 @@ type Info struct {
 	// sent yet; both are zero once everything written is delivered.
 	Unacked       uint32
 	NotSentBytes  uint32
-	BytesSent     uint64
 	BytesAcked    uint64
 	BytesReceived uint64
 
@@ -51,12 +52,15 @@ type Info struct {
 	// Delivered counts segments delivered (Linux 4.18).
 	Delivered uint64
 
-	// HasRetransBytes is set when the kernel reports retransmitted bytes and
-	// duplicate SACKs (Linux 4.19 and 5.0). DSACKDups counts retransmissions
-	// the receiver already had, which were not losses.
+	// HasRetransBytes is set when the kernel reports bytes sent and
+	// retransmitted (Linux 4.19).
 	HasRetransBytes bool
+	BytesSent       uint64
 	BytesRetrans    uint64
-	DSACKDups       uint64
+	// DSACKDups counts retransmissions the receiver already had, which were
+	// not losses (Linux 5.0).
+	HasDSACK  bool
+	DSACKDups uint64
 
 	// HasRTOStats is set when the kernel reports retransmission timeouts
 	// (Linux 6.7).

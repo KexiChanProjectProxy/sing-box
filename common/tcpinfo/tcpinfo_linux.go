@@ -21,10 +21,15 @@ const Supported = true
 // returns a prefix of it.
 const tcpInfoSize = uint32(unsafe.Sizeof(unix.TCPInfo{}))
 
+// Where each group of fields ends; a kernel that returns less does not
+// report the group.
 var (
+	minRTTEnd       = uint32(unsafe.Offsetof(unix.TCPInfo{}.Min_rtt) + 4)
+	deliveryRateEnd = uint32(unsafe.Offsetof(unix.TCPInfo{}.Delivery_rate) + 8)
 	chronoEnd       = uint32(unsafe.Offsetof(unix.TCPInfo{}.Sndbuf_limited) + 8)
 	deliveredEnd    = uint32(unsafe.Offsetof(unix.TCPInfo{}.Delivered) + 4)
-	retransBytesEnd = uint32(unsafe.Offsetof(unix.TCPInfo{}.Dsack_dups) + 4)
+	retransBytesEnd = uint32(unsafe.Offsetof(unix.TCPInfo{}.Bytes_retrans) + 8)
+	dsackEnd        = uint32(unsafe.Offsetof(unix.TCPInfo{}.Dsack_dups) + 4)
 	rtoStatsEnd     = uint32(unsafe.Offsetof(unix.TCPInfo{}.Total_rto) + 2)
 )
 
@@ -64,7 +69,16 @@ func Read(conn net.Conn) (Info, bool) {
 func readFD(fd int) (Info, error) {
 	var raw unix.TCPInfo
 	size := tcpInfoSize
-	if err := getsockopt(fd, unix.TCP_INFO, unsafe.Pointer(&raw), &size); err != nil {
+	if err := getsockopt(fd, unix.TCP_INFO, unsafe.Pointer(&raw), &size); err == unix.ENOSYS {
+		// 32-bit x86 kernels before Linux 4.3 only take socket calls through
+		// socketcall, which the x/sys wrapper uses; it does not return the
+		// length, so only the fields every such kernel has are kept.
+		legacy, legacyErr := unix.GetsockoptTCPInfo(fd, unix.IPPROTO_TCP, unix.TCP_INFO)
+		if legacyErr != nil {
+			return Info{}, legacyErr
+		}
+		raw, size = *legacy, minRTTEnd-1
+	} else if err != nil {
 		return Info{}, err
 	}
 	// The application limited flag is a bitfield in the byte after the
@@ -73,21 +87,26 @@ func readFD(fd int) (Info, error) {
 	info := Info{
 		RTT:             time.Duration(raw.Rtt) * time.Microsecond,
 		RTTVar:          time.Duration(raw.Rttvar) * time.Microsecond,
-		MinRTT:          time.Duration(raw.Min_rtt) * time.Microsecond,
 		RcvRTT:          time.Duration(raw.Rcv_rtt) * time.Microsecond,
 		DataSegmentsOut: uint64(raw.Data_segs_out),
 		DataSegmentsIn:  uint64(raw.Data_segs_in),
 		Retransmits:     uint64(raw.Total_retrans),
-		DeliveryRate:    raw.Delivery_rate,
-		AppLimited:      flags&appLimitedBit != 0,
 		PacingRate:      raw.Pacing_rate,
 		SndCwnd:         raw.Snd_cwnd,
 		SndMSS:          raw.Snd_mss,
 		Unacked:         raw.Unacked,
 		NotSentBytes:    raw.Notsent_bytes,
-		BytesSent:       raw.Bytes_sent,
 		BytesAcked:      raw.Bytes_acked,
 		BytesReceived:   raw.Bytes_received,
+	}
+	if size >= minRTTEnd {
+		info.HasMinRTT = true
+		info.MinRTT = time.Duration(raw.Min_rtt) * time.Microsecond
+	}
+	if size >= deliveryRateEnd {
+		info.HasDeliveryRate = true
+		info.DeliveryRate = raw.Delivery_rate
+		info.AppLimited = flags&appLimitedBit != 0
 	}
 	if size >= chronoEnd {
 		info.HasChrono = true
@@ -100,7 +119,11 @@ func readFD(fd int) (Info, error) {
 	}
 	if size >= retransBytesEnd {
 		info.HasRetransBytes = true
+		info.BytesSent = raw.Bytes_sent
 		info.BytesRetrans = raw.Bytes_retrans
+	}
+	if size >= dsackEnd {
+		info.HasDSACK = true
 		info.DSACKDups = uint64(raw.Dsack_dups)
 	}
 	if size >= rtoStatsEnd {

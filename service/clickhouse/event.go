@@ -257,5 +257,10 @@ func resolveChain(outboundManager adapter.OutboundManager, outbound adapter.Outb
 		}
 		next = group.Now()
 	}
+	if len(chain) == 0 {
+		// An outbound that is not registered, such as the one probe traffic
+		// is accounted to, still names the connection.
+		return outbound.Tag(), outbound.Type(), []string{outbound.Tag()}
+	}
 	return tag, outboundType, common.Reverse(chain)
 }

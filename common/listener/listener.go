@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/sagernet/sing-box/log"
@@ -43,6 +44,13 @@ type Listener struct {
 	packetOutbound       chan *N.PacketBuffer
 	packetOutboundClosed chan struct{}
 	shutdown             atomic.Bool
+
+	// Accepted TCP connections whose handler has not returned yet. Close
+	// closes them, so a handler that serves a connection for a long time
+	// (an anytls session, for one) does not keep running on a closed
+	// instance after a reload.
+	connAccess sync.Mutex
+	conns      map[net.Conn]struct{}
 }
 
 type Options struct {
@@ -135,6 +143,13 @@ func (l *Listener) Start() error {
 
 func (l *Listener) Close() error {
 	l.shutdown.Store(true)
+	l.connAccess.Lock()
+	conns := l.conns
+	l.conns = nil
+	l.connAccess.Unlock()
+	for conn := range conns {
+		conn.Close()
+	}
 	var err error
 	if l.systemProxy != nil {
 		if l.systemProxy.IsEnabled() {
@@ -146,6 +161,27 @@ func (l *Listener) Close() error {
 		l.tcpListener,
 		common.PtrOrNil(l.udpConn),
 	))
+}
+
+// trackConn registers an accepted connection; it reports false once the
+// listener is closed, and the caller then closes the connection itself.
+func (l *Listener) trackConn(conn net.Conn) bool {
+	l.connAccess.Lock()
+	defer l.connAccess.Unlock()
+	if l.shutdown.Load() {
+		return false
+	}
+	if l.conns == nil {
+		l.conns = make(map[net.Conn]struct{})
+	}
+	l.conns[conn] = struct{}{}
+	return true
+}
+
+func (l *Listener) untrackConn(conn net.Conn) {
+	l.connAccess.Lock()
+	delete(l.conns, conn)
+	l.connAccess.Unlock()
 }
 
 func (l *Listener) TCPListener() net.Listener {

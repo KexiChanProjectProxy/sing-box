@@ -280,6 +280,39 @@
         }
       ]
     },
+    "AnyTLSInboundDNSOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnyTLSInboundProbeOptions": {
+      "type": "object",
+      "properties": {
+        "disabled": {
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "type": "integer"
+        },
+        "max_duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "cooldown": {
+          "$ref": "#/$defs/Duration"
+        },
+        "max_concurrent": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
     "AnyTLSUser": {
       "type": "object",
       "properties": {
@@ -1902,6 +1935,24 @@
           "type": "object",
           "properties": {
             "type": {
+              "const": "anytls"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "outbound": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
               "const": "dhcp"
             },
             "tag": {
@@ -2057,6 +2108,50 @@
               "examples": [
                 "fc00::/18"
               ]
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "group"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "servers": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "fallbacks": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "mode": {
+              "type": "string"
             }
           },
           "required": [
@@ -5989,6 +6084,12 @@
             },
             "fallback": {
               "$ref": "#/$defs/ServerOptions"
+            },
+            "dns": {
+              "$ref": "#/$defs/AnyTLSInboundDNSOptions"
+            },
+            "probe": {
+              "$ref": "#/$defs/AnyTLSInboundProbeOptions"
             }
           },
           "required": [

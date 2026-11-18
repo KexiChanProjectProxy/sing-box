@@ -49,6 +49,7 @@ type Outbound struct {
 	statsStart            sync.Once
 	statsAccess           sync.Mutex
 	statsCancel           context.CancelFunc
+	serverReports         serverReports
 }
 
 func NewOutbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSOutboundOptions) (adapter.Outbound, error) {

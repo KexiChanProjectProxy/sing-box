@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"net"
 	"os"
 	"runtime"
 	"time"
@@ -271,6 +272,16 @@ func (r *Router) Rules() []adapter.Rule {
 
 func (r *Router) AppendTracker(tracker adapter.ConnectionTracker) {
 	r.trackers = append(r.trackers, tracker)
+}
+
+var _ adapter.ConnectionTrackingRouter = (*Router)(nil)
+
+func (r *Router) TrackConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, outbound adapter.Outbound) net.Conn {
+	metadata.RouteOutbound = outbound.Tag()
+	for _, tracker := range r.trackers {
+		conn = tracker.RoutedConnection(ctx, conn, metadata, nil, outbound)
+	}
+	return conn
 }
 
 func (r *Router) NeedFindProcess() bool {

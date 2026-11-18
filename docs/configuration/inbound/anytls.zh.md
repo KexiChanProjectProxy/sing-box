@@ -4,7 +4,8 @@ icon: material/new-box
 
 !!! quote "sing-box 1.14.2.11 中的更改"
 
-    :material-plus: [dns](#dns)
+    :material-plus: [dns](#dns)  
+    :material-plus: [probe](#probe)
 
 !!! quote "sing-box 1.14.2.2 中的更改"
 
@@ -36,6 +37,13 @@ icon: material/new-box
   "dns": {
     "enabled": false,
     "server": ""
+  },
+  "probe": {
+    "disabled": false,
+    "max_bytes": 33554432,
+    "max_duration": "5s",
+    "cooldown": "60s",
+    "max_concurrent": 4
   }
 }
 ```
@@ -112,3 +120,59 @@ TLS 握手失败的连接不会被转发。
 
 如果为空，查询经过 [DNS 规则](/zh/configuration/dns/rule/)。
 规则可以用 `inbound`、`auth_user` 和 `source_ip_cidr` 匹配它们，这些字段分别为此入站、AnyTLS 用户和客户端地址。
+
+#### probe
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+客户端请求的吞吐探测的限制。除非禁用，探测默认开启。
+
+客户端测量到此服务器的路径时，请求服务器在一个会话中持续发送几秒填充数据（下行），或自己发送填充数据（上行）。
+此时发送端要发的数据多于路径能承载的量，它的 TCP_INFO 反映的就是路径本身，而不是应用。
+探测期间，该会话会像被一个流占用一样从客户端的连接池中取出。
+
+下行探测在发送端内核的带宽估计（BBR 自身的估计，否则取未受应用限制的投递速率样本）连续三个往返增长不到 25% 时提前结束，这与 BBR 退出启动阶段的判断相同。
+随后服务器等待填充数据被确认，再发送测量结果：
+
+| 键 | 含义 |
+|---|---|
+| `goodput_bps` | 发送端受网络限制（而非受接收窗口或自身缓冲区限制）的每秒时间内被确认的字节数。用于比较路径的主要指标。 |
+| `net_limited_us`、`acked_bytes` | `goodput_bps` 的两个组成部分。该时间以内核时钟节拍计，精度为 1 到 10 毫秒。 |
+| `bbr_bw_bps`、`peak_bw_bps` | 结束时 BBR 的带宽估计，以及观察到的最高估计。在突发投递的路径上会偏高。 |
+| `srtt_us`、`min_rtt_us` | 结束时（负载下）的平滑 RTT，以及无排队时的最低 RTT。两者之差是探测造成的排队延迟。 |
+| `sent_bytes`、`retrans_bytes`、`dsack_dups`、`rtos` | 发送与重传的字节数、接收端其实已收到的重传，以及重传超时次数。 |
+| `received_bytes`、`rcv_rtt_us` | 上行探测中服务器收到的数据。 |
+
+速率单位为字节每秒，时长单位为微秒。服务器内核不报告的键会被省略。
+
+探测的填充数据计入用户流量：它作为一条发往 `probe.anytls.arpa`、经由出站 `anytls-probe`（并不存在）的连接交给流量统计和连接日志。
+
+服务器在会话设置中声明支持探测，因此其他 AnyTLS 客户端不受影响。
+
+##### probe.disabled
+
+不提供探测。
+
+##### probe.max_bytes
+
+单次探测传输的最多填充字节数。
+
+默认使用 `33554432`（32 MiB）。
+
+##### probe.max_duration
+
+单次探测的最长时长。
+
+默认使用 `5s`。
+
+##### probe.cooldown
+
+同一会话在同一方向上两次探测之间的间隔。
+
+默认使用 `60s`。
+
+##### probe.max_concurrent
+
+此入站同时运行的最多探测数。超出的请求被以繁忙拒绝。
+
+默认使用 `4`。

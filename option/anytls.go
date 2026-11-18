@@ -9,6 +9,17 @@ type AnyTLSInboundOptions struct {
 	PaddingScheme badoption.Listable[string] `json:"padding_scheme,omitempty"`
 	Fallback      *ServerOptions             `json:"fallback,omitempty"`
 	DNS           *AnyTLSInboundDNSOptions   `json:"dns,omitempty"`
+	Probe         *AnyTLSInboundProbeOptions `json:"probe,omitempty"`
+}
+
+// AnyTLSInboundProbeOptions bounds the throughput probes clients may ask for.
+// Probes are on unless disabled; a zero limit takes the default.
+type AnyTLSInboundProbeOptions struct {
+	Disabled      bool               `json:"disabled,omitempty"`
+	MaxBytes      int64              `json:"max_bytes,omitempty"`
+	MaxDuration   badoption.Duration `json:"max_duration,omitempty"`
+	Cooldown      badoption.Duration `json:"cooldown,omitempty"`
+	MaxConcurrent int                `json:"max_concurrent,omitempty"`
 }
 
 // AnyTLSInboundDNSOptions lets clients send DNS queries inside their session.

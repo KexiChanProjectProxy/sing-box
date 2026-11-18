@@ -111,6 +111,14 @@ type ConnectionTracker interface {
 	RoutedFlow(ctx context.Context, metadata InboundContext, matchedRule Rule, matchOutbound Outbound) tun.FlowTracker
 }
 
+// ConnectionTrackingRouter passes a connection the router did not route
+// through its connection trackers, as if it had been routed to outbound, so
+// that traffic a protocol generates by itself is counted and logged like
+// routed traffic.
+type ConnectionTrackingRouter interface {
+	TrackConnection(ctx context.Context, conn net.Conn, metadata InboundContext, outbound Outbound) net.Conn
+}
+
 type ConnectionRejectHandler interface {
 	RejectedConnection(ctx context.Context, metadata InboundContext, matchedRule Rule)
 }

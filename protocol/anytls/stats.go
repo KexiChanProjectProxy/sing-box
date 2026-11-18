@@ -1,8 +1,10 @@
 package anytls
 
 import (
+	"cmp"
 	"context"
 	"net"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -12,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/common/tcpinfo"
 	"github.com/sagernet/sing-box/common/transportstats"
 
+	"github.com/anytls/sing-anytls/session"
 	"github.com/anytls/sing-anytls/util"
 )
 
@@ -23,7 +26,30 @@ const (
 	statsKeySegmentsOut  = "segs_out"
 	statsKeyRetransmits  = "retrans"
 	statsKeyDeliveryRate = "delivery_rate_bps"
+
+	// The keys below were added later and are each sent only when the
+	// server's kernel reports them, so a client must treat any of them as
+	// optional. Counters are cumulative over the connection, durations are
+	// in microseconds and rates in bytes per second.
+	statsKeyAppLimited    = "app_limited"
+	statsKeyPacingRate    = "pacing_rate_bps"
+	statsKeyCwnd          = "cwnd"
+	statsKeyMSS           = "mss"
+	statsKeyBytesSent     = "bytes_sent"
+	statsKeyBytesAcked    = "bytes_acked"
+	statsKeyBusy          = "busy_us"
+	statsKeyRwndLimited   = "rwnd_limited_us"
+	statsKeySndbufLimited = "sndbuf_limited_us"
+	statsKeyBytesRetrans  = "bytes_retrans"
+	statsKeyDSACKDups     = "dsack_dups"
+	statsKeyTotalRTO      = "total_rto"
+	statsKeyBBRPacingGain = "bbr_pacing_gain"
+	statsKeyBBRCwndGain   = "bbr_cwnd_gain"
 )
+
+// serverReportTTL is how long a session's last report is kept; a session that
+// has not reported for this long is taken to be closed.
+const serverReportTTL = 3 * session.StatsInterval
 
 // serverStats reports the server's TCP_INFO for a connection. It returns nil
 // where TCP_INFO cannot be read, which makes the server send nothing.
@@ -32,13 +58,95 @@ func serverStats(conn net.Conn) util.StringMap {
 	if !loaded {
 		return nil
 	}
-	return util.StringMap{
+	stats := util.StringMap{
 		statsKeyRTT:          strconv.FormatInt(info.RTT.Microseconds(), 10),
 		statsKeyRTTVar:       strconv.FormatInt(info.RTTVar.Microseconds(), 10),
 		statsKeySegmentsOut:  strconv.FormatUint(info.DataSegmentsOut, 10),
 		statsKeyRetransmits:  strconv.FormatUint(info.Retransmits, 10),
 		statsKeyDeliveryRate: strconv.FormatUint(info.DeliveryRate, 10),
+		probeKeyMinRTT:       formatMicroseconds(info.MinRTT),
+		statsKeyAppLimited:   formatBool(info.AppLimited),
+		statsKeyPacingRate:   strconv.FormatUint(info.PacingRate, 10),
+		statsKeyCwnd:         strconv.FormatUint(uint64(info.SndCwnd), 10),
+		statsKeyMSS:          strconv.FormatUint(uint64(info.SndMSS), 10),
+		statsKeyBytesSent:    strconv.FormatUint(info.BytesSent, 10),
+		statsKeyBytesAcked:   strconv.FormatUint(info.BytesAcked, 10),
 	}
+	if info.HasChrono {
+		stats[statsKeyBusy] = formatMicroseconds(info.BusyTime)
+		stats[statsKeyRwndLimited] = formatMicroseconds(info.RwndLimited)
+		stats[statsKeySndbufLimited] = formatMicroseconds(info.SndbufLimited)
+	}
+	if info.HasRetransBytes {
+		stats[statsKeyBytesRetrans] = strconv.FormatUint(info.BytesRetrans, 10)
+		stats[statsKeyDSACKDups] = strconv.FormatUint(info.DSACKDups, 10)
+	}
+	if info.HasRTOStats {
+		stats[statsKeyTotalRTO] = strconv.FormatUint(info.TotalRTO, 10)
+	}
+	if info.CongestionControl != "" {
+		stats[probeKeyCongestion] = info.CongestionControl
+	}
+	if info.BBR != nil {
+		stats[probeKeyBBRBandwidth] = strconv.FormatUint(info.BBR.Bandwidth, 10)
+		stats[probeKeyBBRMinRTT] = formatMicroseconds(info.BBR.MinRTT)
+		stats[statsKeyBBRPacingGain] = strconv.FormatFloat(info.BBR.PacingGain, 'f', 3, 64)
+		stats[statsKeyBBRCwndGain] = strconv.FormatFloat(info.BBR.CwndGain, 'f', 3, 64)
+	}
+	return stats
+}
+
+func formatBool(value bool) string {
+	if value {
+		return "1"
+	}
+	return "0"
+}
+
+// ServerReport is the last statistics report the server sent for a session,
+// with every key it sent.
+type ServerReport struct {
+	Seq      uint64
+	Received time.Time
+	Stats    util.StringMap
+}
+
+// serverReports keeps the last report of each session.
+type serverReports struct {
+	access  sync.Mutex
+	reports map[uint64]ServerReport
+}
+
+func (r *serverReports) store(seq uint64, stats util.StringMap, now time.Time) {
+	r.access.Lock()
+	defer r.access.Unlock()
+	if r.reports == nil {
+		r.reports = make(map[uint64]ServerReport)
+	}
+	r.reports[seq] = ServerReport{Seq: seq, Received: now, Stats: stats}
+	r.pruneLocked(now)
+}
+
+func (r *serverReports) pruneLocked(now time.Time) {
+	for seq, report := range r.reports {
+		if now.Sub(report.Received) > serverReportTTL {
+			delete(r.reports, seq)
+		}
+	}
+}
+
+func (r *serverReports) list(now time.Time) []ServerReport {
+	r.access.Lock()
+	defer r.access.Unlock()
+	r.pruneLocked(now)
+	reports := make([]ServerReport, 0, len(r.reports))
+	for _, report := range r.reports {
+		reports = append(reports, report)
+	}
+	slices.SortFunc(reports, func(a, b ServerReport) int {
+		return cmp.Compare(a.Seq, b.Seq)
+	})
+	return reports
 }
 
 // parseServerStats turns a server report into a sample keyed by session. It
@@ -211,10 +319,18 @@ func (h *Outbound) applyServerStatsHandler() {
 		return
 	}
 	client.SetStatsHandler(func(seq uint64, stats util.StringMap) {
+		h.serverReports.store(seq, stats, time.Now())
 		if sample, loaded := parseServerStats(seq, stats); loaded {
 			h.stats.Record(transportstats.DirectionServer, []transportstats.Sample{sample}, false)
 		}
 	})
+}
+
+// ServerReports returns the last report the server sent for each session that
+// reported recently. Reports only arrive once the server direction is enabled
+// with EnableTransportStats.
+func (h *Outbound) ServerReports() []ServerReport {
+	return h.serverReports.list(time.Now())
 }
 
 func (h *Outbound) TransportStats(direction adapter.TransportStatsDirection) adapter.TransportStatsReader {

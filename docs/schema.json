@@ -922,6 +922,16 @@
           "minimum": 0,
           "maximum": 4294967295
         },
+        "min_ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "max_ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
         "optimistic": {
           "anyOf": [
             {
@@ -935,11 +945,17 @@
                 },
                 "timeout": {
                   "$ref": "#/$defs/Duration"
+                },
+                "client_timeout": {
+                  "$ref": "#/$defs/Duration"
                 }
               },
               "additionalProperties": false
             }
           ]
+        },
+        "prefetch": {
+          "type": "boolean"
         },
         "client_subnet": {
           "type": "string"
@@ -1745,6 +1761,41 @@
               "minimum": 0,
               "maximum": 4294967295
             },
+            "min_ttl": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "max_ttl": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "optimistic": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "timeout": {
+                      "$ref": "#/$defs/Duration"
+                    },
+                    "client_timeout": {
+                      "$ref": "#/$defs/Duration"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "prefetch": {
+              "type": "boolean"
+            },
             "client_subnet": {
               "type": "string"
             },
@@ -1785,6 +1836,41 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 4294967295
+            },
+            "min_ttl": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "max_ttl": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "optimistic": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "timeout": {
+                      "$ref": "#/$defs/Duration"
+                    },
+                    "client_timeout": {
+                      "$ref": "#/$defs/Duration"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "prefetch": {
+              "type": "boolean"
             },
             "client_subnet": {
               "type": "string"
@@ -1833,6 +1919,41 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 4294967295
+            },
+            "min_ttl": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "max_ttl": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "optimistic": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "timeout": {
+                      "$ref": "#/$defs/Duration"
+                    },
+                    "client_timeout": {
+                      "$ref": "#/$defs/Duration"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "prefetch": {
+              "type": "boolean"
             },
             "client_subnet": {
               "type": "string"

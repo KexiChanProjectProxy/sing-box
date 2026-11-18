@@ -168,6 +168,14 @@ func (r *DNSRuleAction) UnmarshalJSONContext(ctx context.Context, data []byte) e
 	if err != nil {
 		return err
 	}
+	switch r.Action {
+	case C.RuleActionTypeRoute:
+		return r.RouteOptions.AbstractDNSRouteActionOptions.Validate()
+	case C.RuleActionTypeEvaluate:
+		return r.EvaluateOptions.AbstractDNSRouteActionOptions.Validate()
+	case C.RuleActionTypeRouteOptions:
+		return (*AbstractDNSRouteActionOptions)(&r.RouteOptionsOptions).Validate()
+	}
 	return nil
 }
 
@@ -229,8 +237,22 @@ type AbstractDNSRouteActionOptions struct {
 	DisableCache           bool                  `json:"disable_cache,omitempty"`
 	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
 	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
+	MinTTL                 uint32                `json:"min_ttl,omitempty"`
+	MaxTTL                 uint32                `json:"max_ttl,omitempty"`
+	Optimistic             *OptimisticDNSOptions `json:"optimistic,omitempty"`
+	Prefetch               *bool                 `json:"prefetch,omitempty"`
 	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
 	RemoveClientSubnet     bool                  `json:"remove_client_subnet,omitempty"`
+}
+
+func (o *AbstractDNSRouteActionOptions) Validate() error {
+	if o.MinTTL > 0 && o.MaxTTL > 0 && o.MinTTL > o.MaxTTL {
+		return E.New("`min_ttl` must not be greater than `max_ttl`")
+	}
+	if o.Optimistic != nil && o.DisableOptimisticCache {
+		return E.New("`optimistic` and `disable_optimistic_cache` are mutually exclusive")
+	}
+	return nil
 }
 
 type DNSRouteOptionsActionOptions AbstractDNSRouteActionOptions

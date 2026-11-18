@@ -2,6 +2,13 @@
 icon: material/new-box
 ---
 
+!!! quote "Changes in sing-box 1.14.2.11"
+
+    :material-plus: [min_ttl](#min_ttl)  
+    :material-plus: [max_ttl](#max_ttl)  
+    :material-plus: [optimistic](#optimistic)  
+    :material-plus: [prefetch](#prefetch)
+
 !!! quote "Changes in sing-box 1.14.0"
 
     :material-delete-clock: [strategy](#strategy)  
@@ -68,6 +75,10 @@ matched. The result may therefore depend on server speed only among race rules.
   "disable_cache": false,
   "disable_optimistic_cache": false,
   "rewrite_ttl": null,
+  "min_ttl": 0,
+  "max_ttl": 0,
+  "optimistic": null,
+  "prefetch": null,
   "timeout": "",
   "client_subnet": null,
   "remove_client_subnet": false
@@ -117,9 +128,44 @@ Disable cache and save cache in this query.
 
 Disable optimistic DNS caching in this query.
 
+Conflict with `optimistic`.
+
 #### rewrite_ttl
 
 Rewrite TTL in DNS responses.
+
+#### min_ttl
+
+!!! question "Since sing-box 1.14.2.11"
+
+Raise the TTL of DNS responses to this value when it is lower, in seconds. Responses with a TTL of `0` are left as they are.
+
+Will override `dns.min_ttl`. Has no effect when `rewrite_ttl` is set.
+
+#### max_ttl
+
+!!! question "Since sing-box 1.14.2.11"
+
+Lower the TTL of DNS responses to this value when it is higher, in seconds.
+
+Will override `dns.max_ttl`. Has no effect when `rewrite_ttl` is set.
+
+#### optimistic
+
+!!! question "Since sing-box 1.14.2.11"
+
+Enable or disable optimistic DNS caching for this query, in the same format as [`dns.optimistic`](/configuration/dns/#optimistic).
+Fields not set in the object are inherited from `dns.optimistic`.
+
+Will override `dns.optimistic`. Conflict with `disable_optimistic_cache`.
+
+#### prefetch
+
+!!! question "Since sing-box 1.14.2.11"
+
+Enable or disable cache prefetching for this query.
+
+Will override [`dns.prefetch`](/configuration/dns/#prefetch).
 
 #### timeout
 
@@ -158,6 +204,10 @@ Conflict with `client_subnet`.
   "disable_cache": false,
   "disable_optimistic_cache": false,
   "rewrite_ttl": null,
+  "min_ttl": 0,
+  "max_ttl": 0,
+  "optimistic": null,
+  "prefetch": null,
   "timeout": "",
   "client_subnet": null,
   "remove_client_subnet": false
@@ -208,9 +258,44 @@ Disable cache and save cache in this query.
 
 Disable optimistic DNS caching in this query.
 
+Conflict with `optimistic`.
+
 #### rewrite_ttl
 
 Rewrite TTL in DNS responses.
+
+#### min_ttl
+
+!!! question "Since sing-box 1.14.2.11"
+
+Raise the TTL of DNS responses to this value when it is lower, in seconds. Responses with a TTL of `0` are left as they are.
+
+Will override `dns.min_ttl`. Has no effect when `rewrite_ttl` is set.
+
+#### max_ttl
+
+!!! question "Since sing-box 1.14.2.11"
+
+Lower the TTL of DNS responses to this value when it is higher, in seconds.
+
+Will override `dns.max_ttl`. Has no effect when `rewrite_ttl` is set.
+
+#### optimistic
+
+!!! question "Since sing-box 1.14.2.11"
+
+Enable or disable optimistic DNS caching for this query, in the same format as [`dns.optimistic`](/configuration/dns/#optimistic).
+Fields not set in the object are inherited from `dns.optimistic`.
+
+Will override `dns.optimistic`. Conflict with `disable_optimistic_cache`.
+
+#### prefetch
+
+!!! question "Since sing-box 1.14.2.11"
+
+Enable or disable cache prefetching for this query.
+
+Will override [`dns.prefetch`](/configuration/dns/#prefetch).
 
 #### timeout
 
@@ -260,6 +345,10 @@ Only allowed after a preceding top-level `evaluate` rule. If the action is reach
   "disable_cache": false,
   "disable_optimistic_cache": false,
   "rewrite_ttl": null,
+  "min_ttl": 0,
+  "max_ttl": 0,
+  "optimistic": null,
+  "prefetch": null,
   "timeout": "",
   "client_subnet": null,
   "remove_client_subnet": false

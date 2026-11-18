@@ -138,6 +138,10 @@ func NewDNSRuleAction(logger log.StructuredLogger, action option.DNSRuleAction) 
 				DisableCache:           action.RouteOptions.DisableCache,
 				DisableOptimisticCache: action.RouteOptions.DisableOptimisticCache,
 				RewriteTTL:             action.RouteOptions.RewriteTTL,
+				MinTTL:                 action.RouteOptions.MinTTL,
+				MaxTTL:                 action.RouteOptions.MaxTTL,
+				Optimistic:             buildDNSOptimisticOptions(action.RouteOptions.Optimistic),
+				Prefetch:               action.RouteOptions.Prefetch,
 				ClientSubnet:           netip.Prefix(common.PtrValueOrDefault(action.RouteOptions.ClientSubnet)),
 				RemoveClientSubnet:     action.RouteOptions.RemoveClientSubnet,
 			},
@@ -153,6 +157,10 @@ func NewDNSRuleAction(logger log.StructuredLogger, action option.DNSRuleAction) 
 				DisableCache:           action.EvaluateOptions.DisableCache,
 				DisableOptimisticCache: action.EvaluateOptions.DisableOptimisticCache,
 				RewriteTTL:             action.EvaluateOptions.RewriteTTL,
+				MinTTL:                 action.EvaluateOptions.MinTTL,
+				MaxTTL:                 action.EvaluateOptions.MaxTTL,
+				Optimistic:             buildDNSOptimisticOptions(action.EvaluateOptions.Optimistic),
+				Prefetch:               action.EvaluateOptions.Prefetch,
 				ClientSubnet:           netip.Prefix(common.PtrValueOrDefault(action.EvaluateOptions.ClientSubnet)),
 				RemoveClientSubnet:     action.EvaluateOptions.RemoveClientSubnet,
 			},
@@ -166,6 +174,10 @@ func NewDNSRuleAction(logger log.StructuredLogger, action option.DNSRuleAction) 
 			DisableCache:           action.RouteOptionsOptions.DisableCache,
 			DisableOptimisticCache: action.RouteOptionsOptions.DisableOptimisticCache,
 			RewriteTTL:             action.RouteOptionsOptions.RewriteTTL,
+			MinTTL:                 action.RouteOptionsOptions.MinTTL,
+			MaxTTL:                 action.RouteOptionsOptions.MaxTTL,
+			Optimistic:             buildDNSOptimisticOptions(action.RouteOptionsOptions.Optimistic),
+			Prefetch:               action.RouteOptionsOptions.Prefetch,
 			ClientSubnet:           netip.Prefix(common.PtrValueOrDefault(action.RouteOptionsOptions.ClientSubnet)),
 			RemoveClientSubnet:     action.RouteOptionsOptions.RemoveClientSubnet,
 		}
@@ -346,6 +358,7 @@ func formatDNSRouteAction(action string, server string, speculative bool, option
 	if options.RewriteTTL != nil {
 		descriptions = append(descriptions, F.ToString("rewrite-ttl=", *options.RewriteTTL))
 	}
+	descriptions = append(descriptions, describeDNSCacheOptions(options)...)
 	if options.Timeout > 0 {
 		descriptions = append(descriptions, F.ToString("timeout=", options.Timeout.String()))
 	}
@@ -358,12 +371,59 @@ func formatDNSRouteAction(action string, server string, speculative bool, option
 	return F.ToString(action, "(", strings.Join(descriptions, ","), ")")
 }
 
+func buildDNSOptimisticOptions(options *option.OptimisticDNSOptions) *adapter.DNSOptimisticOptions {
+	if options == nil {
+		return nil
+	}
+	return &adapter.DNSOptimisticOptions{
+		Enabled:       options.Enabled,
+		Timeout:       time.Duration(options.Timeout),
+		ClientTimeout: time.Duration(options.ClientTimeout),
+	}
+}
+
+func describeDNSCacheOptions(options RuleActionDNSRouteOptions) []string {
+	var descriptions []string
+	if options.MinTTL > 0 {
+		descriptions = append(descriptions, F.ToString("min-ttl=", options.MinTTL))
+	}
+	if options.MaxTTL > 0 {
+		descriptions = append(descriptions, F.ToString("max-ttl=", options.MaxTTL))
+	}
+	if optimistic := options.Optimistic; optimistic != nil {
+		if !optimistic.Enabled {
+			descriptions = append(descriptions, "optimistic=off")
+		} else {
+			description := "optimistic"
+			if optimistic.Timeout > 0 {
+				description += F.ToString("=", optimistic.Timeout.String())
+			}
+			descriptions = append(descriptions, description)
+			if optimistic.ClientTimeout > 0 {
+				descriptions = append(descriptions, F.ToString("optimistic-client-timeout=", optimistic.ClientTimeout.String()))
+			}
+		}
+	}
+	if options.Prefetch != nil {
+		if *options.Prefetch {
+			descriptions = append(descriptions, "prefetch")
+		} else {
+			descriptions = append(descriptions, "prefetch=off")
+		}
+	}
+	return descriptions
+}
+
 type RuleActionDNSRouteOptions struct {
 	Strategy               C.DomainStrategy
 	Timeout                time.Duration
 	DisableCache           bool
 	DisableOptimisticCache bool
 	RewriteTTL             *uint32
+	MinTTL                 uint32
+	MaxTTL                 uint32
+	Optimistic             *adapter.DNSOptimisticOptions
+	Prefetch               *bool
 	ClientSubnet           netip.Prefix
 	RemoveClientSubnet     bool
 }
@@ -383,6 +443,7 @@ func (r *RuleActionDNSRouteOptions) String() string {
 	if r.RewriteTTL != nil {
 		descriptions = append(descriptions, F.ToString("rewrite-ttl=", *r.RewriteTTL))
 	}
+	descriptions = append(descriptions, describeDNSCacheOptions(*r)...)
 	if r.Timeout > 0 {
 		descriptions = append(descriptions, F.ToString("timeout=", r.Timeout.String()))
 	}

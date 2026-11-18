@@ -66,19 +66,23 @@ type DNSClientOptions struct {
 	DisableExpire    bool                  `json:"disable_expire,omitempty"`
 	IndependentCache bool                  `json:"independent_cache,omitempty" schema:"omit"`
 	CacheCapacity    uint32                `json:"cache_capacity,omitempty"`
+	MinTTL           uint32                `json:"min_ttl,omitempty"`
+	MaxTTL           uint32                `json:"max_ttl,omitempty"`
 	Optimistic       *OptimisticDNSOptions `json:"optimistic,omitempty"`
+	Prefetch         bool                  `json:"prefetch,omitempty"`
 	ClientSubnet     *badoption.Prefixable `json:"client_subnet,omitempty"`
 }
 
 type _OptimisticDNSOptions struct {
-	Enabled bool               `json:"enabled,omitempty"`
-	Timeout badoption.Duration `json:"timeout,omitempty"`
+	Enabled       bool               `json:"enabled,omitempty"`
+	Timeout       badoption.Duration `json:"timeout,omitempty"`
+	ClientTimeout badoption.Duration `json:"client_timeout,omitempty"`
 }
 
 type OptimisticDNSOptions _OptimisticDNSOptions
 
 func (o OptimisticDNSOptions) MarshalJSON() ([]byte, error) {
-	if o.Timeout == 0 {
+	if o.Timeout == 0 && o.ClientTimeout == 0 {
 		return json.Marshal(o.Enabled)
 	}
 	return json.Marshal(_OptimisticDNSOptions(o))

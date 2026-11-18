@@ -47,6 +47,8 @@ type Router struct {
 	dnsReverseMapping     *freelru.Cache[netip.Addr, string]
 	platformInterface     adapter.PlatformInterface
 	legacyDNSMode         bool
+	optimisticTimeout     time.Duration
+	optimisticRetention   time.Duration
 	rulesAccess           sync.RWMutex
 	started               bool
 	closing               bool
@@ -66,28 +68,53 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.DNSOp
 	if options.DNSClientOptions.IndependentCache {
 		deprecated.Report(ctx, deprecated.OptionIndependentDNSCache)
 	}
-	var optimisticTimeout time.Duration
-	optimisticOptions := common.PtrValueOrDefault(options.DNSClientOptions.Optimistic)
+	clientOptions := options.DNSClientOptions
+	if clientOptions.MinTTL > 0 && clientOptions.MaxTTL > 0 && clientOptions.MinTTL > clientOptions.MaxTTL {
+		return nil, E.New("`min_ttl` must not be greater than `max_ttl`")
+	}
+	if clientOptions.Prefetch {
+		if clientOptions.DisableCache {
+			return nil, E.New("`prefetch` is conflict with `disable_cache`")
+		}
+		if clientOptions.DisableExpire {
+			return nil, E.New("`prefetch` is conflict with `disable_expire`")
+		}
+	}
+	var (
+		optimisticTimeout       time.Duration
+		optimisticClientTimeout time.Duration
+	)
+	optimisticOptions := common.PtrValueOrDefault(clientOptions.Optimistic)
 	if optimisticOptions.Enabled {
-		if options.DNSClientOptions.DisableCache {
+		if clientOptions.DisableCache {
 			return nil, E.New("`optimistic` is conflict with `disable_cache`")
 		}
-		if options.DNSClientOptions.DisableExpire {
+		if clientOptions.DisableExpire {
 			return nil, E.New("`optimistic` is conflict with `disable_expire`")
 		}
 		optimisticTimeout = time.Duration(optimisticOptions.Timeout)
 		if optimisticTimeout == 0 {
-			optimisticTimeout = 3 * 24 * time.Hour
+			optimisticTimeout = DefaultOptimisticTimeout
 		}
+		optimisticClientTimeout = time.Duration(optimisticOptions.ClientTimeout)
+	} else if optimisticOptions.ClientTimeout > 0 {
+		// Inherited by rules that enable optimistic caching without their own client_timeout.
+		optimisticClientTimeout = time.Duration(optimisticOptions.ClientTimeout)
 	}
+	router.optimisticTimeout = optimisticTimeout
+	router.optimisticRetention = optimisticTimeout
 	router.client = NewClient(ClientOptions{
-		Context:           ctx,
-		Timeout:           time.Duration(options.DNSClientOptions.Timeout),
-		DisableCache:      options.DNSClientOptions.DisableCache,
-		DisableExpire:     options.DNSClientOptions.DisableExpire,
-		OptimisticTimeout: optimisticTimeout,
-		CacheCapacity:     options.DNSClientOptions.CacheCapacity,
-		ClientSubnet:      options.DNSClientOptions.ClientSubnet.Build(netip.Prefix{}),
+		Context:                 ctx,
+		Timeout:                 time.Duration(clientOptions.Timeout),
+		DisableCache:            clientOptions.DisableCache,
+		DisableExpire:           clientOptions.DisableExpire,
+		MinTTL:                  clientOptions.MinTTL,
+		MaxTTL:                  clientOptions.MaxTTL,
+		OptimisticTimeout:       optimisticTimeout,
+		OptimisticClientTimeout: optimisticClientTimeout,
+		Prefetch:                clientOptions.Prefetch,
+		CacheCapacity:           clientOptions.CacheCapacity,
+		ClientSubnet:            options.DNSClientOptions.ClientSubnet.Build(netip.Prefix{}),
 		RDRC: func() adapter.RDRCStore {
 			cacheFile := service.FromContext[adapter.CacheFile](ctx)
 			if cacheFile == nil {
@@ -107,7 +134,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.DNSOp
 				return nil
 			}
 			cacheFile.SetDisableExpire(options.DNSClientOptions.DisableExpire)
-			cacheFile.SetOptimisticTimeout(optimisticTimeout)
+			cacheFile.SetOptimisticTimeout(router.optimisticRetention)
 			return cacheFile
 		},
 		Logger: router.logger,
@@ -125,7 +152,53 @@ func (r *Router) Initialize(rules []option.DNSRule) error {
 		return err
 	}
 	closeRules(newRules)
+	r.optimisticRetention = max(r.optimisticTimeout, dnsRulesOptimisticRetention(r.rawRules, r.optimisticTimeout))
+	if client, isClient := r.client.(*Client); isClient {
+		client.SetOptimisticRetention(r.optimisticRetention)
+	}
 	return nil
+}
+
+// dnsRulesOptimisticRetention returns the longest optimistic window any rule enables,
+// so that expired cache entries are kept long enough for that rule to serve them.
+func dnsRulesOptimisticRetention(rules []option.DNSRule, globalTimeout time.Duration) time.Duration {
+	var retention time.Duration
+	for _, rule := range rules {
+		var action option.DNSRuleAction
+		switch rule.Type {
+		case "", C.RuleTypeDefault:
+			action = rule.DefaultOptions.DNSRuleAction
+		case C.RuleTypeLogical:
+			action = rule.LogicalOptions.DNSRuleAction
+			retention = max(retention, dnsRulesOptimisticRetention(rule.LogicalOptions.Rules, globalTimeout))
+		}
+		optimistic := dnsRuleActionOptimistic(action)
+		if optimistic == nil || !optimistic.Enabled {
+			continue
+		}
+		timeout := time.Duration(optimistic.Timeout)
+		if timeout == 0 {
+			timeout = globalTimeout
+		}
+		if timeout == 0 {
+			timeout = DefaultOptimisticTimeout
+		}
+		retention = max(retention, timeout)
+	}
+	return retention
+}
+
+func dnsRuleActionOptimistic(action option.DNSRuleAction) *option.OptimisticDNSOptions {
+	switch action.Action {
+	case "", C.RuleActionTypeRoute:
+		return action.RouteOptions.Optimistic
+	case C.RuleActionTypeEvaluate:
+		return action.EvaluateOptions.Optimistic
+	case C.RuleActionTypeRouteOptions:
+		return action.RouteOptionsOptions.Optimistic
+	default:
+		return nil
+	}
 }
 
 func (r *Router) Start(stage adapter.StartStage) error {
@@ -323,6 +396,7 @@ func (r *Router) matchDNS(ctx context.Context, rules []adapter.DNSRule, allowFak
 				if action.RewriteTTL != nil {
 					options.RewriteTTL = action.RewriteTTL
 				}
+				applyDNSCacheOptions(options, action.RuleActionDNSRouteOptions)
 				if action.Timeout > 0 {
 					options.Timeout = action.Timeout
 				}
@@ -345,6 +419,7 @@ func (r *Router) matchDNS(ctx context.Context, rules []adapter.DNSRule, allowFak
 				if action.RewriteTTL != nil {
 					options.RewriteTTL = action.RewriteTTL
 				}
+				applyDNSCacheOptions(options, *action)
 				if action.Timeout > 0 {
 					options.Timeout = action.Timeout
 				}
@@ -367,6 +442,23 @@ func (r *Router) matchDNS(ctx context.Context, rules []adapter.DNSRule, allowFak
 	return transport, nil, -1
 }
 
+// applyDNSCacheOptions applies the TTL bounds, optimistic cache and prefetch
+// overrides of a rule action. A later rule's override replaces an earlier one.
+func applyDNSCacheOptions(options *adapter.DNSQueryOptions, routeOptions R.RuleActionDNSRouteOptions) {
+	if routeOptions.MinTTL > 0 {
+		options.MinTTL = routeOptions.MinTTL
+	}
+	if routeOptions.MaxTTL > 0 {
+		options.MaxTTL = routeOptions.MaxTTL
+	}
+	if routeOptions.Optimistic != nil {
+		options.Optimistic = routeOptions.Optimistic
+	}
+	if routeOptions.Prefetch != nil {
+		options.Prefetch = routeOptions.Prefetch
+	}
+}
+
 func (r *Router) applyDNSRouteOptions(options *adapter.DNSQueryOptions, routeOptions R.RuleActionDNSRouteOptions) {
 	// Strategy is intentionally skipped here. A non-default DNS rule action strategy
 	// forces legacy mode via resolveLegacyDNSMode, so this path is only reachable
@@ -380,6 +472,7 @@ func (r *Router) applyDNSRouteOptions(options *adapter.DNSQueryOptions, routeOpt
 	if routeOptions.RewriteTTL != nil {
 		options.RewriteTTL = routeOptions.RewriteTTL
 	}
+	applyDNSCacheOptions(options, routeOptions)
 	if routeOptions.Timeout > 0 {
 		options.Timeout = routeOptions.Timeout
 	}

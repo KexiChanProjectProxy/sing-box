@@ -33,51 +33,81 @@ var (
 
 var _ adapter.DNSClient = (*Client)(nil)
 
+// DefaultOptimisticTimeout is how long an expired entry may be served when optimistic
+// caching is enabled without a timeout.
+const DefaultOptimisticTimeout = 3 * 24 * time.Hour
+
+// DefaultCacheCapacity is the LRU capacity used when cache_capacity is not set.
+const DefaultCacheCapacity = 1024
+
 type Client struct {
-	ctx               context.Context
-	timeout           time.Duration
-	disableCache      bool
-	disableExpire     bool
-	optimisticTimeout time.Duration
-	cacheCapacity     uint32
-	clientSubnet      netip.Prefix
-	rdrc              adapter.RDRCStore
-	initRDRCFunc      func() adapter.RDRCStore
-	dnsCache          adapter.DNSCacheStore
-	initDNSCacheFunc  func() adapter.DNSCacheStore
-	networkManager    adapter.NetworkManager
-	logger            log.StructuredLogger
-	cache             *freelru.Cache[dnsCacheKey, *dns.Msg]
-	cacheLock         compatible.Map[dnsExchangeKey, chan struct{}]
-	backgroundRefresh compatible.Map[dnsCacheKey, struct{}]
+	ctx                     context.Context
+	timeout                 time.Duration
+	disableCache            bool
+	disableExpire           bool
+	minTTL                  uint32
+	maxTTL                  uint32
+	optimisticTimeout       time.Duration
+	optimisticClientTimeout time.Duration
+	optimisticRetention     time.Duration
+	prefetch                bool
+	cacheCapacity           uint32
+	clientSubnet            netip.Prefix
+	rdrc                    adapter.RDRCStore
+	initRDRCFunc            func() adapter.RDRCStore
+	dnsCache                adapter.DNSCacheStore
+	initDNSCacheFunc        func() adapter.DNSCacheStore
+	networkManager          adapter.NetworkManager
+	logger                  log.StructuredLogger
+	cache                   *freelru.Cache[dnsCacheKey, *dns.Msg]
+	cacheLock               compatible.Map[dnsExchangeKey, chan struct{}]
+	backgroundRefresh       compatible.Map[dnsCacheKey, *refreshTask]
 }
 
 type ClientOptions struct {
-	Context           context.Context
-	Timeout           time.Duration
-	DisableCache      bool
-	DisableExpire     bool
+	Context       context.Context
+	Timeout       time.Duration
+	DisableCache  bool
+	DisableExpire bool
+	MinTTL        uint32
+	MaxTTL        uint32
+	// OptimisticTimeout enables optimistic caching for every query when non-zero.
 	OptimisticTimeout time.Duration
-	CacheCapacity     uint32
-	ClientSubnet      netip.Prefix
-	RDRC              func() adapter.RDRCStore
-	DNSCache          func() adapter.DNSCacheStore
-	Logger            log.StructuredLogger
+	// OptimisticClientTimeout is how long a query that hits an expired entry waits
+	// for the refresh before the expired entry is returned.
+	OptimisticClientTimeout time.Duration
+	// OptimisticRetention keeps expired entries for at least this long, so that
+	// queries whose rule enables optimistic caching can still serve them.
+	OptimisticRetention time.Duration
+	Prefetch            bool
+	CacheCapacity       uint32
+	ClientSubnet        netip.Prefix
+	RDRC                func() adapter.RDRCStore
+	DNSCache            func() adapter.DNSCacheStore
+	Logger              log.StructuredLogger
 }
 
 func NewClient(options ClientOptions) *Client {
-	cacheCapacity := max(options.CacheCapacity, 1024)
+	cacheCapacity := options.CacheCapacity
+	if cacheCapacity == 0 {
+		cacheCapacity = DefaultCacheCapacity
+	}
 	client := &Client{
-		ctx:               options.Context,
-		timeout:           options.Timeout,
-		disableCache:      options.DisableCache,
-		disableExpire:     options.DisableExpire,
-		optimisticTimeout: options.OptimisticTimeout,
-		cacheCapacity:     cacheCapacity,
-		clientSubnet:      options.ClientSubnet,
-		initRDRCFunc:      options.RDRC,
-		initDNSCacheFunc:  options.DNSCache,
-		logger:            options.Logger,
+		ctx:                     options.Context,
+		timeout:                 options.Timeout,
+		disableCache:            options.DisableCache,
+		disableExpire:           options.DisableExpire,
+		minTTL:                  options.MinTTL,
+		maxTTL:                  options.MaxTTL,
+		optimisticTimeout:       options.OptimisticTimeout,
+		optimisticClientTimeout: options.OptimisticClientTimeout,
+		optimisticRetention:     max(options.OptimisticRetention, options.OptimisticTimeout),
+		prefetch:                options.Prefetch,
+		cacheCapacity:           cacheCapacity,
+		clientSubnet:            options.ClientSubnet,
+		initRDRCFunc:            options.RDRC,
+		initDNSCacheFunc:        options.DNSCache,
+		logger:                  options.Logger,
 	}
 	if client.timeout == 0 {
 		client.timeout = C.DNSTimeout
@@ -161,6 +191,69 @@ func (c *Client) environmentHash(transport adapter.DNSTransport) uint64 {
 	binary.BigEndian.PutUint64(hashBytes[:], networkEnvironment)
 	digest.Write(hashBytes[:])
 	return digest.Sum64()
+}
+
+// SetOptimisticRetention keeps expired entries for at least the given duration.
+// It must be called before Start.
+func (c *Client) SetOptimisticRetention(retention time.Duration) {
+	c.optimisticRetention = max(retention, c.optimisticTimeout)
+}
+
+// effectiveOptimistic returns the optimistic window and client timeout for a query:
+// the rule's override if present, otherwise the global setting.
+func (c *Client) effectiveOptimistic(options adapter.DNSQueryOptions) (time.Duration, time.Duration) {
+	if options.DisableOptimisticCache || c.disableExpire {
+		return 0, 0
+	}
+	override := options.Optimistic
+	if override == nil {
+		return c.optimisticTimeout, c.optimisticClientTimeout
+	}
+	if !override.Enabled {
+		return 0, 0
+	}
+	window := override.Timeout
+	if window == 0 {
+		window = c.optimisticTimeout
+	}
+	if window == 0 {
+		window = DefaultOptimisticTimeout
+	}
+	clientTimeout := override.ClientTimeout
+	if clientTimeout == 0 {
+		clientTimeout = c.optimisticClientTimeout
+	}
+	return window, clientTimeout
+}
+
+func (c *Client) effectivePrefetch(options adapter.DNSQueryOptions) bool {
+	if c.disableExpire {
+		return false
+	}
+	if options.Prefetch != nil {
+		return *options.Prefetch
+	}
+	return c.prefetch
+}
+
+// effectiveTTLBounds returns the TTL bounds for a query. A bound set by the rule
+// overrides the global one, and a global bound that conflicts with a rule bound
+// is ignored.
+func (c *Client) effectiveTTLBounds(options adapter.DNSQueryOptions) (uint32, uint32) {
+	minTTL, maxTTL := options.MinTTL, options.MaxTTL
+	if minTTL == 0 {
+		minTTL = c.minTTL
+		if maxTTL > 0 && minTTL > maxTTL {
+			minTTL = 0
+		}
+	}
+	if maxTTL == 0 {
+		maxTTL = c.maxTTL
+		if options.MinTTL > 0 && maxTTL > 0 && maxTTL < minTTL {
+			maxTTL = 0
+		}
+	}
+	return minTTL, maxTTL
 }
 
 func (c *Client) Start() {
@@ -303,21 +396,32 @@ func (c *Client) beginExchange(ctx context.Context, transport adapter.DNSTranspo
 				close(cond)
 			}
 		}
+		optimisticWindow, optimisticClientTimeout := c.effectiveOptimistic(options)
 		for {
-			response, ttl, isStale := c.loadResponse(cacheKey)
-			if response != nil {
-				if isStale && !options.DisableOptimisticCache {
-					c.backgroundRefreshDNS(transport, cacheKey, message.Copy(), options, responseChecker)
-					logOptimisticResponse(c.logger, ctx, response)
-					response.Id = message.Id
+			hit, cached := c.loadResponse(cacheKey, optimisticWindow)
+			if cached {
+				response := hit.response
+				if hit.stale {
+					if optimisticClientTimeout > 0 && !allowWait {
+						operation.release()
+						return nil, nil, exchangeWait, nil
+					}
+					task := c.backgroundRefreshDNS(transport, cacheKey, message.Copy(), options, responseChecker)
 					operation.release()
-					return nil, response, exchangeDone, nil
-				} else if !isStale {
-					logCachedResponse(c.logger, ctx, response, ttl)
-					response.Id = message.Id
+					if optimisticClientTimeout > 0 {
+						response = c.waitRefresh(ctx, task, response, optimisticClientTimeout)
+					} else {
+						logOptimisticResponse(c.logger, ctx, response)
+					}
+				} else {
+					if hit.prefetch && c.effectivePrefetch(options) {
+						c.backgroundRefreshDNS(transport, cacheKey, message.Copy(), options, responseChecker)
+					}
+					logCachedResponse(c.logger, ctx, response, hit.ttl)
 					operation.release()
-					return nil, response, exchangeDone, nil
 				}
+				response.Id = message.Id
+				return nil, response, exchangeDone, nil
 			}
 			if !loaded {
 				break
@@ -375,7 +479,7 @@ func (c *Client) finishExchange(transport adapter.DNSTransport, operation *excha
 			return response, ErrResponseRejected
 		}
 	}
-	timeToLive := applyResponseOptions(question, response, operation.options)
+	timeToLive := c.applyResponseOptions(question, response, operation.options)
 	if !disableCache {
 		cacheKey, storable := c.finishCacheKey(transport, operation.cacheKey)
 		if storable {
@@ -567,16 +671,21 @@ func (c *Client) lookupToExchange(ctx context.Context, transport adapter.DNSTran
 func (c *Client) questionCache(ctx context.Context, transport adapter.DNSTransport, message *dns.Msg, options adapter.DNSQueryOptions, responseChecker func(response *dns.Msg) bool) ([]netip.Addr, error) {
 	question := message.Question[0]
 	cacheKey := c.newCacheKey(transport, question, message, options)
-	response, _, isStale := c.loadResponse(cacheKey)
-	if response == nil {
+	optimisticWindow, optimisticClientTimeout := c.effectiveOptimistic(options)
+	hit, cached := c.loadResponse(cacheKey, optimisticWindow)
+	if !cached {
 		return nil, ErrNotCached
 	}
-	if isStale {
-		if options.DisableOptimisticCache {
-			return nil, ErrNotCached
+	response := hit.response
+	if hit.stale {
+		task := c.backgroundRefreshDNS(transport, cacheKey, c.prepareExchangeMessage(message.Copy(), options), options, responseChecker)
+		if optimisticClientTimeout > 0 {
+			response = c.waitRefresh(ctx, task, response, optimisticClientTimeout)
+		} else {
+			logOptimisticResponse(c.logger, ctx, response)
 		}
+	} else if hit.prefetch && c.effectivePrefetch(options) {
 		c.backgroundRefreshDNS(transport, cacheKey, c.prepareExchangeMessage(message.Copy(), options), options, responseChecker)
-		logOptimisticResponse(c.logger, ctx, response)
 	}
 	if response.Rcode != dns.RcodeSuccess {
 		return nil, RcodeError(response.Rcode)
@@ -584,67 +693,116 @@ func (c *Client) questionCache(ctx context.Context, transport adapter.DNSTranspo
 	return MessageToAddresses(response), nil
 }
 
-func (c *Client) loadResponse(key dnsCacheKey) (*dns.Msg, int, bool) {
+type cacheHit struct {
+	response *dns.Msg
+	// ttl is the remaining TTL of a fresh entry in seconds.
+	ttl int
+	// stale is set when the entry has expired and is served optimistically.
+	stale bool
+	// prefetch is set when less than a tenth of the entry's TTL is left.
+	prefetch bool
+}
+
+// loadResponse looks up a cached response. An expired entry is returned as stale
+// while it is within the optimistic window, and dropped once it is past the
+// retention every rule may need.
+func (c *Client) loadResponse(key dnsCacheKey, optimisticWindow time.Duration) (cacheHit, bool) {
 	if c.dnsCache != nil {
-		return c.loadPersistentResponse(key)
+		return c.loadPersistentResponse(key, optimisticWindow)
 	}
 	if c.cache == nil {
-		return nil, 0, false
+		return cacheHit{}, false
 	}
 	if c.disableExpire {
 		response, loaded := c.cache.Get(key)
 		if !loaded {
-			return nil, 0, false
+			return cacheHit{}, false
 		}
-		return response.Copy(), 0, false
+		return cacheHit{response: response.Copy()}, true
 	}
 	response, expireAt, loaded := c.cache.GetWithLifetimeNoExpire(key)
 	if !loaded {
-		return nil, 0, false
+		return cacheHit{}, false
 	}
-	timeNow := time.Now()
-	if timeNow.After(expireAt) {
-		if c.optimisticTimeout > 0 && timeNow.Before(expireAt.Add(c.optimisticTimeout)) {
-			response = response.Copy()
-			normalizeTTL(response, 1)
-			return response, 0, true
-		}
+	hit, cached, drop := c.checkExpiration(response.Copy(), expireAt, optimisticWindow)
+	if drop {
 		c.cache.Remove(key)
-		return nil, 0, false
 	}
-	nowTTL := max(int(expireAt.Sub(timeNow).Seconds()), 0)
-	response = response.Copy()
-	normalizeTTL(response, uint32(nowTTL))
-	return response, nowTTL, false
+	return hit, cached
 }
 
-func (c *Client) loadPersistentResponse(key dnsCacheKey) (*dns.Msg, int, bool) {
+func (c *Client) loadPersistentResponse(key dnsCacheKey, optimisticWindow time.Duration) (cacheHit, bool) {
 	rawMessage, expireAt, loaded := c.dnsCache.LoadDNSCache(key.persistentName(), key.Name, key.Qtype)
 	if !loaded {
-		return nil, 0, false
+		return cacheHit{}, false
 	}
 	response := new(dns.Msg)
 	err := response.Unpack(rawMessage)
 	if err != nil {
-		return nil, 0, false
+		return cacheHit{}, false
 	}
 	if c.disableExpire {
-		return response, 0, false
+		return cacheHit{response: response}, true
 	}
-	timeNow := time.Now()
-	if timeNow.After(expireAt) {
-		if c.optimisticTimeout > 0 && timeNow.Before(expireAt.Add(c.optimisticTimeout)) {
-			normalizeTTL(response, 1)
-			return response, 0, true
-		}
-		return nil, 0, false
-	}
-	nowTTL := max(int(expireAt.Sub(timeNow).Seconds()), 0)
-	normalizeTTL(response, uint32(nowTTL))
-	return response, nowTTL, false
+	hit, cached, _ := c.checkExpiration(response, expireAt, optimisticWindow)
+	return hit, cached
 }
 
-func applyResponseOptions(question dns.Question, response *dns.Msg, options adapter.DNSQueryOptions) uint32 {
+// checkExpiration rewrites the TTLs of response, which must be a private copy of the
+// cached message, for the time left until expireAt.
+func (c *Client) checkExpiration(response *dns.Msg, expireAt time.Time, optimisticWindow time.Duration) (hit cacheHit, cached bool, drop bool) {
+	timeNow := time.Now()
+	if timeNow.After(expireAt) {
+		if optimisticWindow > 0 && timeNow.Before(expireAt.Add(optimisticWindow)) {
+			normalizeTTL(response, 1)
+			return cacheHit{response: response, stale: true}, true, false
+		}
+		return cacheHit{}, false, !timeNow.Before(expireAt.Add(c.optimisticRetention))
+	}
+	remaining := expireAt.Sub(timeNow)
+	hit = cacheHit{
+		response: response,
+		ttl:      max(int(remaining.Seconds()), 0),
+	}
+	if originalTTL, hasTTL := messageTTL(response); hasTTL && remaining*10 < time.Duration(originalTTL)*time.Second {
+		hit.prefetch = true
+	}
+	normalizeTTL(response, uint32(hit.ttl))
+	return hit, true, false
+}
+
+// messageTTL returns the TTL of the first record, which is the TTL the response was
+// cached with since normalizeTTL gives every record the same value.
+func messageTTL(response *dns.Msg) (uint32, bool) {
+	for _, recordList := range [][]dns.RR{response.Answer, response.Ns, response.Extra} {
+		for _, record := range recordList {
+			if record.Header().Rrtype == dns.TypeOPT {
+				continue
+			}
+			return record.Header().Ttl, true
+		}
+	}
+	return 0, false
+}
+
+// waitRefresh waits up to clientTimeout for a refresh of an expired entry and
+// returns the refreshed response, or the stale one if the refresh is late or fails.
+func (c *Client) waitRefresh(ctx context.Context, task *refreshTask, stale *dns.Msg, clientTimeout time.Duration) *dns.Msg {
+	timer := time.NewTimer(clientTimeout)
+	defer timer.Stop()
+	select {
+	case <-task.done:
+		if task.err == nil {
+			return task.response.Copy()
+		}
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	logOptimisticResponse(c.logger, ctx, stale)
+	return stale
+}
+
+func (c *Client) applyResponseOptions(question dns.Question, response *dns.Msg, options adapter.DNSQueryOptions) uint32 {
 	if question.Qtype == dns.TypeHTTPS && (options.Strategy == C.DomainStrategyIPv4Only || options.Strategy == C.DomainStrategyIPv6Only) {
 		for _, rr := range response.Answer {
 			https, isHTTPS := rr.(*dns.HTTPS)
@@ -664,18 +822,38 @@ func applyResponseOptions(question dns.Question, response *dns.Msg, options adap
 	timeToLive := computeTimeToLive(response)
 	if options.RewriteTTL != nil {
 		timeToLive = *options.RewriteTTL
+	} else if timeToLive > 0 {
+		minTTL, maxTTL := c.effectiveTTLBounds(options)
+		if minTTL > 0 && timeToLive < minTTL {
+			timeToLive = minTTL
+		}
+		if maxTTL > 0 && timeToLive > maxTTL {
+			timeToLive = maxTTL
+		}
 	}
 	normalizeTTL(response, timeToLive)
 	return timeToLive
 }
 
-func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, key dnsCacheKey, message *dns.Msg, options adapter.DNSQueryOptions, responseChecker func(response *dns.Msg) bool) {
-	_, loaded := c.backgroundRefresh.LoadOrStore(key, struct{}{})
+type refreshTask struct {
+	done     chan struct{}
+	response *dns.Msg
+	err      error
+}
+
+// backgroundRefreshDNS refreshes a cached entry in the background. Concurrent calls
+// for the same key share one refresh, whose result is published when done is closed.
+func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, key dnsCacheKey, message *dns.Msg, options adapter.DNSQueryOptions, responseChecker func(response *dns.Msg) bool) *refreshTask {
+	task := &refreshTask{done: make(chan struct{})}
+	existing, loaded := c.backgroundRefresh.LoadOrStore(key, task)
 	if loaded {
-		return
+		return existing
 	}
 	go func() {
-		defer c.backgroundRefresh.Delete(key)
+		defer func() {
+			c.backgroundRefresh.Delete(key)
+			close(task.done)
+		}()
 		timeout := options.Timeout
 		if timeout == 0 {
 			timeout = c.timeout
@@ -686,8 +864,9 @@ func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, key dnsCac
 		response, err := c.exchangeToTransport(ctx, transport, message)
 		if err != nil {
 			if c.logger != nil {
-				c.logger.DebugEventContext(ctx, "dns.cache.refresh.error", "optimistic refresh failed", log.String("domain", FqdnToDomain(key.Name)), log.Err(err))
+				c.logger.DebugEventContext(ctx, "dns.cache.refresh.error", "cache refresh failed", log.String("domain", FqdnToDomain(key.Name)), log.Err(err))
 			}
+			task.err = err
 			return
 		}
 		if responseChecker != nil {
@@ -699,24 +878,29 @@ func (c *Client) backgroundRefreshDNS(transport adapter.DNSTransport, key dnsCac
 			}
 			if rejected {
 				if c.logger != nil {
-					c.logger.DebugEventContext(ctx, "dns.cache.refresh.rejected", "optimistic refresh rejected", log.String("domain", FqdnToDomain(key.Name)))
+					c.logger.DebugEventContext(ctx, "dns.cache.refresh.rejected", "cache refresh rejected", log.String("domain", FqdnToDomain(key.Name)))
 				}
 				if c.rdrc != nil {
 					c.rdrc.SaveRDRCAsync(transport.Tag(), key.Name, key.Qtype, c.logger)
 				}
+				task.err = ErrResponseRejected
 				return
 			}
 		} else if response.Rcode != dns.RcodeSuccess && response.Rcode != dns.RcodeNameError {
+			task.err = RcodeError(response.Rcode)
 			return
 		}
 		storeKey, storable := c.finishCacheKey(transport, key)
 		if !storable {
+			task.err = E.New("network environment changed")
 			return
 		}
-		timeToLive := applyResponseOptions(key.Question, response, options)
+		timeToLive := c.applyResponseOptions(key.Question, response, options)
 		c.storeCache(storeKey, response, timeToLive)
 		logRefreshedResponse(c.logger, ctx, response, timeToLive)
+		task.response = response
 	}()
+	return task
 }
 
 func (c *Client) prepareExchangeMessage(message *dns.Msg, options adapter.DNSQueryOptions) *dns.Msg {

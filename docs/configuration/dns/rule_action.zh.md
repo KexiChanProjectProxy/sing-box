@@ -2,6 +2,13 @@
 icon: material/new-box
 ---
 
+!!! quote "sing-box 1.14.2.11 中的更改"
+
+    :material-plus: [min_ttl](#min_ttl)  
+    :material-plus: [max_ttl](#max_ttl)  
+    :material-plus: [optimistic](#optimistic)  
+    :material-plus: [prefetch](#prefetch)
+
 !!! quote "sing-box 1.14.0 中的更改"
 
     :material-delete-clock: [strategy](#strategy)  
@@ -61,6 +68,10 @@ icon: material/new-box
   "disable_cache": false,
   "disable_optimistic_cache": false,
   "rewrite_ttl": null,
+  "min_ttl": 0,
+  "max_ttl": 0,
+  "optimistic": null,
+  "prefetch": null,
   "timeout": "",
   "client_subnet": null,
   "remove_client_subnet": false
@@ -107,9 +118,44 @@ icon: material/new-box
 
 在此查询中禁用乐观 DNS 缓存。
 
+与 `optimistic` 冲突。
+
 #### rewrite_ttl
 
 重写 DNS 回应中的 TTL。
+
+#### min_ttl
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+将低于此值的 DNS 响应 TTL 提高到此值，单位为秒。TTL 为 `0` 的响应保持不变。
+
+将覆盖 `dns.min_ttl`。设置了 `rewrite_ttl` 时无效。
+
+#### max_ttl
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+将高于此值的 DNS 响应 TTL 降低到此值，单位为秒。
+
+将覆盖 `dns.max_ttl`。设置了 `rewrite_ttl` 时无效。
+
+#### optimistic
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+为此查询启用或禁用乐观 DNS 缓存，格式与 [`dns.optimistic`](/zh/configuration/dns/#optimistic) 相同。
+对象中未设置的字段继承 `dns.optimistic`。
+
+将覆盖 `dns.optimistic`。与 `disable_optimistic_cache` 冲突。
+
+#### prefetch
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+为此查询启用或禁用缓存预取。
+
+将覆盖 [`dns.prefetch`](/zh/configuration/dns/#prefetch)。
 
 #### timeout
 
@@ -148,6 +194,10 @@ icon: material/new-box
   "disable_cache": false,
   "disable_optimistic_cache": false,
   "rewrite_ttl": null,
+  "min_ttl": 0,
+  "max_ttl": 0,
+  "optimistic": null,
+  "prefetch": null,
   "timeout": "",
   "client_subnet": null,
   "remove_client_subnet": false
@@ -194,9 +244,44 @@ icon: material/new-box
 
 在此查询中禁用乐观 DNS 缓存。
 
+与 `optimistic` 冲突。
+
 #### rewrite_ttl
 
 重写 DNS 回应中的 TTL。
+
+#### min_ttl
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+将低于此值的 DNS 响应 TTL 提高到此值，单位为秒。TTL 为 `0` 的响应保持不变。
+
+将覆盖 `dns.min_ttl`。设置了 `rewrite_ttl` 时无效。
+
+#### max_ttl
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+将高于此值的 DNS 响应 TTL 降低到此值，单位为秒。
+
+将覆盖 `dns.max_ttl`。设置了 `rewrite_ttl` 时无效。
+
+#### optimistic
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+为此查询启用或禁用乐观 DNS 缓存，格式与 [`dns.optimistic`](/zh/configuration/dns/#optimistic) 相同。
+对象中未设置的字段继承 `dns.optimistic`。
+
+将覆盖 `dns.optimistic`。与 `disable_optimistic_cache` 冲突。
+
+#### prefetch
+
+!!! question "自 sing-box 1.14.2.11 起"
+
+为此查询启用或禁用缓存预取。
+
+将覆盖 [`dns.prefetch`](/zh/configuration/dns/#prefetch)。
 
 #### timeout
 
@@ -246,6 +331,10 @@ icon: material/new-box
   "disable_cache": false,
   "disable_optimistic_cache": false,
   "rewrite_ttl": null,
+  "min_ttl": 0,
+  "max_ttl": 0,
+  "optimistic": null,
+  "prefetch": null,
   "timeout": "",
   "client_subnet": null,
   "remove_client_subnet": false

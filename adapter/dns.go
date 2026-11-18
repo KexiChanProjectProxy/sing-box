@@ -37,9 +37,21 @@ type DNSQueryOptions struct {
 	DisableCache           bool
 	DisableOptimisticCache bool
 	RewriteTTL             *uint32
+	MinTTL                 uint32
+	MaxTTL                 uint32
+	Optimistic             *DNSOptimisticOptions
+	Prefetch               *bool
 	Timeout                time.Duration
 	ClientSubnet           netip.Prefix
 	RemoveClientSubnet     bool
+}
+
+// DNSOptimisticOptions overrides the optimistic (serve-stale) cache for one query.
+// Timeout and ClientTimeout left at zero inherit the global values.
+type DNSOptimisticOptions struct {
+	Enabled       bool
+	Timeout       time.Duration
+	ClientTimeout time.Duration
 }
 
 type RDRCStore interface {

@@ -7,7 +7,9 @@ icon: material/alert-decagram
 * AnyTLS 入站新增 [`anytls.dns`](/zh/configuration/inbound/anytls/#dns)：应答客户端在会话内以独立帧（而非流）发送的 DNS 查询。查询发往 `dns.server` 指定的 DNS 服务器并与 sing-box 自身的查询共享缓存，或经过 DNS 规则。服务器只向支持此功能的客户端声明，其他 AnyTLS 客户端不受影响
 * 新增 [`anytls`](/zh/configuration/dns/server/anytls/) DNS 服务器：通过 AnyTLS 出站的会话把查询发往其服务器。服务器未启用 `dns` 时查询立即失败，代理连接不受影响
 * 新增 [`group`](/zh/configuration/dns/server/group/) DNS 服务器：以 `load_balance`、`parallel` 或 `sequential` 模式把查询分散到 `udp`、`tcp`、`tls` 和 `https` DNS 服务器，全部失败时尝试 `fallbacks`。组作为一个服务器缓存
-* 更新 sing-anytls 至 v0.0.14-kexi.9，新增会话内 DNS 帧，并修复会话关闭后 SYNACK 看门狗仍会运行至多 3 秒的问题
+* AnyTLS 入站新增 [`anytls.probe`](/zh/configuration/inbound/anytls/#probe)：默认开启，客户端可请求服务器在一个会话中持续发送几秒填充数据，或自己发送填充数据，以测量路径的容量、延迟和丢包。填充数据计入用户流量。出站可在代码中通过 `Probe` 发起探测
+* AnyTLS 入站定期上报的会话 TCP_INFO 新增最低 RTT、忙碌时间及其中受接收窗口和发送缓冲区限制的时间、字节计数、DSACK、RTO、拥塞控制算法和 BBR 的路径模型，均仅在内核提供时上报
+* 更新 sing-anytls 至 v0.0.14-kexi.10，新增会话内 DNS 帧与探测帧，修复会话关闭后 SYNACK 看门狗仍会运行至多 3 秒的问题，并在服务器持续拒绝某会话上的流时不再复用该会话
 
 #### 1.14.2.9
 

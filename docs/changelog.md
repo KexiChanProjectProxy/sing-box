@@ -7,7 +7,9 @@ icon: material/alert-decagram
 * Add [`anytls.dns`](/configuration/inbound/anytls/#dns) to the AnyTLS inbound: answer DNS queries that clients send inside their session, as frames of their own rather than streams. Queries go to the DNS server named in `dns.server`, sharing its cache with sing-box's own queries, or through the DNS rules. The server only offers this to clients that support it, so other AnyTLS clients are unaffected
 * Add the [`anytls`](/configuration/dns/server/anytls/) DNS server: send queries to the server of an AnyTLS outbound inside its sessions. Against a server without `dns` enabled, queries fail at once and proxied connections keep working
 * Add the [`group`](/configuration/dns/server/group/) DNS server: spread queries over `udp`, `tcp`, `tls` and `https` DNS servers with `load_balance`, `parallel` or `sequential` mode, and fall back to `fallbacks` when they all fail. The group is cached as one server
-* Update sing-anytls to v0.0.14-kexi.9, which adds the in-session DNS frames and stops a closed session's SYNACK watchdog from running on for up to 3 seconds
+* Add [`anytls.probe`](/configuration/inbound/anytls/#probe) to the AnyTLS inbound: on by default, clients may ask the server to fill one session with filler for a few seconds, or send filler themselves, to measure the path's capacity, delay and loss. The filler counts towards the user's traffic. The outbound runs a probe with `Probe` from code
+* The AnyTLS inbound's periodic report of a session's TCP_INFO also carries the minimum RTT, the busy, receive window and send buffer limited times, byte counters, DSACKs, RTOs, the congestion control and BBR's model, each only when the kernel reports it
+* Update sing-anytls to v0.0.14-kexi.10, which adds the in-session DNS and probe frames, stops a closed session's SYNACK watchdog from running on for up to 3 seconds, and stops reusing a session whose streams the server keeps refusing
 
 #### 1.14.2.9
 

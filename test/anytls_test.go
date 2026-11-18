@@ -296,3 +296,64 @@ func TestAnyTLSPlaintextSelf(t *testing.T) {
 		return wrongClient.CreateProxy(globalCtx, M.ParseSocksaddrHostPort("127.0.0.1", testPort))
 	}))
 }
+
+// TestAnyTLSIdleSessionAfterServerReload rebuilds the server in the same
+// process, as a SIGHUP reload does, while the client holds an idle session to
+// the old instance. Closing the old instance must close that session, so the
+// client dials a new one instead of reusing a session whose every stream the
+// closed instance fails with "remote: ...".
+func TestAnyTLSIdleSessionAfterServerReload(t *testing.T) {
+	serverOptions := option.Options{
+		Inbounds:  []option.Inbound{anyTLSFallbackInbound(0, nil)},
+		Outbounds: []option.Outbound{{Type: C.TypeDirect}},
+	}
+	// Built by hand rather than with startInstance: a reload cancels the old
+	// instance's context before closing it, and that cancellation is what makes
+	// the old instance fail every stream it is still handed.
+	oldCtx, cancelOld := context.WithCancel(globalCtx)
+	oldServerOptions := serverOptions
+	oldServerOptions.Log = &option.LogOptions{Level: "warning"}
+	oldServer, err := box.New(box.Options{Context: oldCtx, Options: oldServerOptions})
+	require.NoError(t, err)
+	require.NoError(t, oldServer.Start())
+	t.Cleanup(func() {
+		oldServer.Close()
+		cancelOld()
+	})
+	client, err := anytls.NewClient(globalCtx, anytls.ClientConfig{
+		Password: "password",
+		DialOut: func(ctx context.Context) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "tcp", "127.0.0.1:"+F.ToString(serverPort))
+		},
+		Logger: logger.NOP(),
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { client.Close() })
+	dialTCP := func() (net.Conn, error) {
+		return client.CreateProxy(globalCtx, M.ParseSocksaddrHostPort("127.0.0.1", testPort))
+	}
+	// The stream ends and its session goes back to the idle pool.
+	require.NoError(t, testPingPongWithConn(t, testPort, dialTCP))
+
+	cancelOld()
+	require.NoError(t, oldServer.Close())
+	startInstance(t, serverOptions)
+
+	// The client learns of the closed session from its connection, not from
+	// failed streams: no stream may come back with the old instance's error.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		err = testPingPongWithConn(t, testPort, dialTCP)
+		if err == nil {
+			break
+		}
+		require.NotContains(t, err.Error(), "remote:")
+		require.True(t, time.Now().Before(deadline), "no working stream after the reload: %v", err)
+		time.Sleep(100 * time.Millisecond)
+	}
+	// Later streams keep working.
+	for i := 0; i < 3; i++ {
+		require.NoError(t, testPingPongWithConn(t, testPort, dialTCP))
+	}
+}

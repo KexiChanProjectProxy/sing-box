@@ -1,6 +1,7 @@
 package listener
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"os"
@@ -129,8 +130,21 @@ func (l *Listener) loopTCPIn() {
 			l.logger.InfoEventContext(ctx, "inbound.accepted", "inbound accepted", log.Addr("source", metadata.Source))
 		}
 
-		go l.connHandler.NewConnection(ctx, conn, metadata, nil)
+		if !l.trackConn(conn) {
+			conn.Close()
+			return
+		}
+		go l.serveConn(ctx, conn, metadata)
 	}
+}
+
+// serveConn runs the handler and keeps conn registered while it does. A
+// handler that hands conn off and returns early leaves its closing to
+// whoever took it: the connection manager closes routed connections when the
+// instance closes.
+func (l *Listener) serveConn(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) {
+	defer l.untrackConn(conn)
+	l.connHandler.NewConnection(ctx, conn, metadata, nil)
 }
 
 func (l *Listener) listenUnix() (net.Listener, error) {

@@ -282,6 +282,14 @@ func (m *ConnectionManager) NewPacketConnection(ctx context.Context, this N.Dial
 }
 
 func (m *ConnectionManager) deleteURLTestHistory(chain []adapter.Outbound) {
+	// A chain that ends at a group that picks per connection names no member;
+	// that group clears the history of the member that failed itself.
+	if len(chain) == 0 {
+		return
+	}
+	if _, isGroup := chain[len(chain)-1].(adapter.OutboundGroup); isGroup {
+		return
+	}
 	if slices.ContainsFunc(chain, func(it adapter.Outbound) bool {
 		_, isURLTestGroup := it.(adapter.URLTestGroup)
 		return isURLTestGroup

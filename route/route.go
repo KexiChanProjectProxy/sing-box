@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -155,11 +157,15 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		return err
 	}
 	// Join the groups before the destination overrides, which may wait on DNS,
-	// so a group switch in the meantime still closes this connection.
-	detach := attachInterrupt(chain, conn)
+	// so a group switch in the meantime stops this route instead of letting it
+	// dial the member the group just left.
+	ctx, interrupter := attachInterrupt(ctx, chain, conn)
 	ctx, err = r.applyDestinationOverrides(ctx, &metadata, chain)
+	if err == nil {
+		err = interrupter.Err()
+	}
 	if err != nil {
-		detach()
+		interrupter.Detach()
 		buf.ReleaseMulti(buffers)
 		return err
 	}
@@ -175,7 +181,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		conn = tracker.RoutedConnection(ctx, conn, metadata, selectedRule, selectedOutbound)
 	}
 	ctx = interrupt.ContextWithIsExternalConnection(ctx, true)
-	onClose = N.AppendClose(onClose, func(error) { detach() })
+	onClose = N.AppendClose(onClose, func(error) { interrupter.Detach() })
 	outbound := chain[len(chain)-1]
 	if outboundHandler, isHandler := outbound.(adapter.ConnectionHandler); isHandler {
 		outboundHandler.NewConnection(ctx, conn, metadata, onClose)
@@ -227,48 +233,78 @@ func resolveOutbound(outbound adapter.Outbound, network string) ([]adapter.Outbo
 }
 
 // resolveFlowOutbound resolves the chain for a flow forwarded by the TUN stack.
-// A flow never reaches a group's own dial, so a group that picks a member per
-// connection is resolved to its current choice instead of ending the chain.
+// A flow never reaches a group's own dial, so every group, including one that
+// picks a member per connection, is resolved to its current choice, and only
+// the final member has to carry the network: groups do not list ICMP.
 func resolveFlowOutbound(outbound adapter.Outbound, network string) ([]adapter.Outbound, error) {
-	chain, err := resolveOutbound(outbound, network)
-	if err != nil {
-		return nil, err
-	}
-	for range 16 {
-		group, isGroup := chain[len(chain)-1].(adapter.OutboundGroup)
+	chain := []adapter.Outbound{outbound}
+	for range 32 {
+		group, isGroup := outbound.(adapter.OutboundGroup)
 		if !isGroup {
+			if !common.Contains(outbound.Network(), network) {
+				return nil, E.New(strings.ToUpper(network), " is not supported by outbound: ", outbound.Tag())
+			}
 			return chain, nil
 		}
-		selected := group.Selected(network)
-		if selected == nil {
+		outbound = group.Selected(network)
+		if outbound == nil {
 			return nil, E.New(strings.ToUpper(network), " is not supported by outbound: ", group.Tag())
 		}
-		next, err := resolveOutbound(selected, network)
-		if err != nil {
-			return nil, err
-		}
-		chain = append(chain, next...)
+		chain = append(chain, outbound)
 	}
-	return nil, E.New("outbound group nesting too deep: ", outbound.Tag())
+	return nil, E.New("outbound group nesting too deep: ", chain[0].Tag())
 }
 
-// attachInterrupt registers closer with every group on the chain, so that a
-// group switching its member closes it, and returns the function that
-// removes it again.
-func attachInterrupt(chain []adapter.Outbound, closer io.Closer) func() {
-	var removers []func()
+var errRouteInterrupted = E.Cause(net.ErrClosed, "outbound group switched while routing")
+
+// routeInterrupter is what a routed connection registers with the groups on
+// its chain. A group switch closes the connection and cancels the routing
+// context, which stops a pending override_ip lookup or dial.
+type routeInterrupter struct {
+	conn        io.Closer
+	cancel      context.CancelFunc
+	interrupted atomic.Bool
+	removers    []func()
+	detachOnce  sync.Once
+}
+
+// attachInterrupt registers conn with every group on the chain and returns
+// the context to route it with.
+func attachInterrupt(ctx context.Context, chain []adapter.Outbound, conn io.Closer) (context.Context, *routeInterrupter) {
+	ctx, cancel := context.WithCancel(ctx)
+	interrupter := &routeInterrupter{conn: conn, cancel: cancel}
 	for _, outbound := range chain {
 		group, isGroup := outbound.(adapter.OutboundGroup)
 		if !isGroup {
 			continue
 		}
-		removers = append(removers, group.AttachConnection(closer))
+		interrupter.removers = append(interrupter.removers, group.AttachConnection(interrupter))
 	}
-	return func() {
-		for _, remove := range removers {
+	return ctx, interrupter
+}
+
+func (i *routeInterrupter) Close() error {
+	i.interrupted.Store(true)
+	i.cancel()
+	return i.conn.Close()
+}
+
+// Err reports whether a group switch interrupted the route.
+func (i *routeInterrupter) Err() error {
+	if i.interrupted.Load() {
+		return errRouteInterrupted
+	}
+	return nil
+}
+
+// Detach removes the connection from the groups and releases the context.
+func (i *routeInterrupter) Detach() {
+	i.detachOnce.Do(func() {
+		for _, remove := range i.removers {
 			remove()
 		}
-	}
+		i.cancel()
+	})
 }
 
 func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
@@ -382,11 +418,15 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		return err
 	}
 	// Join the groups before the destination overrides, which may wait on DNS,
-	// so a group switch in the meantime still closes this connection.
-	detach := attachInterrupt(chain, conn)
+	// so a group switch in the meantime stops this route instead of letting it
+	// dial the member the group just left.
+	ctx, interrupter := attachInterrupt(ctx, chain, conn)
 	ctx, err = r.applyDestinationOverrides(ctx, &metadata, chain)
+	if err == nil {
+		err = interrupter.Err()
+	}
 	if err != nil {
-		detach()
+		interrupter.Detach()
 		N.ReleaseMultiPacketBuffer(packetBuffers)
 		return err
 	}
@@ -406,7 +446,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		conn = newFakeIPNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, metadata.Destination)
 	}
 	ctx = interrupt.ContextWithIsExternalConnection(ctx, true)
-	onClose = N.AppendClose(onClose, func(error) { detach() })
+	onClose = N.AppendClose(onClose, func(error) { interrupter.Detach() })
 	outbound := chain[len(chain)-1]
 	if outboundHandler, isHandler := outbound.(adapter.PacketConnectionHandler); isHandler {
 		outboundHandler.NewPacketConnection(ctx, conn, metadata, onClose)

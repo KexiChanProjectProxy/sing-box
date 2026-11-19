@@ -233,7 +233,7 @@ func (m *ReferenceManager) update() {
 		}
 		unreferencedTransports[tag] = true
 		if m.unreferencedTransports != nil && !m.unreferencedTransports[tag] {
-			m.logger.Debug("dns/", transport.Type(), "[", tag, "] is unreferenced, resetting")
+			m.logger.DebugEvent("route.reference.unreferenced", "DNS server is unreferenced, resetting", log.String("type", transport.Type()), log.String("tag", tag))
 			transport.Reset()
 		}
 	}
@@ -262,7 +262,7 @@ func (m *ReferenceManager) applyKeepIdle(keepIdle map[any]bool, target idleTarge
 		return
 	}
 	if !target.keep {
-		m.logger.Debug(target.kind, target.typeName, "[", target.tag, "] is unreferenced, ", target.action)
+		m.logger.DebugEvent("route.reference.unreferenced", "component is unreferenced", log.String("kind", target.kind), log.String("type", target.typeName), log.String("tag", target.tag), log.String("action", target.action))
 	}
 	target.keeper.SetKeepIdleConnections(target.keep)
 }

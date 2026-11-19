@@ -9,6 +9,7 @@ import (
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/common/tcpinfo"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -317,7 +318,7 @@ func (h *Inbound) accountProbe(ctx context.Context, direction anytls.ProbeDirect
 	if user, _ := auth.UserFromContext[string](ctx); user != "" {
 		metadata.User = user
 	}
-	h.logger.InfoContext(ctx, "inbound probe ", direction, " of ", bytes, " bytes from ", metadata.Source, " user ", metadata.User)
+	h.logger.InfoEventContext(ctx, "anytls.probe", "inbound probe", log.String("direction", direction.String()), log.Int64("bytes", bytes), log.Addr("source", metadata.Source), log.String("user", metadata.User))
 	if h.trackingRouter == nil {
 		return
 	}

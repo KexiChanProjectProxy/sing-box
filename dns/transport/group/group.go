@@ -152,7 +152,7 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 	if accepted(response, err) || len(t.fallbacks) == 0 || ctx.Err() != nil {
 		return response, err
 	}
-	t.logger.DebugContext(ctx, "all servers failed, trying fallbacks: ", err)
+	t.logger.DebugEventContext(ctx, "dns.group.fallback", "all servers failed, trying fallbacks", log.Err(err))
 	fallbackResponse, fallbackErr := t.exchangeInOrder(ctx, message, t.fallbacks)
 	if fallbackResponse == nil && fallbackErr != nil && response != nil {
 		// A server failure answer is better than none.

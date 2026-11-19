@@ -472,7 +472,7 @@ func (r *Recorder) writeHeapDump() bool {
 	tempPath := dumpPath + ".tmp"
 	file, err := os.Create(tempPath)
 	if err != nil {
-		r.logger.Error(E.Cause(err, "OOM report: create heap dump"))
+		r.logger.ErrorEvent("oom.report.error", "create heap dump", log.Err(err))
 		return false
 	}
 	runtimeDebug.WriteHeapDump(file.Fd())
@@ -482,7 +482,7 @@ func (r *Recorder) writeHeapDump() bool {
 	}
 	if err != nil {
 		os.Remove(tempPath)
-		r.logger.Error(E.Cause(err, "OOM report: write heap dump"))
+		r.logger.ErrorEvent("oom.report.error", "write heap dump", log.Err(err))
 		return false
 	}
 	r.chown(dumpPath)

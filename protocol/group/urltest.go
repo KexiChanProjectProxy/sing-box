@@ -55,6 +55,7 @@ type URLTest struct {
 	preferDomain                 bool
 	overrideIP                   *option.OverrideIPOptions
 	sessionLatency               bool
+	latencyOffset                map[string]int32
 }
 
 func NewURLTest(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.URLTestOutboundOptions) (adapter.Outbound, error) {
@@ -78,9 +79,13 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.Structure
 		preferDomain:                 options.PreferDomain,
 		overrideIP:                   options.OverrideIP,
 		sessionLatency:               options.LatencyMode == option.LatencyModeSession,
+		latencyOffset:                options.LatencyOffset,
 	}
 	if len(outbound.tags) == 0 {
 		return nil, E.New("missing tags")
+	}
+	if err := option.CheckLatencyOffset(options.LatencyOffset, options.Outbounds); err != nil {
+		return nil, err
 	}
 	for i, tag := range outbound.tags {
 		if slices.Contains(outbound.tags[:i], tag) {
@@ -114,6 +119,7 @@ func (s *URLTest) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			return err
 		}
 		group.sessionLatency = s.sessionLatency
+		group.latencyOffset = s.latencyOffset
 		s.group = group
 	case adapter.StartStateStarted:
 		s.group.PostStart()
@@ -238,8 +244,11 @@ func (s *URLTest) selectForConnection(ctx context.Context, network string) adapt
 		outbound, _ = s.group.Select(network)
 		return outbound
 	}
-	s.logger.DebugEventContext(ctx, "urltest.select", "urltest member selected",
-		log.String("tag", outbound.Tag()), log.Int64("latency_ms", int64(delay)), log.String("source", source))
+	fields := []log.Field{log.String("tag", outbound.Tag()), log.Int64("latency_ms", int64(delay)), log.String("source", source)}
+	if offset := s.group.latencyOffset[outbound.Tag()]; offset != 0 {
+		fields = append(fields, log.Int64("latency_offset_ms", int64(offset)))
+	}
+	s.logger.DebugEventContext(ctx, "urltest.select", "urltest member selected", fields...)
 	return outbound
 }
 
@@ -295,7 +304,10 @@ type URLTestGroup struct {
 	interruptExternalConnections bool
 	// sessionLatency ranks members on their live session latency, falling
 	// back to URL test results, and chooses a member per connection.
-	sessionLatency  bool
+	sessionLatency bool
+	// latencyOffset is the configured latency_offset, keyed by member tag. It
+	// shifts the latency members are compared on, never the stored results.
+	latencyOffset   map[string]int32
 	updateCallback  func()
 	dataPathLatency bool
 	memberProbe     func(detour adapter.Outbound) (uint16, probeAction)
@@ -380,12 +392,14 @@ func (g *URLTestGroup) Close() error {
 	return nil
 }
 
-// selectLowest returns the member with the lowest latency for network, read
-// live in session latency mode, or nil when no member has a latency.
+// selectLowest returns the member with the lowest latency plus latency_offset
+// for network, read live in session latency mode, or nil when no member has a
+// latency. The returned delay is the measured one, without the offset.
 func (g *URLTestGroup) selectLowest(network string) (adapter.Outbound, uint16, string) {
 	var (
 		best      adapter.Outbound
 		bestDelay uint16
+		bestRank  int64
 		bestFrom  string
 	)
 	for _, detour := range g.outbounds {
@@ -396,8 +410,9 @@ func (g *URLTestGroup) selectLowest(network string) (adapter.Outbound, uint16, s
 		if !ok {
 			continue
 		}
-		if best == nil || delay < bestDelay {
-			best, bestDelay, bestFrom = detour, delay, source
+		rank := offsetLatency(delay, g.latencyOffset[detour.Tag()])
+		if best == nil || rank < bestRank {
+			best, bestDelay, bestRank, bestFrom = detour, delay, rank, source
 		}
 	}
 	return best, bestDelay, bestFrom
@@ -409,21 +424,30 @@ func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
 			return outbound, true
 		}
 	}
-	var minDelay uint16
-	var minOutbound adapter.Outbound
+	// minDelay is the incumbent's delay plus its latency_offset, and only
+	// means something while hasMin is set: a zero measured delay leaves it
+	// unset, so any member can take over, as before offsets existed.
+	var (
+		minDelay    int64
+		hasMin      bool
+		minOutbound adapter.Outbound
+	)
+	consider := func(detour adapter.Outbound, delay uint16) {
+		minOutbound = detour
+		minDelay = offsetLatency(delay, g.latencyOffset[detour.Tag()])
+		hasMin = delay != 0
+	}
 	switch network {
 	case N.NetworkTCP:
 		if g.selectedOutboundTCP != nil {
 			if history := g.history.LoadURLTestHistory(RealTag(g.selectedOutboundTCP, N.NetworkTCP)); history != nil {
-				minOutbound = g.selectedOutboundTCP
-				minDelay = history.Delay
+				consider(g.selectedOutboundTCP, history.Delay)
 			}
 		}
 	case N.NetworkUDP:
 		if g.selectedOutboundUDP != nil {
 			if history := g.history.LoadURLTestHistory(RealTag(g.selectedOutboundUDP, N.NetworkUDP)); history != nil {
-				minOutbound = g.selectedOutboundUDP
-				minDelay = history.Delay
+				consider(g.selectedOutboundUDP, history.Delay)
 			}
 		}
 	}
@@ -435,9 +459,8 @@ func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
 		if history == nil {
 			continue
 		}
-		if minDelay == 0 || minDelay > history.Delay+g.tolerance {
-			minDelay = history.Delay
-			minOutbound = detour
+		if !hasMin || minDelay > offsetLatency(history.Delay, g.latencyOffset[detour.Tag()])+int64(g.tolerance) {
+			consider(detour, history.Delay)
 		}
 	}
 	if minOutbound == nil {

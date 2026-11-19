@@ -2,6 +2,7 @@ package option
 
 import (
 	"math"
+	"slices"
 
 	"github.com/sagernet/sing/common/json/badoption"
 
@@ -26,6 +27,19 @@ type URLTestOutboundOptions struct {
 	PreferDomain              bool               `json:"prefer_domain,omitempty"`
 	OverrideIP                *OverrideIPOptions `json:"override_ip,omitempty"`
 	LatencyMode               string             `json:"latency_mode,omitempty"`
+	LatencyOffset             map[string]int32   `json:"latency_offset,omitempty"`
+}
+
+// CheckLatencyOffset rejects a latency_offset key that is not one of the
+// group's members, so that a misspelt tag is a configuration error instead of
+// an offset that silently never applies.
+func CheckLatencyOffset(offsets map[string]int32, members []string) error {
+	for tag := range offsets {
+		if !slices.Contains(members, tag) {
+			return E.New("latency_offset: ", tag, " is not a member of the group")
+		}
+	}
+	return nil
 }
 
 // Values of LatencyMode in the urltest and loadbalance groups. URL test
@@ -106,6 +120,7 @@ type LoadBalanceOutboundOptions struct {
 	PreferDomain              bool                             `json:"prefer_domain,omitempty"`
 	OverrideIP                *OverrideIPOptions               `json:"override_ip,omitempty"`
 	LatencyMode               string                           `json:"latency_mode,omitempty"`
+	LatencyOffset             map[string]int32                 `json:"latency_offset,omitempty"`
 }
 
 type LoadBalanceTopNOptions struct {
@@ -148,6 +163,9 @@ func (o LoadBalanceOutboundOptions) Check() error {
 				return E.New("unsupported hash.key_parts entry: ", part)
 			}
 		}
+	}
+	if err := CheckLatencyOffset(o.LatencyOffset, slices.Concat(o.PrimaryOutbounds, o.BackupOutbounds)); err != nil {
+		return err
 	}
 	// Check duplicate tags between primary and backup
 	tagSet := make(map[string]bool)

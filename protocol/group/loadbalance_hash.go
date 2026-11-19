@@ -16,8 +16,13 @@ type Candidate struct {
 	// Latency is the member's raw health check delay in milliseconds, kept for
 	// health decisions, fail-over ordering and reporting.
 	Latency uint16
-	// Score is the sorter's millisecond equivalent ranking value, where lower
-	// ranks better. With no sorter configured it equals Latency.
+	// Offset is the member's configured latency_offset in milliseconds. It
+	// only shifts ranking: Score includes it, and rankLatency adds it to
+	// Latency, but health decisions and reporting read Latency alone.
+	Offset int32
+	// Score is the sorter's millisecond equivalent ranking value plus Offset,
+	// where lower ranks better. With no sorter configured it equals
+	// Latency+Offset.
 	Score     float64
 	IsPrimary bool
 }

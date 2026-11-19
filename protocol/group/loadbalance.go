@@ -78,6 +78,8 @@ type LoadBalance struct {
 	// sessionLatency ranks members on their live session latency, falling
 	// back to URL test results, and ranks again for every connection.
 	sessionLatency bool
+	// latencyOffset is the configured latency_offset, keyed by member tag.
+	latencyOffset map[string]int32
 }
 
 func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
@@ -112,6 +114,7 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 		preferDomain:                 options.PreferDomain,
 		overrideIP:                   options.OverrideIP,
 		sessionLatency:               options.LatencyMode == option.LatencyModeSession,
+		latencyOffset:                options.LatencyOffset,
 	}
 	if lb.timeout == 0 {
 		lb.timeout = C.TCPTimeout
@@ -472,7 +475,7 @@ func (l *LoadBalance) poolByLastDelay(tags []string, outbounds map[string]adapte
 			continue
 		}
 		tried[tag] = struct{}{}
-		candidate := Candidate{Tag: tag, Outbound: detour, IsPrimary: isPrimary}
+		candidate := Candidate{Tag: tag, Outbound: detour, IsPrimary: isPrimary, Offset: l.latencyOffset[tag]}
 		if delay, ok := l.liveMemberDelay(tag, detour); ok && delay != 0 {
 			candidate.Latency = delay
 			measured = append(measured, candidate)
@@ -712,6 +715,7 @@ func (l *LoadBalance) healthyCandidates(tags []string, outbounds map[string]adap
 			Tag:       tag,
 			Outbound:  detour,
 			Latency:   delay,
+			Offset:    l.latencyOffset[tag],
 			IsPrimary: isPrimary,
 		})
 	}
@@ -746,15 +750,17 @@ func (l *LoadBalance) scoreCandidates(candidates []Candidate, quiet bool) {
 		}
 		return source
 	})
+	applyLatencyOffsets(candidates, breakdowns)
 	if !quiet {
 		l.logScores(breakdowns)
 	}
 }
 
 // logScores explains each member's score, which is how a weight is tuned. The
-// default sorter scores the raw delay, so it has nothing to explain.
+// default sorter scores the raw delay, so it has nothing to explain unless a
+// latency_offset shifts it.
 func (l *LoadBalance) logScores(breakdowns []breakdown) {
-	if l.logger == nil || l.memberSorter().isDefault || len(breakdowns) == 0 {
+	if l.logger == nil || (l.memberSorter().isDefault && len(l.latencyOffset) == 0) || len(breakdowns) == 0 {
 		return
 	}
 	for _, member := range breakdowns {
@@ -771,7 +777,7 @@ func (l *LoadBalance) logScores(breakdowns []breakdown) {
 }
 
 // sortCandidatesByScore orders candidates for ranking: best score first, then
-// lowest raw delay, then by tag so that the order is stable across rebuilds.
+// lowest delay with its offset, then by tag so that the order is stable across rebuilds.
 //
 // The delay tie-break matters whenever a sorter cannot tell two members apart.
 // A metric no member reports contributes the same pool average to every score,
@@ -782,20 +788,21 @@ func sortCandidatesByScore(candidates []Candidate) {
 		if candidates[i].Score != candidates[j].Score {
 			return candidates[i].Score < candidates[j].Score
 		}
-		if candidates[i].Latency != candidates[j].Latency {
-			return candidates[i].Latency < candidates[j].Latency
+		if candidates[i].rankLatency() != candidates[j].rankLatency() {
+			return candidates[i].rankLatency() < candidates[j].rankLatency()
 		}
 		return candidates[i].Tag < candidates[j].Tag
 	})
 }
 
-// sortCandidatesByLatency orders candidates by raw measured delay. Fail-over
-// uses it rather than the sorter, so that a dial that is already failing falls
-// back on the simplest signal available.
+// sortCandidatesByLatency orders candidates by measured delay plus their
+// latency_offset. Fail-over uses it rather than the sorter, so that a dial
+// that is already failing falls back on the simplest signal available, while
+// still honouring the configured preference between members.
 func sortCandidatesByLatency(candidates []Candidate) {
 	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].Latency != candidates[j].Latency {
-			return candidates[i].Latency < candidates[j].Latency
+		if candidates[i].rankLatency() != candidates[j].rankLatency() {
+			return candidates[i].rankLatency() < candidates[j].rankLatency()
 		}
 		return candidates[i].Tag < candidates[j].Tag
 	})
@@ -817,15 +824,16 @@ func worstCandidateIndex(candidates []Candidate) int {
 // than tolerance, which is what it takes to displace an incumbent.
 //
 // Scores are compared first. When they tie, which happens whenever the sorter
-// cannot tell the two apart, the raw delay decides with the same tolerance, so
-// that a slow incumbent cannot hold its place just because nothing the sorter
-// reads distinguishes it. With the default sorter scores equal the delay, so
-// the second branch never changes the outcome there.
+// cannot tell the two apart, the delay with its offset decides with the same
+// tolerance, so that a slow incumbent cannot hold its place just because
+// nothing the sorter reads distinguishes it. With the default sorter scores
+// equal the delay plus its offset, so the second branch never changes the
+// outcome there.
 func outranksBeyondTolerance(next, incumbent Candidate, tolerance uint16) bool {
 	if incumbent.Score != next.Score {
 		return incumbent.Score > next.Score+float64(tolerance)
 	}
-	return float64(incumbent.Latency) > float64(next.Latency)+float64(tolerance)
+	return incumbent.rankLatency() > next.rankLatency()+int64(tolerance)
 }
 
 // rankAfter reports whether candidate ranks worse than other.
@@ -833,8 +841,8 @@ func rankAfter(candidate, other Candidate) bool {
 	if candidate.Score != other.Score {
 		return candidate.Score > other.Score
 	}
-	if candidate.Latency != other.Latency {
-		return candidate.Latency > other.Latency
+	if candidate.rankLatency() != other.rankLatency() {
+		return candidate.rankLatency() > other.rankLatency()
 	}
 	return candidate.Tag > other.Tag
 }

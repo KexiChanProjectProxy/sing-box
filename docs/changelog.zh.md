@@ -5,9 +5,17 @@ icon: material/alert-decagram
 #### 1.14.4.0
 
 * 合入上游 [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4)，包含 1.14.3 的修复
-* 合并上游 sing-quic 修复：Hysteria2 与 TUIC 的空闲连接保持、协议输入校验、TUIC UDP 分片重组，以及 Hysteria2 端口跳跃接收循环对 EMSGSIZE 的处理
+* 合并上游 sing-quic 修复：Hysteria、Hysteria2 与 TUIC 的空闲连接保持、协议输入校验、Salamander 向量化写入、TUIC UDP 分片重组与并发认证，以及 Hysteria2 端口跳跃接收循环对 EMSGSIZE 的处理
 * 路由现在像上游一样把 `selector` 和 `urltest` 组解析为连接实际使用的成员；[`prefer_domain`](/zh/configuration/outbound/selector/#prefer_domain) 与 [`override_ip`](/zh/configuration/outbound/selector/#override_ip) 仍在途经的每个组上生效。[`loadbalance`](/zh/configuration/outbound/loadbalance/) 以及 `latency_mode: "session"` 的 `urltest` 仍在拨号时为每个连接选择成员
 * **不兼容变更：**`selector` 与 `urltest` 跟随上游拒绝重复的成员标签
+* **不兼容变更：**跟随上游，重复的 DNS 服务器和服务标签会报错，不再由后者替换前者；未实现的 `direct` 路由规则动作被移除
+* 上游会关闭未被引用的出站与 DNS 服务器的空闲连接。[`override_ip.server`](/zh/configuration/shared/dial/#override_ip) 与 AnyTLS 入站 `dns.server` 指定的 DNS 服务器、[`anytls`](/zh/configuration/dns/server/anytls/) DNS 服务器使用的出站、clickhouse 的 `detour`，以及 `latency_mode: "session"` 的 `urltest` 的所有成员，现在都视为被引用
+* `firefox-vpn` 的共享会话与控制面连接、`noisy-shuttle` 的池化会话不再继承发起连接的中断标记，detour 组切换成员时会再次关闭它们
+* 路由到 `loadbalance` 或 `latency_mode: "session"` 的 `urltest` 的 TUN 流（如 ping）改为经由组当前排名第一的成员转发，不再回退
+* 组切换成员时，仍在等待 `override_ip` 查询的连接会和其他连接一样被关闭，不再拨号到旧成员
+* clickhouse 记录路由实际使用的出站链，经 `urltest` 的 UDP 会记录 UDP 成员
+* 被地址过滤拒绝的 DNS 缓存命中不再记录为已返回，也不再触发预取
+* `cloudflare-warp` 在启动时才创建网络栈，启动失败不再使其残留
 * 修复 shadowsocks 入站、多路复用与 UDP over TCP 上每个路由失败的 UDP 流（例如被 `reject` 规则匹配）都会占用一个 goroutine 直到退出的问题。该问题来自上游
 
 #### 1.14.2.11

@@ -191,16 +191,52 @@ func (s *Session) openTunnel(ctx context.Context, destination M.Socksaddr, relea
 }
 
 func (s *Session) acquireSlot(ctx context.Context) (func(), error) {
+	s.mu.Lock()
+	s.streams++
+	s.mu.Unlock()
 	acquireCtx, cancel := s.withStreamTimeout(ctx)
 	defer cancel()
 	select {
 	case s.slots <- struct{}{}:
-		return func() { <-s.slots }, nil
+		return func() {
+			<-s.slots
+			s.streamDone()
+		}, nil
 	case <-acquireCtx.Done():
+		s.streamDone()
 		return nil, acquireCtx.Err()
 	case <-s.closeCh:
+		s.streamDone()
 		return nil, net.ErrClosed
 	}
+}
+
+func (s *Session) streamDone() {
+	s.mu.Lock()
+	s.streams--
+	idle := s.retiring && s.streams == 0
+	s.mu.Unlock()
+	if idle {
+		_ = s.Close()
+	}
+}
+
+// retire marks a session replaced by a newer proxy pass. It closes once its
+// last stream ends, or now if it has none.
+func (s *Session) retire() {
+	s.mu.Lock()
+	s.retiring = true
+	idle := s.streams == 0
+	s.mu.Unlock()
+	if idle {
+		_ = s.Close()
+	}
+}
+
+func (s *Session) isClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 func (s *Session) withDialTimeout(ctx context.Context) (context.Context, context.CancelFunc) {

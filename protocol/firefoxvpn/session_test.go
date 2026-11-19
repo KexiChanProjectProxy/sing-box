@@ -155,3 +155,27 @@ func TestFirefoxVPNTimeouts_enforcesDialAndConnectTimeouts(t *testing.T) {
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 }
+
+// A session replaced by a newer proxy pass closes once its last stream ends,
+// not before and not only at shutdown.
+func TestFirefoxVPNSessionRetireClosesAfterLastStream(t *testing.T) {
+	session := NewSession(SessionOptions{MaxConcurrentStreams: 2})
+	release, err := session.acquireSlot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.retire()
+	if session.isClosed() {
+		t.Fatal("a retiring session with an open stream must stay open")
+	}
+	release()
+	if !session.isClosed() {
+		t.Fatal("a retiring session must close after its last stream")
+	}
+
+	idle := NewSession(SessionOptions{MaxConcurrentStreams: 2})
+	idle.retire()
+	if !idle.isClosed() {
+		t.Fatal("a retiring session without streams must close at once")
+	}
+}

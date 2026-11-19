@@ -192,7 +192,14 @@ func (o *Outbound) sessionForToken(proxyPassToken string) (*Session, error) {
 		return o.session, nil
 	}
 	if o.session != nil {
-		o.retiredSessions = append(o.retiredSessions, o.session)
+		retiredSessions := o.retiredSessions[:0]
+		for _, retiredSession := range o.retiredSessions {
+			if !retiredSession.isClosed() {
+				retiredSessions = append(retiredSessions, retiredSession)
+			}
+		}
+		o.retiredSessions = append(retiredSessions, o.session)
+		o.session.retire()
 	}
 	o.session = newSession
 	return newSession, nil

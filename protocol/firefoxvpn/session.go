@@ -49,6 +49,10 @@ type Session struct {
 	clientConn clientConn
 	localAddr  net.Addr
 	closed     bool
+	// streams counts streams holding or waiting for a slot. A retiring
+	// session closes once it drops to zero.
+	streams  int
+	retiring bool
 }
 
 type ConnectResponseError struct {

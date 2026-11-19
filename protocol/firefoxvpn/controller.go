@@ -119,11 +119,13 @@ func (c *AuthController) GetProxyPass(ctx context.Context) (*ProxyPassInfo, erro
 }
 
 func (c *AuthController) Close() error {
+	// Cancel first: a background refresh holds c.mu through its retries and
+	// stops them only once its context is done.
+	c.backgroundCancel()
 	c.mu.Lock()
 	started := c.started
 	c.started = false
 	c.mu.Unlock()
-	c.backgroundCancel()
 	if started {
 		select {
 		case <-c.backgroundDone:

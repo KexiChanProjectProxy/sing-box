@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.1
+
+* Add `latency_offset` to [`loadbalance`](/configuration/outbound/loadbalance/#latency_offset) and [`urltest`](/configuration/outbound/urltest/#latency_offset): a per-member number of milliseconds added to the member's latency only when the group ranks its members.
+  A positive offset makes a member less preferred, a negative one more preferred.
+  Health checks, `timeout`, stored URL test results and the delays shown in the Clash API are unaffected.
+  In `loadbalance` it shifts the sorter score and orders connection fail-over, and it decides which members carry traffic only when `top_n.primary` is set
+
 #### 1.14.4.0
 
 * Integrate upstream [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4), including the 1.14.3 fixes

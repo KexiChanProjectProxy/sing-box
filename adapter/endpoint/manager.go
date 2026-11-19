@@ -79,6 +79,10 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 	}
 	m.access.Lock()
 	defer m.access.Unlock()
+	// Start may have run while the component was being constructed.
+	if m.started {
+		return E.New("cannot create endpoint after start: ", tag)
+	}
 	_, loaded := m.endpointByTag[tag]
 	if loaded {
 		return E.New("duplicate endpoint tag: ", tag)

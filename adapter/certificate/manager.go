@@ -69,6 +69,10 @@ func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag s
 	}
 	m.access.Lock()
 	defer m.access.Unlock()
+	// Start may have run while the component was being constructed.
+	if m.started {
+		return E.New("cannot create certificate provider after start: ", tag)
+	}
 	_, loaded := m.providerByTag[tag]
 	if loaded {
 		return E.New("duplicate certificate provider tag: ", tag)

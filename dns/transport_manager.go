@@ -172,6 +172,10 @@ func (m *TransportManager) Create(ctx context.Context, logger log.StructuredLogg
 	}
 	m.access.Lock()
 	defer m.access.Unlock()
+	// Start may have run while the component was being constructed.
+	if m.started {
+		return E.New("cannot create DNS server after start: ", tag)
+	}
 	_, loaded := m.transportByTag[tag]
 	if loaded {
 		return E.New("duplicate DNS server tag: ", tag)

@@ -20,6 +20,7 @@ type TransportManager struct {
 	outbound                 adapter.OutboundManager
 	defaultTag               string
 	access                   sync.RWMutex
+	started                  bool
 	transports               []adapter.DNSTransport
 	transportByTag           map[string]adapter.DNSTransport
 	defaultTransport         adapter.DNSTransport
@@ -42,6 +43,7 @@ func (m *TransportManager) Initialize(defaultTransportFallback func() (adapter.D
 
 func (m *TransportManager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.access.Lock()
+	m.started = true
 	if stage == adapter.StartStateInitialize {
 		if m.defaultTag != "" && m.defaultTransport == nil {
 			m.access.Unlock()
@@ -153,6 +155,14 @@ func (m *TransportManager) FakeIP() adapter.FakeIPTransport {
 }
 
 func (m *TransportManager) Create(ctx context.Context, logger log.StructuredLogger, tag string, transportType string, options any) error {
+	// Components are started with the manager; nothing would start or clean
+	// up one created later.
+	m.access.Lock()
+	started := m.started
+	m.access.Unlock()
+	if started {
+		return E.New("cannot create DNS server after start: ", tag)
+	}
 	if tag == "" {
 		return os.ErrInvalid
 	}

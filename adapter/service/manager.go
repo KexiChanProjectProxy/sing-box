@@ -14,6 +14,7 @@ var _ adapter.ServiceManager = (*Manager)(nil)
 type Manager struct {
 	registry     adapter.ServiceRegistry
 	access       sync.Mutex
+	started      bool
 	services     []adapter.Service
 	serviceByTag map[string]adapter.Service
 }
@@ -27,6 +28,7 @@ func NewManager(registry adapter.ServiceRegistry) *Manager {
 
 func (m *Manager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.access.Lock()
+	m.started = true
 	services := m.services
 	m.access.Unlock()
 	for _, service := range services {
@@ -53,6 +55,14 @@ func (m *Manager) Get(tag string) (adapter.Service, bool) {
 }
 
 func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag string, serviceType string, options any) error {
+	// Components are started with the manager; nothing would start or clean
+	// up one created later.
+	m.access.Lock()
+	started := m.started
+	m.access.Unlock()
+	if started {
+		return E.New("cannot create service after start: ", tag)
+	}
 	service, err := m.registry.Create(ctx, logger, tag, serviceType, options)
 	if err != nil {
 		return err

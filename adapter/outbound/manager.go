@@ -19,6 +19,7 @@ type Manager struct {
 	endpoint                adapter.EndpointManager
 	defaultTag              string
 	access                  sync.RWMutex
+	started                 bool
 	outbounds               []adapter.Outbound
 	outboundByTag           map[string]adapter.Outbound
 	defaultOutbound         adapter.Outbound
@@ -40,6 +41,7 @@ func (m *Manager) Initialize(defaultOutboundFallback func() (adapter.Outbound, e
 
 func (m *Manager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.access.Lock()
+	m.started = true
 	if stage == adapter.StartStateInitialize {
 		if m.defaultTag != "" && m.defaultOutbound == nil {
 			defaultEndpoint, loaded := m.endpoint.Get(m.defaultTag)
@@ -167,6 +169,14 @@ func (m *Manager) Default() adapter.Outbound {
 }
 
 func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, inboundType string, options any) error {
+	// Components are started with the manager; nothing would start or clean
+	// up one created later.
+	m.access.Lock()
+	started := m.started
+	m.access.Unlock()
+	if started {
+		return E.New("cannot create outbound after start: ", tag)
+	}
 	if tag == "" {
 		return os.ErrInvalid
 	}

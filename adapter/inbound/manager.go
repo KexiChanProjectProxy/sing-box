@@ -15,6 +15,7 @@ type Manager struct {
 	registry     adapter.InboundRegistry
 	endpoint     adapter.EndpointManager
 	access       sync.Mutex
+	started      bool
 	inbounds     []adapter.Inbound
 	inboundByTag map[string]adapter.Inbound
 }
@@ -29,6 +30,7 @@ func NewManager(registry adapter.InboundRegistry, endpoint adapter.EndpointManag
 
 func (m *Manager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.access.Lock()
+	m.started = true
 	inbounds := m.inbounds
 	m.access.Unlock()
 	for _, inbound := range inbounds {
@@ -58,6 +60,14 @@ func (m *Manager) Get(tag string) (adapter.Inbound, bool) {
 }
 
 func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, outboundType string, options any) error {
+	// Components are started with the manager; nothing would start or clean
+	// up one created later.
+	m.access.Lock()
+	started := m.started
+	m.access.Unlock()
+	if started {
+		return E.New("cannot create inbound after start: ", tag)
+	}
 	inbound, err := m.registry.Create(ctx, router, logger, tag, outboundType, options)
 	if err != nil {
 		return err

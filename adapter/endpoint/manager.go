@@ -14,6 +14,7 @@ var _ adapter.EndpointManager = (*Manager)(nil)
 type Manager struct {
 	registry      adapter.EndpointRegistry
 	access        sync.Mutex
+	started       bool
 	scope         *adapter.Scope
 	endpoints     []adapter.Endpoint
 	endpointByTag map[string]adapter.Endpoint
@@ -28,6 +29,7 @@ func NewManager(registry adapter.EndpointRegistry) *Manager {
 
 func (m *Manager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.access.Lock()
+	m.started = true
 	defer m.access.Unlock()
 	if stage == adapter.StartStateInitialize {
 		m.scope = scope
@@ -63,6 +65,14 @@ func (m *Manager) Get(tag string) (adapter.Endpoint, bool) {
 }
 
 func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, outboundType string, options any) error {
+	// Components are started with the manager; nothing would start or clean
+	// up one created later.
+	m.access.Lock()
+	started := m.started
+	m.access.Unlock()
+	if started {
+		return E.New("cannot create endpoint after start: ", tag)
+	}
 	endpoint, err := m.registry.Create(ctx, router, logger, tag, outboundType, options)
 	if err != nil {
 		return err

@@ -14,6 +14,7 @@ var _ adapter.CertificateProviderManager = (*Manager)(nil)
 type Manager struct {
 	registry      adapter.CertificateProviderRegistry
 	access        sync.Mutex
+	started       bool
 	providers     []adapter.CertificateProviderService
 	providerByTag map[string]adapter.CertificateProviderService
 }
@@ -27,6 +28,7 @@ func NewManager(registry adapter.CertificateProviderRegistry) *Manager {
 
 func (m *Manager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.access.Lock()
+	m.started = true
 	providers := m.providers
 	m.access.Unlock()
 	for _, provider := range providers {
@@ -53,6 +55,14 @@ func (m *Manager) Get(tag string) (adapter.CertificateProviderService, bool) {
 }
 
 func (m *Manager) Create(ctx context.Context, logger log.StructuredLogger, tag string, providerType string, options any) error {
+	// Components are started with the manager; nothing would start or clean
+	// up one created later.
+	m.access.Lock()
+	started := m.started
+	m.access.Unlock()
+	if started {
+		return E.New("cannot create certificate provider after start: ", tag)
+	}
 	provider, err := m.registry.Create(ctx, logger, tag, providerType, options)
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ package noisyshuttle
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync/atomic"
@@ -233,5 +234,53 @@ func (s *reusableMockServer) handleStream(conn net.Conn, streamID uint32) {
 				_ = WriteBufferedFrame(conn, FrameTypePong, 0, 0, frame.Payload)
 			}
 		}
+	}
+}
+
+// A pooled session carries one stream at a time. Opening a second stream while
+// the first is open must neither hang on the pool lock nor cut the first
+// stream off.
+func TestOutboundSessionConcurrentOpenKeepsActiveStream(t *testing.T) {
+	server := newReusableMockServer(t, "secret", 4, true)
+	defer server.Close()
+	outbound := newTestSessionOutbound(t, server.Addr().String(), "secret", SessionOptions{MaxStreams: 4, KeepaliveInterval: time.Hour}, true)
+
+	first, err := outbound.DialContext(context.Background(), N.NetworkTCP, M.ParseSocksaddrHostPort("example.com", 443))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	opened := make(chan error, 1)
+	go func() {
+		second, dialErr := outbound.DialContext(context.Background(), N.NetworkTCP, M.ParseSocksaddrHostPort("example.com", 443))
+		if dialErr == nil {
+			second.Close()
+		}
+		opened <- dialErr
+	}()
+	select {
+	case err = <-opened:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("opening a second stream hung")
+	}
+	if _, err = first.Write([]byte("ping")); err != nil {
+		t.Fatal("first stream was closed: ", err)
+	}
+	buf := make([]byte, 4)
+	if _, err = io.ReadFull(first, buf); err != nil {
+		t.Fatal("first stream was closed: ", err)
+	}
+}
+
+func TestSessionPoolCloseRefusesStreams(t *testing.T) {
+	pool := NewSessionPool(nil, log.NewNOPFactory().Logger())
+	if err := pool.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.OpenStream(context.Background()); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("expected net.ErrClosed, got %v", err)
 	}
 }

@@ -217,6 +217,13 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	}, nil
 }
 
+func (h *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	if stage == adapter.StartStateStart && h.sessionPool != nil {
+		scope.Add(h.sessionPool.Close)
+	}
+	return nil
+}
+
 func (h *Outbound) openStream(ctx context.Context) (*streamConn, error) {
 	if h.sessionPool != nil {
 		return h.sessionPool.OpenStream(ctx)

@@ -19,6 +19,7 @@ type SessionPool struct {
 	logger   log.StructuredLogger
 	mu       sync.Mutex
 	session  *clientSession
+	closed   bool
 }
 
 func NewSessionPool(outbound *Outbound, logger log.StructuredLogger) *SessionPool {
@@ -28,12 +29,11 @@ func NewSessionPool(outbound *Outbound, logger log.StructuredLogger) *SessionPoo
 func (p *SessionPool) OpenStream(ctx context.Context) (*streamConn, error) {
 	for {
 		p.mu.Lock()
-		session := p.session
-		if session != nil && !session.canOpen() {
-			p.session = nil
-			session.close()
-			session = nil
+		if p.closed {
+			p.mu.Unlock()
+			return nil, net.ErrClosed
 		}
+		session := p.session
 		if session != nil && session.tryAcquire() {
 			streamID := p.outbound.allocateStreamID()
 			p.mu.Unlock()
@@ -49,22 +49,56 @@ func (p *SessionPool) OpenStream(ctx context.Context) (*streamConn, error) {
 			return nil, err
 		}
 		p.mu.Lock()
-		if p.session == nil || !p.session.canOpen() {
-			p.session = newSession
-			newSession.pool = p
-			if newSession.keepaliveEnabled() || newSession.hasLifecycleTimers() {
-				newSession.startBackground()
-			}
-			if newSession.tryAcquire() {
-				streamID := p.outbound.allocateStreamID()
-				p.mu.Unlock()
-				p.logger.DebugEventContext(ctx, "noisyshuttle.session.miss", "session reuse miss")
-				return newSession.open(streamID), nil
-			}
+		if p.closed {
+			p.mu.Unlock()
+			newSession.close()
+			return nil, net.ErrClosed
+		}
+		if p.session != nil && p.session.canOpen() {
+			// Another stream pooled a usable session meanwhile; use that one.
+			p.mu.Unlock()
+			newSession.close()
+			continue
+		}
+		oldSession := p.session
+		p.session = newSession
+		newSession.pool = p
+		if newSession.keepaliveEnabled() || newSession.hasLifecycleTimers() {
+			newSession.startBackground()
+		}
+		acquired := newSession.tryAcquire()
+		var streamID uint32
+		if acquired {
+			streamID = p.outbound.allocateStreamID()
 		}
 		p.mu.Unlock()
-		newSession.close()
+		// Outside p.mu: closing a session removes it from the pool, which
+		// takes p.mu. A session still carrying a stream closes when that
+		// stream ends instead of cutting it off.
+		if oldSession != nil {
+			oldSession.detach()
+		}
+		if !acquired {
+			newSession.close()
+			continue
+		}
+		p.logger.DebugEventContext(ctx, "noisyshuttle.session.miss", "session reuse miss")
+		return newSession.open(streamID), nil
 	}
+}
+
+// Close closes the pooled session and refuses new streams. It runs when the
+// outbound's scope closes.
+func (p *SessionPool) Close() error {
+	p.mu.Lock()
+	p.closed = true
+	session := p.session
+	p.session = nil
+	p.mu.Unlock()
+	if session != nil {
+		session.close()
+	}
+	return nil
 }
 
 func (p *SessionPool) remove(session *clientSession) {
@@ -95,6 +129,9 @@ type clientSession struct {
 	requestCount uint32
 	lastActivity time.Time
 	counter      uint32
+	// detached is set when the pool replaced this session while it carried a
+	// stream; it closes once that stream ends.
+	detached bool
 }
 
 func newClientSession(conn net.Conn, capabilities uint16, maxStreams uint16, opts SessionOptions) *clientSession {
@@ -158,11 +195,24 @@ func (s *clientSession) open(streamID uint32) *streamConn {
 	return &streamConn{Conn: s.conn, streamID: streamID, session: s}
 }
 
+// detach is called when the pool replaces this session. It closes now, or
+// when its current stream ends.
+func (s *clientSession) detach() {
+	s.mu.Lock()
+	if s.active {
+		s.detached = true
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+	s.close()
+}
+
 func (s *clientSession) release(reusable bool) {
 	s.mu.Lock()
 	s.active = false
 	s.lastActivity = time.Now()
-	shouldClose := !reusable || !s.canOpenLocked(s.lastActivity)
+	shouldClose := !reusable || s.detached || !s.canOpenLocked(s.lastActivity)
 	s.mu.Unlock()
 	if shouldClose {
 		s.close()

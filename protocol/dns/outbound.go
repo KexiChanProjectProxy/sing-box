@@ -58,5 +58,7 @@ func (d *Outbound) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 }
 
 func (d *Outbound) NewPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
-	NewDNSPacketConnection(ctx, d.router, conn, nil, metadata)
+	// The router releases group registrations, and a legacy packet route
+	// returns, only once onClose runs.
+	N.CloseOnHandshakeFailure(conn, onClose, NewDNSPacketConnection(ctx, d.router, conn, nil, metadata))
 }

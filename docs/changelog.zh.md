@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.1
+
+* [`loadbalance`](/zh/configuration/outbound/loadbalance/#latency_offset) 与 [`urltest`](/zh/configuration/outbound/urltest/#latency_offset) 新增 `latency_offset`：为每个成员设置毫秒数，仅在组对成员排序时加到该成员的延迟上。
+  正数让成员更不优先，负数让它更优先。
+  健康检查、`timeout`、已存储的 URL 测试结果以及 Clash API 显示的延迟都不受影响。
+  在 `loadbalance` 中它平移 sorter 评分并决定连接级故障转移的顺序，只有配置了 `top_n.primary` 时才会决定由哪些成员承载流量
+
 #### 1.14.4.0
 
 * 合入上游 [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4)，包含 1.14.3 的修复

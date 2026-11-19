@@ -183,11 +183,15 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 }
 
 // applyDestinationOverrides applies prefer_domain and override_ip along the
-// resolved chain, outermost group first, as each hop did when groups handled
-// connections themselves.
+// resolved chain, outermost first. A member's own options apply only when it
+// is used directly, so past the first hop only groups take part, as they did
+// when groups handled connections themselves.
 func (r *Router) applyDestinationOverrides(ctx context.Context, metadata *adapter.InboundContext, chain []adapter.Outbound) (context.Context, error) {
 	var err error
-	for _, outbound := range chain {
+	for index, outbound := range chain {
+		if _, isGroup := outbound.(adapter.OutboundGroup); index > 0 && !isGroup {
+			continue
+		}
 		ctx = ApplyPreferDomain(ctx, metadata, outbound)
 		ctx, err = ApplyOverrideIP(ctx, metadata, outbound, r.dns, r.dnsTransport)
 		if err != nil {

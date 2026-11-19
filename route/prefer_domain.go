@@ -21,6 +21,12 @@ func ApplyPreferDomain(ctx context.Context, metadata *adapter.InboundContext, ou
 		return ctx
 	}
 
+	// A group's override_ip has already chosen the address; a later hop's
+	// prefer_domain must not turn it back into the domain.
+	if adapter.OverrideIPAppliedFromContext(ctx) {
+		return ctx
+	}
+
 	switch metadata.Protocol {
 	case C.ProtocolHTTP, C.ProtocolTLS, C.ProtocolQUIC:
 	default:

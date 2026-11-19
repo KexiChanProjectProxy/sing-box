@@ -707,3 +707,18 @@ func TestApplyPreferDomainNestedInheritance(t *testing.T) {
 		require.Equal(t, metadata.Socksaddr{Fqdn: "nested.example.com", Port: 443}, meta.Destination, "destination should be rewritten by child")
 	})
 }
+// A group's override_ip that already resolved the destination must survive a
+// later hop's prefer_domain.
+func TestApplyPreferDomainKeepsAppliedOverrideIP(t *testing.T) {
+	t.Parallel()
+	resolved := metadata.Socksaddr{Addr: netip.MustParseAddr("192.0.2.1"), Port: 443}
+	meta := &adapter.InboundContext{
+		Protocol:    C.ProtocolTLS,
+		Domain:      "example.com",
+		Destination: resolved,
+	}
+	ctx := adapter.ContextWithOverrideIPApplied(context.Background())
+	ctx = ApplyPreferDomain(ctx, meta, &mockOutbound{tag: "member", preferDomain: true})
+	require.True(t, adapter.PreferDomainFromContext(ctx))
+	require.Equal(t, resolved, meta.Destination)
+}

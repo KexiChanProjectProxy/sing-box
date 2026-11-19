@@ -262,7 +262,7 @@ func (m *ReferenceManager) applyKeepIdle(keepIdle map[any]bool, target idleTarge
 		return
 	}
 	if !target.keep {
-		m.logger.DebugEvent("route.reference.unreferenced", "component is unreferenced", log.String("kind", target.kind), log.String("type", target.typeName), log.String("tag", target.tag), log.String("action", target.action))
+		m.logger.DebugEvent("route.reference.idle", "component is unreferenced", log.String("kind", target.kind), log.String("type", target.typeName), log.String("tag", target.tag), log.String("action", target.action))
 	}
 	target.keeper.SetKeepIdleConnections(target.keep)
 }

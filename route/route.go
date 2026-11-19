@@ -154,9 +154,12 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		buf.ReleaseMulti(buffers)
 		return err
 	}
-
+	// Join the groups before the destination overrides, which may wait on DNS,
+	// so a group switch in the meantime still closes this connection.
+	detach := attachInterrupt(chain, conn)
 	ctx, err = r.applyDestinationOverrides(ctx, &metadata, chain)
 	if err != nil {
+		detach()
 		buf.ReleaseMulti(buffers)
 		return err
 	}
@@ -172,7 +175,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		conn = tracker.RoutedConnection(ctx, conn, metadata, selectedRule, selectedOutbound)
 	}
 	ctx = interrupt.ContextWithIsExternalConnection(ctx, true)
-	onClose = registerInterrupt(chain, conn, onClose)
+	onClose = N.AppendClose(onClose, func(error) { detach() })
 	outbound := chain[len(chain)-1]
 	if outboundHandler, isHandler := outbound.(adapter.ConnectionHandler); isHandler {
 		outboundHandler.NewConnection(ctx, conn, metadata, onClose)
@@ -223,7 +226,36 @@ func resolveOutbound(outbound adapter.Outbound, network string) ([]adapter.Outbo
 	return chain, nil
 }
 
-func registerInterrupt(chain []adapter.Outbound, closer io.Closer, onClose N.CloseHandlerFunc) N.CloseHandlerFunc {
+// resolveFlowOutbound resolves the chain for a flow forwarded by the TUN stack.
+// A flow never reaches a group's own dial, so a group that picks a member per
+// connection is resolved to its current choice instead of ending the chain.
+func resolveFlowOutbound(outbound adapter.Outbound, network string) ([]adapter.Outbound, error) {
+	chain, err := resolveOutbound(outbound, network)
+	if err != nil {
+		return nil, err
+	}
+	for range 16 {
+		group, isGroup := chain[len(chain)-1].(adapter.OutboundGroup)
+		if !isGroup {
+			return chain, nil
+		}
+		selected := group.Selected(network)
+		if selected == nil {
+			return nil, E.New(strings.ToUpper(network), " is not supported by outbound: ", group.Tag())
+		}
+		next, err := resolveOutbound(selected, network)
+		if err != nil {
+			return nil, err
+		}
+		chain = append(chain, next...)
+	}
+	return nil, E.New("outbound group nesting too deep: ", outbound.Tag())
+}
+
+// attachInterrupt registers closer with every group on the chain, so that a
+// group switching its member closes it, and returns the function that
+// removes it again.
+func attachInterrupt(chain []adapter.Outbound, closer io.Closer) func() {
 	var removers []func()
 	for _, outbound := range chain {
 		group, isGroup := outbound.(adapter.OutboundGroup)
@@ -232,14 +264,11 @@ func registerInterrupt(chain []adapter.Outbound, closer io.Closer, onClose N.Clo
 		}
 		removers = append(removers, group.AttachConnection(closer))
 	}
-	if len(removers) == 0 {
-		return onClose
-	}
-	return N.AppendClose(onClose, func(it error) {
+	return func() {
 		for _, remove := range removers {
 			remove()
 		}
-	})
+	}
 }
 
 func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
@@ -352,9 +381,12 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		N.ReleaseMultiPacketBuffer(packetBuffers)
 		return err
 	}
-
+	// Join the groups before the destination overrides, which may wait on DNS,
+	// so a group switch in the meantime still closes this connection.
+	detach := attachInterrupt(chain, conn)
 	ctx, err = r.applyDestinationOverrides(ctx, &metadata, chain)
 	if err != nil {
+		detach()
 		N.ReleaseMultiPacketBuffer(packetBuffers)
 		return err
 	}
@@ -374,7 +406,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		conn = newFakeIPNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, metadata.Destination)
 	}
 	ctx = interrupt.ContextWithIsExternalConnection(ctx, true)
-	onClose = registerInterrupt(chain, conn, onClose)
+	onClose = N.AppendClose(onClose, func(error) { detach() })
 	outbound := chain[len(chain)-1]
 	if outboundHandler, isHandler := outbound.(adapter.PacketConnectionHandler); isHandler {
 		outboundHandler.NewPacketConnection(ctx, conn, metadata, onClose)
@@ -541,7 +573,7 @@ func (r *Router) preMatchFlow(ctx context.Context, metadata *adapter.InboundCont
 			return continueResult
 		}
 	}
-	chain, err := resolveOutbound(outbound, metadata.Network)
+	chain, err := resolveFlowOutbound(outbound, metadata.Network)
 	if err != nil {
 		return continueResult
 	}

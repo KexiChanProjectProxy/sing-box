@@ -60,19 +60,20 @@ var (
 
 type Outbound struct {
 	outbound.Adapter
-	ctx          context.Context
-	cancel       context.CancelFunc
-	logger       log.StructuredLogger
-	options      option.CloudflareWARPOutboundOptions
-	dialer       N.Dialer
-	apiAccess    sync.Mutex
-	apiHTTP      *http.Client
-	dnsRouter    adapter.DNSRouter
-	cacheFile    adapter.CacheFile
-	baseTLS      *tls.Config
-	device       ipstack.Device
-	dependencies []string
-	static       *warpapi.Registration
+	ctx           context.Context
+	cancel        context.CancelFunc
+	logger        log.StructuredLogger
+	options       option.CloudflareWARPOutboundOptions
+	dialer        N.Dialer
+	apiAccess     sync.Mutex
+	apiHTTP       *http.Client
+	dnsRouter     adapter.DNSRouter
+	cacheFile     adapter.CacheFile
+	baseTLS       *tls.Config
+	device        ipstack.Device
+	deviceOptions ipstack.DeviceOptions
+	dependencies  []string
+	static        *warpapi.Registration
 
 	access       sync.Mutex
 	session      warptransport.Session
@@ -141,17 +142,18 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.Structur
 	if o.static != nil {
 		addresses = o.static.Addresses()
 	}
-	o.device, err = ipstack.NewDevice(ipstack.DeviceOptions{
+	if !ipstack.Available {
+		return nil, E.New("cloudflare-warp requires the with_gvisor build tag")
+	}
+	// The device is created when the outbound starts, together with the
+	// cleanup that closes it.
+	o.deviceOptions = ipstack.DeviceOptions{
 		Context:        ctx,
 		Logger:         logger,
 		MTU:            options.MTU,
 		Addresses:      addresses,
 		PacketHeadroom: warptransport.PacketHeadroom,
-	})
-	if err != nil {
-		return nil, E.Cause(err, "cloudflare-warp requires the with_gvisor build tag")
 	}
-	o.device.SetPacketWriter(o.writePacketBuffers)
 	return o, nil
 }
 
@@ -199,8 +201,15 @@ func (o *Outbound) Dependencies() []string {
 
 func (o *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	switch stage {
-	case adapter.StartStateStart:
+	case adapter.StartStateInitialize:
+		device, err := ipstack.NewDevice(o.deviceOptions)
+		if err != nil {
+			return E.Cause(err, "create cloudflare-warp device")
+		}
+		device.SetPacketWriter(o.writePacketBuffers)
+		o.device = device
 		scope.Add(o.Close)
+	case adapter.StartStateStart:
 		// The cache file service is registered after outbounds are created,
 		// so it can only be looked up once the box starts.
 		if o.static == nil && !o.options.Ephemeral {
@@ -243,6 +252,9 @@ func (o *Outbound) close() error {
 	}
 	if started {
 		<-o.loopDone
+	}
+	if o.device == nil {
+		return nil
 	}
 	return o.device.Close()
 }

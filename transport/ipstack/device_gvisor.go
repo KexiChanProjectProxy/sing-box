@@ -43,6 +43,9 @@ type stackDevice struct {
 	closeOnce     sync.Once
 }
 
+// Available reports whether this build includes the gVisor stack NewDevice needs.
+const Available = true
+
 func NewDevice(options DeviceOptions) (Device, error) {
 	if options.MTU == 0 {
 		options.MTU = DefaultMTU

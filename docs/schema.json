@@ -13087,6 +13087,12 @@
             },
             "latency_mode": {
               "type": "string"
+            },
+            "latency_offset": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer"
+              }
             }
           },
           "required": [
@@ -15188,6 +15194,12 @@
             },
             "latency_mode": {
               "type": "string"
+            },
+            "latency_offset": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer"
+              }
             }
           },
           "required": [

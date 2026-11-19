@@ -12,21 +12,34 @@ icon: material/alert-decagram
 #### 1.14.4.0
 
 * 合入上游 [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4)，包含 1.14.3 的修复
-* 合并上游 sing-quic 修复：Hysteria、Hysteria2 与 TUIC 的空闲连接保持、协议输入校验、Salamander 向量化写入、TUIC UDP 分片重组与并发认证，以及 Hysteria2 端口跳跃接收循环对 EMSGSIZE 的处理
+* 合并上游 sing-quic 修复：Hysteria、Hysteria2 与 TUIC 的空闲连接保持、协议输入校验、Salamander 向量化写入、TUIC UDP 分片重组与并发认证，以及 Hysteria 与 Hysteria2 端口跳跃接收循环对 EMSGSIZE 的处理
 * 路由现在像上游一样把 `selector` 和 `urltest` 组解析为连接实际使用的成员；[`prefer_domain`](/zh/configuration/outbound/selector/#prefer_domain) 与 [`override_ip`](/zh/configuration/outbound/selector/#override_ip) 仍在途经的每个组上生效。[`loadbalance`](/zh/configuration/outbound/loadbalance/) 以及 `latency_mode: "session"` 的 `urltest` 仍在拨号时为每个连接选择成员
 * **不兼容变更：**`selector` 与 `urltest` 跟随上游拒绝重复的成员标签
 * **不兼容变更：**跟随上游，重复的 DNS 服务器和服务标签会报错，不再由后者替换前者；未实现的 `direct` 路由规则动作被移除
+* 对嵌入 sing-box 的代码是**不兼容变更**：组件管理器跟随上游不再提供 `Remove`，且 box 启动后调用 `Create` 会返回错误，因为没有任何东西会启动或清理新组件
 * 上游会关闭未被引用的出站与 DNS 服务器的空闲连接。[`override_ip.server`](/zh/configuration/shared/dial/#override_ip) 与 AnyTLS 入站 `dns.server` 指定的 DNS 服务器、[`anytls`](/zh/configuration/dns/server/anytls/) DNS 服务器使用的出站、clickhouse 的 `detour`，以及 `latency_mode: "session"` 的 `urltest` 的所有成员，现在都视为被引用
 * `firefox-vpn` 的共享会话与控制面连接、`noisy-shuttle` 的池化会话不再继承发起连接的中断标记，detour 组切换成员时会再次关闭它们
-* 路由到 `loadbalance` 或 `latency_mode: "session"` 的 `urltest` 的 TUN 流（如 ping）改为经由组当前排名第一的成员转发，不再回退
-* 组切换成员时，仍在等待 `override_ip` 查询的连接会和其他连接一样被关闭，不再拨号到旧成员
-* clickhouse 记录路由实际使用的出站链，经 `urltest` 的 UDP 会记录 UDP 成员
-* 被地址过滤拒绝的 DNS 缓存命中不再记录为已返回，也不再触发预取
+* 路由到 `loadbalance` 或 `latency_mode: "session"` 的 `urltest` 的 TUN 流（如 ping）改为经由组当前在该网络上排名第一的成员转发，不再回退
+* 途经的组切换成员时，仍在进行 `override_ip` 查询或拨号的连接会被终止，不再到达旧成员
+* clickhouse 记录路由实际使用的出站链，经 `urltest` 的 UDP 会记录 UDP 成员。`loadbalance` 与 `latency_mode: "session"` 的 `urltest` 在连接拨号时才选择成员，因此 clickhouse 与 Clash API 对这些连接记录的是组本身
+* 被地址过滤拒绝的未过期 DNS 缓存命中不再记录为已返回，也不再触发预取。已过期的条目仍会像上游一样在后台刷新
+* 经组路由到 `dns` 出站的 UDP 不再一直登记在组中，在 shadowsocks 入站上也不再占用 goroutine 直到退出。该问题来自上游
+* 修复经 `urltest` 路由与其健康检查更新选择之间的数据竞争
+* 经 `loadbalance` 或会话延迟模式 `urltest` 的连接失败时，清除失败成员的 URL 测试结果，而不是组或嵌套组的结果
+* 修复 `noisy-shuttle` 在池化会话无法再承载流时打开新流会卡住的问题，并在 sing-box 停止时关闭池化会话
+* `firefox-vpn` 在被新代理凭证替换的会话的最后一个流结束后即关闭它，不再保留到退出，且退出时不再等待认证重试
+* 在 sing-box 停止过程中注册的临时 `cloudflare-warp` 设备也会被删除
+* Windows ARM64 发布构建与其他构建一样使用 Go 1.26.10 和 ARM64 CPU 特性检测补丁
 * `cloudflare-warp` 在启动时才创建网络栈，启动失败不再使其残留
 * 修复 shadowsocks 入站、多路复用与 UDP over TCP 上每个路由失败的 UDP 流（例如被 `reject` 规则匹配）都会占用一个 goroutine 直到退出的问题。该问题来自上游
 
 #### 1.14.2.11
 
+* 新增 [`dns.min_ttl`](/zh/configuration/dns/#min_ttl) 与 [`dns.max_ttl`](/zh/configuration/dns/#max_ttl)：提高或降低 DNS 响应的 TTL，同时作用于客户端看到的值与响应在缓存中保留的时间。DNS 规则动作可用自己的 `min_ttl` 和 `max_ttl` 覆盖，`rewrite_ttl` 仍然优先。TTL 为 `0` 的响应不缓存
+* 新增 [`optimistic.client_timeout`](/zh/configuration/dns/#client_timeout)：命中过期条目的查询最多等待此时长的刷新结果，只有刷新超时或失败时才返回过期响应
+* DNS 规则动作可通过 [`optimistic`](/zh/configuration/dns/rule_action/#optimistic) 启用乐观缓存（即使 `dns.optimistic` 关闭），也可将其禁用
+* 新增 [`dns.prefetch`](/zh/configuration/dns/#prefetch) 与 DNS 规则动作的 `prefetch` 选项：缓存条目在剩余 TTL 不足十分之一时被命中，会在后台刷新
+* [`dns.cache_capacity`](/zh/configuration/dns/#cache_capacity) 小于 1024 的值现在会生效，不再被忽略
 * AnyTLS 入站新增 [`anytls.dns`](/zh/configuration/inbound/anytls/#dns)：应答客户端在会话内以独立帧（而非流）发送的 DNS 查询。查询发往 `dns.server` 指定的 DNS 服务器并与 sing-box 自身的查询共享缓存，或经过 DNS 规则。服务器只向支持此功能的客户端声明，其他 AnyTLS 客户端不受影响
 * 新增 [`anytls`](/zh/configuration/dns/server/anytls/) DNS 服务器：通过 AnyTLS 出站的会话把查询发往其服务器。服务器未启用 `dns` 时查询立即失败，代理连接不受影响
 * 新增 [`group`](/zh/configuration/dns/server/group/) DNS 服务器：以 `load_balance`、`parallel` 或 `sequential` 模式把查询分散到 `udp`、`tcp`、`tls` 和 `https` DNS 服务器，全部失败时尝试 `fallbacks`。组作为一个服务器缓存

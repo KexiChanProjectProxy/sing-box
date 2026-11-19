@@ -12,16 +12,24 @@ icon: material/alert-decagram
 #### 1.14.4.0
 
 * Integrate upstream [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4), including the 1.14.3 fixes
-* Merge upstream sing-quic fixes: idle connection keeping for Hysteria, Hysteria2 and TUIC, protocol input validation, the vectorised Salamander write, TUIC UDP defragmentation and concurrent authentication, and EMSGSIZE in the Hysteria2 port hopping receive loop
+* Merge upstream sing-quic fixes: idle connection keeping for Hysteria, Hysteria2 and TUIC, protocol input validation, the vectorised Salamander write, TUIC UDP defragmentation and concurrent authentication, and EMSGSIZE in the Hysteria and Hysteria2 port hopping receive loop
 * Routing now resolves `selector` and `urltest` groups to the member a connection uses, as upstream does; [`prefer_domain`](/configuration/outbound/selector/#prefer_domain) and [`override_ip`](/configuration/outbound/selector/#override_ip) still apply at every group on the way. [`loadbalance`](/configuration/outbound/loadbalance/) and `urltest` with `latency_mode: "session"` keep choosing a member for each connection when it dials
 * **Breaking:** `selector` and `urltest` reject duplicate member tags, following upstream
 * **Breaking:** duplicate DNS server and service tags are rejected instead of the later one replacing the earlier, and the unimplemented `direct` route rule action is removed, following upstream
+* **Breaking** for code embedding sing-box: the component managers no longer have `Remove`, following upstream, and `Create` returns an error once the box has started, since nothing would start or clean up the new component
 * Upstream closes idle connections of outbounds and DNS servers nothing references. The DNS servers named by [`override_ip.server`](/configuration/shared/dial/#override_ip) and the AnyTLS inbound's `dns.server`, the outbound of an [`anytls`](/configuration/dns/server/anytls/) DNS server, the clickhouse `detour`, and every member of a `urltest` with `latency_mode: "session"` now count as referenced
 * Shared `firefox-vpn` sessions, its control plane connections and pooled `noisy-shuttle` sessions no longer inherit the opening connection's interrupt mark, so a detour group switching its member closes them again
-* TUN flows such as ping routed to a `loadbalance`, or a `urltest` with `latency_mode: "session"`, are forwarded through the member the group currently ranks first instead of falling back
-* A connection whose `override_ip` lookup is still running when a group switches its member is now closed like the others instead of dialing the old member
-* clickhouse records the outbound chain the router used, so UDP through a `urltest` names the UDP member
-* A DNS cache hit that the address filter rejects is no longer logged as served or prefetched
+* TUN flows such as ping routed to a `loadbalance`, or a `urltest` with `latency_mode: "session"`, are forwarded through the member the group currently ranks first for that network instead of falling back
+* A connection whose `override_ip` lookup or dial is still running when a group on its way switches member is stopped instead of reaching the old member
+* clickhouse records the outbound chain the router used, so UDP through a `urltest` names the UDP member. A `loadbalance`, or a `urltest` with `latency_mode: "session"`, picks its member when the connection dials, so clickhouse and the Clash API name the group for those connections
+* A fresh DNS cache hit that the address filter rejects is no longer logged as served or prefetched. An expired one is still refreshed in the background, as upstream does
+* UDP routed through a group to the `dns` outbound no longer stays registered with the group, and no longer holds its goroutine until shutdown on the shadowsocks inbounds. The bug comes from upstream
+* Fix a data race between routing through a `urltest` and its health check updating the selection
+* A failed connection through a `loadbalance` or a session latency `urltest` clears the URL test result of the member that failed, not of the group or of a nested group
+* Fix `noisy-shuttle` hanging when a stream is opened while the pooled session can no longer take streams, and close the pooled session when sing-box stops
+* `firefox-vpn` closes a session replaced by a new proxy pass once its last stream ends instead of keeping it until shutdown, and shutdown no longer waits for authentication retries
+* An ephemeral `cloudflare-warp` device registered while sing-box stops is deleted too
+* Windows ARM64 release builds use Go 1.26.10 with the ARM64 CPU feature detection backport, like the other builds
 * `cloudflare-warp` creates its network stack when it starts, so a failed startup no longer leaves it open
 * Fix a goroutine held until shutdown for every UDP flow that failed to route on the shadowsocks inbounds, multiplex and UDP over TCP, such as one matched by a `reject` rule. The bug comes from upstream
 

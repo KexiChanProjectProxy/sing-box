@@ -253,6 +253,14 @@ func (o *Outbound) close() error {
 	if started {
 		<-o.loopDone
 	}
+	// A registration that completed while shutting down was published after
+	// the snapshot above; the worker has exited, so delete it now.
+	o.access.Lock()
+	lateRegistration := o.registration
+	o.access.Unlock()
+	if lateRegistration != registration {
+		o.deleteEphemeral(lateRegistration)
+	}
 	if o.device == nil {
 		return nil
 	}

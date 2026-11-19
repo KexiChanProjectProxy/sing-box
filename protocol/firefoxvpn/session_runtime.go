@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagernet/sing-box/adapter"
 	boxTLS "github.com/sagernet/sing-box/common/tls"
 	M "github.com/sagernet/sing/common/metadata"
 
@@ -81,7 +82,9 @@ func (s *Session) ensureOpen(ctx context.Context) error {
 }
 
 func (s *Session) openClientConn(ctx context.Context) (net.Conn, clientConn, error) {
-	openCtx, cancel := s.withDialTimeout(ctx)
+	// The session is shared by every connection after this one, so it must
+	// not carry this connection's routing context or interrupt mark.
+	openCtx, cancel := s.withDialTimeout(adapter.ContextForMultiplexSession(ctx))
 	defer cancel()
 	tlsConfig := s.tlsConfig.Clone()
 	if len(tlsConfig.NextProtos()) == 0 {

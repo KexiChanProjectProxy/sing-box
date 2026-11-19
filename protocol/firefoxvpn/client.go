@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/option"
 	M "github.com/sagernet/sing/common/metadata"
@@ -59,7 +60,8 @@ func NewControlPlaneHTTPClient(ctx context.Context, apiDetour string) (*http.Cli
 			return nil, fmt.Errorf("create control-plane dialer: %w", err)
 		}
 		dialContext = func(ctx context.Context, network string, addr string) (net.Conn, error) {
-			return outboundDialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
+			// Pooled control plane connections outlive the request that opened them.
+			return outboundDialer.DialContext(adapter.ContextForMultiplexSession(ctx), network, M.ParseSocksaddr(addr))
 		}
 	}
 

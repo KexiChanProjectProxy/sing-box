@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -41,7 +42,9 @@ func (p *SessionPool) OpenStream(ctx context.Context) (*streamConn, error) {
 		}
 		p.mu.Unlock()
 
-		newSession, err := p.outbound.dialSession(ctx)
+		// The pooled session is shared by later streams, so it must not carry
+		// this stream's routing context or interrupt mark.
+		newSession, err := p.outbound.dialSession(adapter.ContextForMultiplexSession(ctx))
 		if err != nil {
 			return nil, err
 		}

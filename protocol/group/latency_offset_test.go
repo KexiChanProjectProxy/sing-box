@@ -158,7 +158,7 @@ func TestURLTestLatencyOffsetSelect(t *testing.T) {
 	selected, _ = group.Select(N.NetworkTCP)
 	require.Equal(t, "b", selected.Tag(), "b at -80ms is, and the sum does not wrap")
 
-	group.selectedOutboundTCP = b
+	group.selectedOutboundTCP.Store(b)
 	group.latencyOffset = map[string]int32{"b": -200, "a": -20}
 	selected, _ = group.Select(N.NetworkTCP)
 	require.Equal(t, "b", selected.Tag(), "a at 30ms does not displace b at -80ms")

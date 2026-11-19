@@ -339,6 +339,15 @@ func (l *LoadBalance) All() []string {
 // group picks a member for each connection when it dials, so routing does
 // not resolve it to this member; see SelectsPerConnection.
 func (l *LoadBalance) Selected(network string) adapter.Outbound {
+	// The best ranked candidate that can carry the network, so a TUN flow
+	// such as ping is not sent to a member without it.
+	if snapshot := l.snapshot.Load(); snapshot != nil {
+		for _, candidate := range snapshot.Candidates {
+			if carriesNetwork(candidate.Outbound, network) {
+				return candidate.Outbound
+			}
+		}
+	}
 	tag := l.now()
 	if detour, loaded := l.primaryOutbounds[tag]; loaded {
 		return detour
@@ -347,6 +356,18 @@ func (l *LoadBalance) Selected(network string) adapter.Outbound {
 		return detour
 	}
 	return nil
+}
+
+// carriesNetwork reports whether detour handles network. A nested group
+// counts, since its own selection decides.
+func carriesNetwork(detour adapter.Outbound, network string) bool {
+	if detour == nil {
+		return false
+	}
+	if _, isGroup := detour.(adapter.OutboundGroup); isGroup {
+		return true
+	}
+	return common.Contains(detour.Network(), network)
 }
 
 func (l *LoadBalance) SelectsPerConnection() bool {

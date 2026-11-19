@@ -138,7 +138,7 @@ func TestURLTestSessionModeSelectsPerConnection(t *testing.T) {
 	a.set(20 * time.Millisecond)
 	b.set(10 * time.Millisecond)
 	outbound, _ := newSessionURLTest(true, a, b)
-	outbound.group.selectedOutboundTCP = a
+	outbound.group.selectedOutboundTCP.Store(a)
 
 	dialOnce(t, outbound)
 	require.Equal(t, "b", lastDial(recorder))
@@ -173,7 +173,7 @@ func TestURLTestDefaultModeIgnoresSessionLatency(t *testing.T) {
 	b := newSessionStub("b", recorder)
 	b.set(time.Millisecond)
 	outbound, _ := newSessionURLTest(false, a, b)
-	outbound.group.selectedOutboundTCP = a
+	outbound.group.selectedOutboundTCP.Store(a)
 
 	dialOnce(t, outbound)
 	require.Equal(t, "a", lastDial(recorder), "the default mode dials the member chosen by the last check")

@@ -133,11 +133,18 @@ func (s *URLTest) All() []string {
 }
 
 func (s *URLTest) Selected(network string) adapter.Outbound {
+	// In session latency mode a connection takes the lowest member at that
+	// moment, without the tolerance that keeps the periodic selection.
+	if s.sessionLatency {
+		if outbound, _, _ := s.group.selectLowest(network); outbound != nil {
+			return outbound
+		}
+	}
 	var outbound adapter.Outbound
 	if network == N.NetworkUDP {
-		outbound = s.group.selectedOutboundUDP
+		outbound = s.group.selectedOutboundUDP.Load()
 	} else {
-		outbound = s.group.selectedOutboundTCP
+		outbound = s.group.selectedOutboundTCP.Load()
 	}
 	if outbound == nil {
 		outbound, _ = s.group.Select(network)
@@ -165,14 +172,14 @@ func (s *URLTest) References() []string {
 	if s.sessionLatency {
 		return s.tags
 	}
-	group.updateAccess.Lock()
-	defer group.updateAccess.Unlock()
 	var references []string
-	if group.selectedOutboundTCP != nil {
-		references = append(references, group.selectedOutboundTCP.Tag())
+	selectedTCP := group.selectedOutboundTCP.Load()
+	selectedUDP := group.selectedOutboundUDP.Load()
+	if selectedTCP != nil {
+		references = append(references, selectedTCP.Tag())
 	}
-	if group.selectedOutboundUDP != nil && group.selectedOutboundUDP != group.selectedOutboundTCP {
-		references = append(references, group.selectedOutboundUDP.Tag())
+	if selectedUDP != nil && selectedUDP != selectedTCP {
+		references = append(references, selectedUDP.Tag())
 	}
 	return references
 }
@@ -216,9 +223,9 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	var outbound adapter.Outbound
 	switch N.NetworkName(network) {
 	case N.NetworkTCP:
-		outbound = s.group.selectedOutboundTCP
+		outbound = s.group.selectedOutboundTCP.Load()
 	case N.NetworkUDP:
-		outbound = s.group.selectedOutboundUDP
+		outbound = s.group.selectedOutboundUDP.Load()
 	default:
 		return nil, E.Extend(N.ErrUnknownNetwork, network)
 	}
@@ -236,7 +243,7 @@ func (s *URLTest) DialContext(ctx context.Context, network string, destination M
 	}
 	s.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", outbound.Tag()))
 
-	s.group.history.DeleteURLTestHistory(outbound.Tag())
+	s.group.history.DeleteURLTestHistory(RealTag(outbound, N.NetworkName(network)))
 	return nil, err
 }
 
@@ -264,7 +271,7 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 		ctx = adapter.ContextWithPreferDomain(ctx, true)
 	}
 	ctx = withOverrideIPContext(ctx, s.overrideIP)
-	outbound := s.group.selectedOutboundUDP
+	outbound := s.group.selectedOutboundUDP.Load()
 	if s.group.sessionLatency {
 		outbound = s.selectForConnection(ctx, N.NetworkUDP)
 	} else if outbound == nil {
@@ -279,7 +286,7 @@ func (s *URLTest) ListenPacket(ctx context.Context, destination M.Socksaddr) (ne
 	}
 	s.logger.ErrorEventContext(ctx, "urltest.error", "urltest error", log.Err(err), log.String("tag", outbound.Tag()))
 
-	s.group.history.DeleteURLTestHistory(outbound.Tag())
+	s.group.history.DeleteURLTestHistory(RealTag(outbound, N.NetworkUDP))
 	return nil, err
 }
 
@@ -304,8 +311,8 @@ type URLTestGroup struct {
 	idleTimeout                  time.Duration
 	history                      *urltest.HistoryStorage
 	checking                     atomic.Bool
-	selectedOutboundTCP          adapter.Outbound
-	selectedOutboundUDP          adapter.Outbound
+	selectedOutboundTCP          common.TypedValue[adapter.Outbound]
+	selectedOutboundUDP          common.TypedValue[adapter.Outbound]
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
 	// sessionLatency ranks members on their live session latency, falling
@@ -445,15 +452,15 @@ func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
 	}
 	switch network {
 	case N.NetworkTCP:
-		if g.selectedOutboundTCP != nil {
-			if history := g.history.LoadURLTestHistory(RealTag(g.selectedOutboundTCP, N.NetworkTCP)); history != nil {
-				consider(g.selectedOutboundTCP, history.Delay)
+		if selected := g.selectedOutboundTCP.Load(); selected != nil {
+			if history := g.history.LoadURLTestHistory(RealTag(selected, N.NetworkTCP)); history != nil {
+				consider(selected, history.Delay)
 			}
 		}
 	case N.NetworkUDP:
-		if g.selectedOutboundUDP != nil {
-			if history := g.history.LoadURLTestHistory(RealTag(g.selectedOutboundUDP, N.NetworkUDP)); history != nil {
-				consider(g.selectedOutboundUDP, history.Delay)
+		if selected := g.selectedOutboundUDP.Load(); selected != nil {
+			if history := g.history.LoadURLTestHistory(RealTag(selected, N.NetworkUDP)); history != nil {
+				consider(selected, history.Delay)
 			}
 		}
 	}
@@ -726,18 +733,18 @@ func (g *URLTestGroup) performUpdateCheck() {
 		updated  bool
 		selected bool
 	)
-	if outbound, exists := g.Select(N.NetworkTCP); outbound != nil && (g.selectedOutboundTCP == nil || (exists && outbound != g.selectedOutboundTCP)) {
-		if g.selectedOutboundTCP != nil {
+	if outbound, exists := g.Select(N.NetworkTCP); outbound != nil && (g.selectedOutboundTCP.Load() == nil || (exists && outbound != g.selectedOutboundTCP.Load())) {
+		if g.selectedOutboundTCP.Load() != nil {
 			updated = true
 		}
-		g.selectedOutboundTCP = outbound
+		g.selectedOutboundTCP.Store(outbound)
 		selected = true
 	}
-	if outbound, exists := g.Select(N.NetworkUDP); outbound != nil && (g.selectedOutboundUDP == nil || (exists && outbound != g.selectedOutboundUDP)) {
-		if g.selectedOutboundUDP != nil {
+	if outbound, exists := g.Select(N.NetworkUDP); outbound != nil && (g.selectedOutboundUDP.Load() == nil || (exists && outbound != g.selectedOutboundUDP.Load())) {
+		if g.selectedOutboundUDP.Load() != nil {
 			updated = true
 		}
-		g.selectedOutboundUDP = outbound
+		g.selectedOutboundUDP.Store(outbound)
 		selected = true
 	}
 	if updated {

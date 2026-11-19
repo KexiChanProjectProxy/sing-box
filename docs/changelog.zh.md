@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.0
+
+* 合入上游 [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4)，包含 1.14.3 的修复
+* 合并上游 sing-quic 修复：Hysteria2 与 TUIC 的空闲连接保持、协议输入校验、TUIC UDP 分片重组，以及 Hysteria2 端口跳跃接收循环对 EMSGSIZE 的处理
+* 路由现在像上游一样把 `selector` 和 `urltest` 组解析为连接实际使用的成员；[`prefer_domain`](/zh/configuration/outbound/selector/#prefer_domain) 与 [`override_ip`](/zh/configuration/outbound/selector/#override_ip) 仍在途经的每个组上生效。[`loadbalance`](/zh/configuration/outbound/loadbalance/) 以及 `latency_mode: "session"` 的 `urltest` 仍在拨号时为每个连接选择成员
+* **不兼容变更：**`selector` 与 `urltest` 跟随上游拒绝重复的成员标签
+
 #### 1.14.2.11
 
 * AnyTLS 入站新增 [`anytls.dns`](/zh/configuration/inbound/anytls/#dns)：应答客户端在会话内以独立帧（而非流）发送的 DNS 查询。查询发往 `dns.server` 指定的 DNS 服务器并与 sing-box 自身的查询共享缓存，或经过 DNS 规则。服务器只向支持此功能的客户端声明，其他 AnyTLS 客户端不受影响

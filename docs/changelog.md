@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.0
+
+* Integrate upstream [v1.14.4](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4), including the 1.14.3 fixes
+* Merge upstream sing-quic fixes: idle connection keeping for Hysteria2 and TUIC, protocol input validation, TUIC UDP defragmentation, and EMSGSIZE in the Hysteria2 port hopping receive loop
+* Routing now resolves `selector` and `urltest` groups to the member a connection uses, as upstream does; [`prefer_domain`](/configuration/outbound/selector/#prefer_domain) and [`override_ip`](/configuration/outbound/selector/#override_ip) still apply at every group on the way. [`loadbalance`](/configuration/outbound/loadbalance/) and `urltest` with `latency_mode: "session"` keep choosing a member for each connection when it dials
+* **Breaking:** `selector` and `urltest` reject duplicate member tags, following upstream
+
 #### 1.14.2.11
 
 * Add [`dns.min_ttl`](/configuration/dns/#min_ttl) and [`dns.max_ttl`](/configuration/dns/#max_ttl): raise or lower the TTL of DNS responses, both in what clients see and in how long the response stays cached. DNS rule actions can override them with their own `min_ttl` and `max_ttl`, and `rewrite_ttl` still takes precedence. Responses with a TTL of `0` are left uncached

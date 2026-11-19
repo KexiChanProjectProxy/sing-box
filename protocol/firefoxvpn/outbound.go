@@ -101,7 +101,11 @@ func (o *Outbound) Dependencies() []string {
 	return o.dependencies
 }
 
-func (o *Outbound) Start() error {
+func (o *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	if stage != adapter.StartStateStart {
+		return nil
+	}
+	scope.Add(o.Close)
 	return o.authController.Start(o.ctx)
 }
 

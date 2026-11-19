@@ -81,7 +81,7 @@ func newGroup(t *testing.T, options option.GroupDNSServerOptions, members ...*st
 	ctx := service.ContextWith[adapter.DNSTransportManager](context.Background(), manager)
 	transport, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "group", options)
 	require.NoError(t, err)
-	require.NoError(t, transport.Start(adapter.StartStateStart))
+	require.NoError(t, transport.Start(adapter.StartStateStart, adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())))
 	return transport.(*Transport)
 }
 
@@ -131,7 +131,7 @@ func TestGroupMemberTypes(t *testing.T) {
 			ctx := service.ContextWith[adapter.DNSTransportManager](context.Background(), manager)
 			transport, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "group", option.GroupDNSServerOptions{Servers: []string{"m"}})
 			require.NoError(t, err)
-			err = transport.Start(adapter.StartStateStart)
+			err = transport.Start(adapter.StartStateStart, adapter.NewScope(context.Background(), log.NewNOPFactory().Logger()))
 			require.ErrorContains(t, err, "only udp, tcp, tls, https")
 			require.ErrorContains(t, err, memberType)
 		})
@@ -143,7 +143,7 @@ func TestGroupMemberTypes(t *testing.T) {
 	ctx := service.ContextWith[adapter.DNSTransportManager](context.Background(), manager)
 	transport, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "group", option.GroupDNSServerOptions{Servers: []string{"a"}, Fallbacks: []string{"bad"}})
 	require.NoError(t, err)
-	require.Error(t, transport.Start(adapter.StartStateStart))
+	require.Error(t, transport.Start(adapter.StartStateStart, adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())))
 }
 
 func TestGroupSequential(t *testing.T) {

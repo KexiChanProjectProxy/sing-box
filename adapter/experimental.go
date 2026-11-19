@@ -153,8 +153,19 @@ func (s *SavedBinary) UnmarshalBinary(data []byte) error {
 
 type OutboundGroup interface {
 	Outbound
-	Now() string
 	All() []string
+	Selected(network string) Outbound
+	AttachConnection(closer io.Closer) (detach func())
+}
+
+// ConnectionSelectingGroup is a group that may choose its member for each
+// connection when it dials, from state routing cannot see, such as
+// per-connection hashing or live session latency. While SelectsPerConnection
+// reports true, routing hands connections to the group itself instead of
+// resolving it to Selected.
+type ConnectionSelectingGroup interface {
+	OutboundGroup
+	SelectsPerConnection() bool
 }
 
 type URLTestGroup interface {

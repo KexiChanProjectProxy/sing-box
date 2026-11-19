@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"errors"
+	"io"
 	"math/rand"
 	"sort"
 	"sync"
@@ -62,22 +63,38 @@ func (s *statsStub) enabledDirections() []adapter.TransportStatsDirection {
 // groupStub is a nested group outbound that resolves to one of its members.
 type groupStub struct {
 	seedStub
-	members []string
-	current string
+	members   []string
+	current   string
+	outbounds map[string]adapter.Outbound
 }
 
-func (g *groupStub) Now() string   { return g.current }
 func (g *groupStub) All() []string { return g.members }
 func (g *groupStub) Type() string  { return "selector" }
+
+func (g *groupStub) Selected(network string) adapter.Outbound {
+	return g.outbounds[g.current]
+}
+
+func (g *groupStub) AttachConnection(io.Closer) func() { return func() {} }
+
+// linkGroupStubs lets every group stub in outbounds resolve its current
+// member from the same map.
+func linkGroupStubs(outbounds map[string]adapter.Outbound) {
+	for _, outbound := range outbounds {
+		if group, isGroup := outbound.(*groupStub); isGroup {
+			group.outbounds = outbounds
+		}
+	}
+}
 
 // stubManager is the smallest OutboundManager that resolves tags.
 type stubManager struct {
 	outbounds map[string]adapter.Outbound
 }
 
-func (m *stubManager) Start(adapter.StartStage) error { return nil }
-func (m *stubManager) Close() error                   { return nil }
-func (m *stubManager) Outbounds() []adapter.Outbound  { return nil }
+func (m *stubManager) Start(adapter.StartStage, *adapter.Scope) error { return nil }
+func (m *stubManager) Close() error                                   { return nil }
+func (m *stubManager) Outbounds() []adapter.Outbound                  { return nil }
 func (m *stubManager) Outbound(tag string) (adapter.Outbound, bool) {
 	detour, loaded := m.outbounds[tag]
 	return detour, loaded
@@ -149,6 +166,7 @@ func TestEnableTransportStatsDescendsIntoNestedGroups(t *testing.T) {
 	leafB := newStatsStub("leaf-b")
 	nested := &groupStub{seedStub: seedStub{tag: "nested"}, members: []string{"leaf-a", "leaf-b"}, current: "leaf-a"}
 	members := map[string]adapter.Outbound{"nested": nested, "leaf-a": leafA, "leaf-b": leafB}
+	linkGroupStubs(members)
 	lb := &LoadBalance{
 		sorter:           mustSorter(t, map[string]float64{"client_rtt": 1}),
 		logger:           log.NewNOPFactory().Logger(),
@@ -167,6 +185,7 @@ func TestEnableTransportStatsSurvivesGroupCycle(t *testing.T) {
 	// A group that lists itself would loop without the depth and seen guards.
 	cyclic := &groupStub{seedStub: seedStub{tag: "loop"}, members: []string{"loop"}, current: "loop"}
 	members := map[string]adapter.Outbound{"loop": cyclic}
+	linkGroupStubs(members)
 	lb := &LoadBalance{
 		sorter:           mustSorter(t, map[string]float64{"client_rtt": 1}),
 		logger:           log.NewNOPFactory().Logger(),
@@ -210,6 +229,7 @@ func TestScoreCandidatesResolvesNestedGroupSelection(t *testing.T) {
 	leafB.readers[adapter.TransportStatsClient] = &fakeStats{rtt: 80}
 	nested := &groupStub{seedStub: seedStub{tag: "nested"}, members: []string{"leaf-a", "leaf-b"}, current: "leaf-a"}
 	members := map[string]adapter.Outbound{"nested": nested, "leaf-a": leafA, "leaf-b": leafB}
+	linkGroupStubs(members)
 	lb := &LoadBalance{
 		sorter:           mustSorter(t, map[string]float64{"client_rtt": 1}),
 		logger:           log.NewNOPFactory().Logger(),
@@ -722,11 +742,11 @@ func TestRebuildSnapshotUnreportableSorterFollowsLatency(t *testing.T) {
 	lb.topNPrimary = 1
 	lb.tolerance = 10
 	lb.rebuildSnapshot()
-	require.Equal(t, "a", lb.Now())
+	require.Equal(t, "a", lb.now())
 
 	lb.history.StoreURLTestHistory("a", &adapter.URLTestHistory{Time: time.Now(), Delay: 900})
 	lb.rebuildSnapshot()
-	require.Equal(t, "b", lb.Now(), "the degraded incumbent must be replaced")
+	require.Equal(t, "b", lb.now(), "the degraded incumbent must be replaced")
 }
 
 // A group first reached through a path cut off by the depth limit must still be
@@ -745,6 +765,7 @@ func TestEnableTransportStatsRevisitsShallowerPath(t *testing.T) {
 		previous = tag
 		chainHead = tag
 	}
+	linkGroupStubs(members)
 	lb := &LoadBalance{
 		sorter:          mustSorter(t, map[string]float64{"client_rtt": 1}),
 		logger:          log.NewNOPFactory().Logger(),

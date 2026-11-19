@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"context"
 	"slices"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -82,8 +83,7 @@ func (c *ClientEndpoint) setTerminalError(err error) {
 	c.statusAccess.Unlock()
 }
 
-func (c *ClientEndpoint) watchChallenges() {
-	defer close(c.challengeLoopDone)
+func (c *ClientEndpoint) watchChallenges(ctx context.Context) {
 	var loggedChallengeID string
 	for {
 		challengeUpdated := c.client.ChallengeUpdated()
@@ -94,7 +94,7 @@ func (c *ClientEndpoint) watchChallenges() {
 		}
 		c.notifyStatusUpdated()
 		select {
-		case <-c.loopContext.Done():
+		case <-ctx.Done():
 			return
 		case <-challengeUpdated:
 		}

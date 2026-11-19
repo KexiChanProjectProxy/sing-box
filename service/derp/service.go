@@ -132,7 +132,7 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 	}, nil
 }
 
-func (d *Service) Start(stage adapter.StartStage) error {
+func (d *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	switch stage {
 	case adapter.StartStateStart:
 		config, err := readDERPConfig(d.ctx, filemanager.BasePath(d.ctx, d.configPath))
@@ -203,11 +203,13 @@ func (d *Service) Start(stage adapter.StartStage) error {
 		if err != nil {
 			return err
 		}
+		scope.Add(d.tlsConfig.Close)
 
 		tcpListener, err := d.listener.ListenTCP()
 		if err != nil {
 			return err
 		}
+		scope.Add(d.listener.Close)
 		if len(d.tlsConfig.NextProtos()) == 0 {
 			d.tlsConfig.SetNextProtos([]string{http2.NextProtoTLS, "http/1.1"})
 		} else if !common.Contains(d.tlsConfig.NextProtos(), http2.NextProtoTLS) {
@@ -304,11 +306,14 @@ func (d *Service) startMeshWithHost(derpServer *derpserver.Server, server *optio
 	logf := func(format string, args ...any) {
 		d.logger.DebugEvent("derp.mesh.log", "derp mesh log", log.String("detail", fmt.Sprintf(format, args...)), log.String("host", hostname))
 	}
+	meshAddress := M.ParseSocksaddrHostPort(hostname, server.ServerPort)
 	var meshHost string
-	if server.ServerPort == 0 || server.ServerPort == 443 {
-		meshHost = hostname
+	if server.ServerPort != 0 && server.ServerPort != 443 {
+		meshHost = meshAddress.String()
+	} else if meshAddress.IsIPv6() {
+		meshHost = "[" + meshAddress.AddrString() + "]"
 	} else {
-		meshHost = M.ParseSocksaddrHostPort(hostname, server.ServerPort).String()
+		meshHost = meshAddress.AddrString()
 	}
 	var serverURL string
 	if stdConfig != nil {
@@ -324,21 +329,13 @@ func (d *Service) startMeshWithHost(derpServer *derpserver.Server, server *optio
 	meshClient.MeshKey = derpServer.MeshKey()
 	meshClient.WatchConnectionChanges = true
 	meshClient.SetURLDialer(func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return meshDialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
+		return meshDialer.DialContext(ctx, network, M.ParseSocksaddrHostPort(server.Server, M.ParseSocksaddr(addr).Port))
 	})
 	add := func(m derp.PeerPresentMessage) { derpServer.AddPacketForwarder(m.Key, meshClient) }
 	remove := func(m derp.PeerGoneMessage) { derpServer.RemovePacketForwarder(m.Peer, meshClient) }
 	notifyError := func(err error) { d.logger.ErrorEvent("service.derp.mesh.error", "mesh connection", log.Err(err)) }
 	go meshClient.RunWatchConnectionLoop(context.Background(), derpServer.PublicKey(), logf, add, remove, notifyError)
 	return nil
-}
-
-func (d *Service) Close() error {
-	err := common.Close(
-		common.PtrOrNil(d.listener),
-		d.tlsConfig,
-	)
-	return err
 }
 
 var homePage = `
@@ -509,4 +506,10 @@ func (d *Service) loopSTUNPacket(packetConn *net.UDPConn) {
 		}
 		packetConn.WriteMsgUDPAddrPort(stun.Response(txid, addrPort), oob[:oobN], addrPort)
 	}
+}
+
+func (d *Service) References() []string {
+	return common.FilterNotDefault(common.Map(d.meshWith, func(it *option.DERPMeshOptions) string {
+		return it.Detour
+	}))
 }

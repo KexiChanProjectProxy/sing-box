@@ -102,11 +102,11 @@ type testCertStore struct {
 	pool *x509.CertPool
 }
 
-func (s *testCertStore) Name() string                   { return "test-certs" }
-func (s *testCertStore) Start(adapter.StartStage) error { return nil }
-func (s *testCertStore) Close() error                   { return nil }
-func (s *testCertStore) Pool() *x509.CertPool           { return s.pool }
-func (s *testCertStore) ExclusiveAnchors() bool         { return false }
+func (s *testCertStore) Name() string                                   { return "test-certs" }
+func (s *testCertStore) Start(adapter.StartStage, *adapter.Scope) error { return nil }
+func (s *testCertStore) Close() error                                   { return nil }
+func (s *testCertStore) Pool() *x509.CertPool                           { return s.pool }
+func (s *testCertStore) ExclusiveAnchors() bool                         { return false }
 
 type delayedReadConn struct {
 	net.Conn

@@ -350,10 +350,6 @@ func (h *Outbound) allocateStreamID() uint32 {
 	return id
 }
 
-func (h *Outbound) Close() error {
-	return nil
-}
-
 func (h *Outbound) InterfaceUpdated() {}
 
 type udpOutboundPacketConn struct {

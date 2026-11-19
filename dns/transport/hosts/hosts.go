@@ -58,11 +58,7 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 	}, nil
 }
 
-func (t *Transport) Start(stage adapter.StartStage) error {
-	return nil
-}
-
-func (t *Transport) Close() error {
+func (t *Transport) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	return nil
 }
 

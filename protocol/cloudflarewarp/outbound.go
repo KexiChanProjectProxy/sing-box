@@ -197,9 +197,10 @@ func (o *Outbound) Dependencies() []string {
 	return o.dependencies
 }
 
-func (o *Outbound) Start(stage adapter.StartStage) error {
+func (o *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	switch stage {
 	case adapter.StartStateStart:
+		scope.Add(o.Close)
 		// The cache file service is registered after outbounds are created,
 		// so it can only be looked up once the box starts.
 		if o.static == nil && !o.options.Ephemeral {

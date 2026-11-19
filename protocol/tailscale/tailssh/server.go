@@ -252,28 +252,25 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) serverConfig(ctx gliderssh.Context) *gossh.ServerConfig {
+	var preAuthConn gossh.ServerPreAuthConn
 	config := &gossh.ServerConfig{
+		PreAuthConnCallback: func(conn gossh.ServerPreAuthConn) {
+			preAuthConn = conn
+		},
 		NoClientAuthCallback: func(conn gossh.ConnMetadata) (*gossh.Permissions, error) {
-			return s.authenticate(ctx, conn)
+			return s.authenticate(ctx, preAuthConn, conn)
 		},
 		PasswordCallback: func(conn gossh.ConnMetadata, password []byte) (*gossh.Permissions, error) {
-			return s.authenticate(ctx, conn)
+			return s.authenticate(ctx, preAuthConn, conn)
 		},
 		PublicKeyCallback: func(conn gossh.ConnMetadata, key gossh.PublicKey) (*gossh.Permissions, error) {
-			return s.authenticate(ctx, conn)
-		},
-		BannerCallback: func(conn gossh.ConnMetadata) string {
-			connInfo := s.connInfoFromContext(ctx)
-			if connInfo != nil && connInfo.action.Message != "" {
-				return connInfo.action.Message
-			}
-			return ""
+			return s.authenticate(ctx, preAuthConn, conn)
 		},
 	}
 	return config
 }
 
-func (s *Server) authenticate(ctx gliderssh.Context, conn gossh.ConnMetadata) (*gossh.Permissions, error) {
+func (s *Server) authenticate(ctx gliderssh.Context, preAuthConn gossh.ServerPreAuthConn, conn gossh.ConnMetadata) (*gossh.Permissions, error) {
 	if s.connInfoFromContext(ctx) != nil {
 		return &gossh.Permissions{}, nil
 	}
@@ -298,12 +295,22 @@ func (s *Server) authenticate(ctx gliderssh.Context, conn gossh.ConnMetadata) (*
 		s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Err(err), log.Bool("accepted", false))
 		return nil, &gossh.PartialSuccessError{}
 	}
-	if connInfo.action.Reject {
-		s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
-		return nil, &gossh.PartialSuccessError{}
-	}
 	connInfo.action0 = connInfo.action
-	for hops := 0; connInfo.action.HoldAndDelegate != ""; hops++ {
+	for hops := 0; ; hops++ {
+		if connInfo.action.Message != "" {
+			err = preAuthConn.SendAuthBanner(connInfo.action.Message)
+			if err != nil {
+				s.logger.InfoEvent("tailssh.auth.banner.error", "send SSH auth banner", log.Err(err))
+				return nil, &gossh.PartialSuccessError{}
+			}
+		}
+		if connInfo.action.Reject {
+			s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
+			return nil, &gossh.PartialSuccessError{}
+		}
+		if connInfo.action.HoldAndDelegate == "" {
+			break
+		}
 		if hops >= 10 {
 			s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("reason", "hold-and-delegate chain too long"), log.Bool("accepted", false))
 			return nil, &gossh.PartialSuccessError{}
@@ -314,10 +321,6 @@ func (s *Server) authenticate(ctx gliderssh.Context, conn gossh.ConnMetadata) (*
 			return nil, &gossh.PartialSuccessError{}
 		}
 		connInfo.action = delegatedAction
-		if connInfo.action.Reject {
-			s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
-			return nil, &gossh.PartialSuccessError{}
-		}
 	}
 	if !connInfo.action.Accept {
 		s.logger.InfoEvent("tailssh.auth", "auth rejected", log.String("user", userProfile.LoginName), log.Bool("accepted", false))
@@ -334,6 +337,9 @@ func (s *Server) authenticate(ctx gliderssh.Context, conn gossh.ConnMetadata) (*
 func (s *Server) evaluatePolicy(policy *tailcfg.SSHPolicy, sshUser string, node tailcfg.NodeView, userProfile tailcfg.UserProfile, srcIP netip.Addr) (*sshConnInfo, error) {
 	now := time.Now()
 	for _, rule := range policy.Rules {
+		if rule == nil {
+			continue
+		}
 		if rule.RuleExpires != nil && now.After(*rule.RuleExpires) {
 			continue
 		}

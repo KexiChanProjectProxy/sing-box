@@ -16,22 +16,24 @@ import (
 func TestCloudflareWARPRegistration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cache.db")
 	for _, cacheID := range []string{"", "profile"} {
-		openCache := func() *CacheFile {
-			cacheFile := New(context.Background(), log.NewNOPFactory().Logger(), option.CacheFileOptions{Path: path, CacheID: cacheID})
-			require.NoError(t, cacheFile.Start(adapter.StartStateInitialize))
-			return cacheFile
+		openCache := func() (*CacheFile, *adapter.Scope) {
+			logger := log.NewNOPFactory().Logger()
+			cacheFile := New(context.Background(), logger, option.CacheFileOptions{Path: path, CacheID: cacheID})
+			scope := adapter.NewScope(context.Background(), logger)
+			require.NoError(t, cacheFile.Start(adapter.StartStateInitialize, scope))
+			return cacheFile, scope
 		}
-		cacheFile := openCache()
+		cacheFile, scope := openCache()
 		_, err := cacheFile.LoadCloudflareWARPRegistration("warp")
 		require.ErrorIs(t, err, os.ErrNotExist)
 		require.NoError(t, cacheFile.StoreCloudflareWARPRegistration("warp", []byte(`{"version":1}`)))
 		data, err := cacheFile.LoadCloudflareWARPRegistration("warp")
 		require.NoError(t, err)
 		require.Equal(t, `{"version":1}`, string(data))
-		require.NoError(t, cacheFile.Close())
+		require.NoError(t, scope.Close())
 
 		// The bucket must survive the unknown-bucket cleanup on start.
-		cacheFile = openCache()
+		cacheFile, scope = openCache()
 		data, err = cacheFile.LoadCloudflareWARPRegistration("warp")
 		require.NoError(t, err)
 		require.Equal(t, `{"version":1}`, string(data))
@@ -39,6 +41,6 @@ func TestCloudflareWARPRegistration(t *testing.T) {
 		_, err = cacheFile.LoadCloudflareWARPRegistration("warp")
 		require.ErrorIs(t, err, os.ErrNotExist)
 		require.NoError(t, cacheFile.DeleteCloudflareWARPRegistration("missing"))
-		require.NoError(t, cacheFile.Close())
+		require.NoError(t, scope.Close())
 	}
 }

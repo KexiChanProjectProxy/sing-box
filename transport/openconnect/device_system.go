@@ -109,8 +109,6 @@ func (d *systemDevice) buildTunOptions() tun.Options {
 		InterfaceMonitor:     nil,
 		InterfaceFinder:      nil,
 		Logger:               d.options.Logger,
-		IPRoute2TableIndex:   tun.DefaultIPRoute2TableIndex,
-		IPRoute2RuleIndex:    tun.DefaultIPRoute2RuleIndex,
 		EXP_DisableDNSHijack: true,
 	}
 	if networkManager != nil {
@@ -153,8 +151,7 @@ func (d *systemDevice) readLoop(tunInterface tun.Tun, mtu int) {
 		err = d.writeOutbound([]*buf.Buffer{packetBuffer})
 		packetBuffer.DecRef()
 		if err != nil {
-			d.options.Logger.ErrorEvent("tun.error", "write packet", log.Err(err))
-			return
+			d.options.Logger.DebugEvent("tun.error", "write packet", log.Err(err))
 		}
 	}
 }
@@ -184,8 +181,7 @@ func (d *systemDevice) readLoopLinux(tunInterface tun.LinuxTUN, batchSize int, m
 				packetBuffers[i].DecRef()
 			}
 			if writeErr != nil {
-				d.options.Logger.ErrorEvent("tun.error", "write packet", log.Err(writeErr), log.String("op", "batch"))
-				return
+				d.options.Logger.DebugEvent("tun.error", "write packet", log.Err(writeErr), log.String("op", "batch"))
 			}
 		}
 		if readErr != nil {
@@ -212,8 +208,7 @@ func (d *systemDevice) readLoopDarwin(tunInterface tun.DarwinTUN) {
 		if len(outboundBuffers) > 0 {
 			writeErr := d.writeOutbound(outboundBuffers)
 			if writeErr != nil {
-				d.options.Logger.ErrorEvent("tun.error", "write packet", log.Err(writeErr), log.String("op", "batch"))
-				return
+				d.options.Logger.DebugEvent("tun.error", "write packet", log.Err(writeErr), log.String("op", "batch"))
 			}
 		}
 		if readErr != nil {

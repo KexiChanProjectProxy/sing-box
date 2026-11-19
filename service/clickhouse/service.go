@@ -113,10 +113,11 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 	return s, nil
 }
 
-func (s *Service) Start(stage adapter.StartStage) error {
+func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
+	scope.Add(s.close)
 	conn, err := s.openConn()
 	if err != nil {
 		return err
@@ -226,7 +227,7 @@ func (c nativeConn) PrepareBatch(ctx context.Context, query string) (preparedBat
 	return c.Conn.PrepareBatch(ctx, query)
 }
 
-func (s *Service) Close() error {
+func (s *Service) close() error {
 	s.cancel()
 	s.wg.Wait()
 	if s.conn != nil {

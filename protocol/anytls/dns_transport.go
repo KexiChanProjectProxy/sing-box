@@ -44,7 +44,7 @@ func NewDNSTransport(ctx context.Context, logger log.StructuredLogger, tag strin
 	}, nil
 }
 
-func (t *DNSTransport) Start(stage adapter.StartStage) error {
+func (t *DNSTransport) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateInitialize {
 		return nil
 	}
@@ -57,10 +57,6 @@ func (t *DNSTransport) Start(stage adapter.StartStage) error {
 		return E.New("outbound is not anytls: ", t.outboundTag)
 	}
 	t.outbound = outbound
-	return nil
-}
-
-func (t *DNSTransport) Close() error {
 	return nil
 }
 

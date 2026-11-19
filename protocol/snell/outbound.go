@@ -29,14 +29,21 @@ type Outbound struct {
 	dialer     N.Dialer
 	client     snellClient
 	serverAddr M.Socksaddr
+	reuse      bool
 }
 
-var _ adapter.InterfaceUpdateListener = (*Outbound)(nil)
+var (
+	_ adapter.InterfaceUpdateListener = (*Outbound)(nil)
+	_ adapter.IdleConnectionKeeper    = (*Outbound)(nil)
+	_ adapter.OutboundWithMultiplex   = (*Outbound)(nil)
+)
 
 type snellClient interface {
 	snellprotocol.Method
 	DialContext(ctx context.Context, destination M.Socksaddr) (net.Conn, error)
 	Reset()
+	SetKeepIdleConnections(keep bool)
+	CloseIdleConnections()
 	Close() error
 }
 
@@ -91,6 +98,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		dialer:     outboundDialer,
 		client:     client,
 		serverAddr: serverAddr,
+		reuse:      options.Reuse,
 	}
 	return outbound, nil
 }
@@ -103,6 +111,9 @@ func (h *Outbound) DialContext(ctx context.Context, network string, destination 
 	switch networkName {
 	case N.NetworkTCP:
 		adapter.LogOutboundConnection(h.logger, ctx, destination)
+		if h.reuse {
+			return h.client.DialContext(adapter.ContextForMultiplexSession(ctx), destination)
+		}
 		return h.client.DialContext(ctx, destination)
 	case N.NetworkUDP:
 		adapter.LogOutboundPacket(h.logger, ctx, destination)
@@ -142,6 +153,22 @@ func (h *Outbound) InterfaceUpdated(ctx context.Context) {
 	h.client.Reset()
 }
 
-func (h *Outbound) Close() error {
-	return h.client.Close()
+func (h *Outbound) MultiplexEnabled() bool {
+	return h.reuse
+}
+
+func (h *Outbound) SetKeepIdleConnections(keep bool) {
+	h.client.SetKeepIdleConnections(keep)
+}
+
+func (h *Outbound) CloseIdleConnections() {
+	h.client.CloseIdleConnections()
+}
+
+func (h *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	if stage != adapter.StartStateInitialize {
+		return nil
+	}
+	scope.Add(h.client.Close)
+	return nil
 }

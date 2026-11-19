@@ -235,8 +235,6 @@ BBR 拥塞控制算法配置，可选 `conservative` `standard` `aggressive`。
 
 将此入站注册到 Hysteria Realm 会合服务，以启用 NAT 穿透。
 
-入站通过 STUN 发现自己的公网地址并注册到 realm，借助 UDP 打洞接受客户端连接，无需可公网直达的监听地址。
-
 会合服务参阅 [Hysteria Realm](/zh/configuration/service/hysteria-realm/)。
 
 #### realm.server_url
@@ -321,7 +319,7 @@ UDP 监听端口或范围（`443`、`60000:61000`、`60000-61000`）。被占用
 
 通过 UPnP 或 NAT-PMP 在本地网关上维护 UDP 端口映射。
 
-映射在 STUN 发现之前建立，可在支持的网关后提升打洞成功率；失败不影响正常流程。
+可在支持的网关后提升打洞成功率。
 
 需要 IPv4：与 `"ip_version": 6` 冲突。
 
@@ -337,7 +335,7 @@ UDP 监听端口或范围（`443`、`60000:61000`、`60000-61000`）。被占用
 
 #### realm.port_mapping.lifetime
 
-映射的租约时长；每过一半时长续期一次。
+映射的租约时长。
 
 默认使用 `10m`。
 

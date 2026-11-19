@@ -49,7 +49,6 @@ type Service struct {
 	certificate.Adapter
 	ctx           context.Context
 	config        *certmagic.Config
-	cache         *certmagic.Cache
 	zapLogger     *zap.Logger
 	dataDirectory string
 	domain        []string
@@ -181,7 +180,7 @@ func NewCertificateProvider(ctx context.Context, logger log.StructuredLogger, ta
 	}, nil
 }
 
-func (s *Service) Start(stage adapter.StartStage) error {
+func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	switch stage {
 	case adapter.StartStateInitialize:
 		if s.dataDirectory != "" {
@@ -197,18 +196,14 @@ func (s *Service) Start(stage adapter.StartStage) error {
 			},
 			Logger: s.zapLogger,
 		})
+		scope.Add(func() error {
+			cache.Stop()
+			return nil
+		})
 		config = certmagic.New(cache, *config)
 		s.config = config
-		s.cache = cache
 	case adapter.StartStateStart:
 		return s.config.ManageAsync(s.ctx, s.domain)
-	}
-	return nil
-}
-
-func (s *Service) Close() error {
-	if s.cache != nil {
-		s.cache.Stop()
 	}
 	return nil
 }

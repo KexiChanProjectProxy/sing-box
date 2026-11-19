@@ -10,6 +10,7 @@ import (
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 )
 
 const (
@@ -255,7 +256,11 @@ func resolveChain(outboundManager adapter.OutboundManager, outbound adapter.Outb
 		if !isGroup {
 			break
 		}
-		next = group.Now()
+		selected := group.Selected(N.NetworkTCP)
+		if selected == nil {
+			break
+		}
+		next = selected.Tag()
 	}
 	if len(chain) == 0 {
 		// An outbound that is not registered, such as the one probe traffic

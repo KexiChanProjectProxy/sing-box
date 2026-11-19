@@ -115,8 +115,8 @@ func TestRebuildSnapshotRanksNestedByMinLatency(t *testing.T) {
 	}
 	parent.seedInitialSnapshot()
 	parent.rebuildSnapshot()
-	if parent.Now() != "fast" {
-		t.Fatalf("Now()=%q want fast", parent.Now())
+	if parent.now() != "fast" {
+		t.Fatalf("Now()=%q want fast", parent.now())
 	}
 }
 

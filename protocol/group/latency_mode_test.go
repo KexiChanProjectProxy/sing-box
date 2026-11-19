@@ -72,6 +72,7 @@ func TestMemberLatencySources(t *testing.T) {
 	storeDelay(history, "plain", 250)
 	selector := &groupStub{seedStub: seedStub{tag: "selector"}, members: []string{"anytls"}, current: "anytls"}
 	manager := &stubManager{outbounds: map[string]adapter.Outbound{"anytls": measured, "plain": plain, "selector": selector}}
+	linkGroupStubs(manager.outbounds)
 
 	delay, source, ok := memberLatency(manager, history, measured, true)
 	require.True(t, ok)

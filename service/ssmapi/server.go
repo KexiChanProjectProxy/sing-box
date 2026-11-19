@@ -31,7 +31,6 @@ func RegisterService(registry *boxService.Registry) {
 type Service struct {
 	boxService.Adapter
 	ctx            context.Context
-	cancel         context.CancelFunc
 	logger         log.StructuredLogger
 	listener       *listener.Listener
 	tlsConfig      tls.ServerConfig
@@ -39,20 +38,16 @@ type Service struct {
 	traffics       map[string]*TrafficManager
 	users          map[string]*UserManager
 	cachePath      string
-	saveTicker     *time.Ticker
 	lastSavedCache []byte
 	cacheMutex     sync.Mutex
 }
 
-func NewService(ctx context.Context, logger log.StructuredLogger, tag string, options option.SSMAPIServiceOptions) (adapter.Service, error) {
-	structuredLogger := logger.(log.StructuredLogger)
-	ctx, cancel := context.WithCancel(ctx)
+func NewService(ctx context.Context, logger log.ContextLogger, tag string, options option.SSMAPIServiceOptions) (adapter.Service, error) {
 	chiRouter := chi.NewRouter()
 	s := &Service{
 		Adapter: boxService.NewAdapter(C.TypeSSMAPI, tag),
 		ctx:     ctx,
-		cancel:  cancel,
-		logger:  structuredLogger,
+		logger:  logger,
 		listener: listener.New(listener.Options{
 			Context: ctx,
 			Logger:  logger,
@@ -82,7 +77,7 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 		traffic := NewTrafficManager()
 		managedServer.SetTracker(traffic)
 		user := NewUserManager(managedServer, traffic)
-		chiRouter.Route(entry.Key, NewAPIServer(structuredLogger, traffic, user).Route)
+		chiRouter.Route(entry.Key, NewAPIServer(logger, traffic, user).Route)
 		s.traffics[entry.Key] = traffic
 		s.users[entry.Key] = user
 	}
@@ -96,32 +91,44 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 	return s, nil
 }
 
-func (s *Service) Start(stage adapter.StartStage) error {
+func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
 	err := s.loadCache()
 	if err != nil {
-		s.logger.ErrorEvent("service.cache.load.error", "load cache", log.Err(err))
+		s.logger.ErrorEvent("service.cache.load.error", "load cache, saving disabled", log.Err(err))
+	} else {
+		saveTicker := time.NewTicker(1 * time.Minute)
+		scope.Add(func() error {
+			saveTicker.Stop()
+			saveErr := s.saveCache()
+			if saveErr != nil {
+				s.logger.ErrorEvent("service.cache.save.error", "save cache", log.Err(saveErr))
+			}
+			return nil
+		})
+		go s.loopSaveCache(scope.Context(), saveTicker)
 	}
-	s.saveTicker = time.NewTicker(1 * time.Minute)
-	go s.loopSaveCache()
 	if s.tlsConfig != nil {
 		err = s.tlsConfig.Start()
 		if err != nil {
 			return E.Cause(err, "create TLS config")
 		}
+		scope.Add(s.tlsConfig.Close)
 	}
 	tcpListener, err := s.listener.ListenTCP()
 	if err != nil {
 		return err
 	}
+	scope.Add(s.listener.Close)
 	if s.tlsConfig != nil {
 		if !common.Contains(s.tlsConfig.NextProtos(), http2.NextProtoTLS) {
 			s.tlsConfig.SetNextProtos(append([]string{"h2"}, s.tlsConfig.NextProtos()...))
 		}
 		tcpListener = aTLS.NewListener(tcpListener, s.tlsConfig)
 	}
+	scope.Add(s.httpServer.Close)
 	go func() {
 		err = s.httpServer.Serve(tcpListener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -131,34 +138,16 @@ func (s *Service) Start(stage adapter.StartStage) error {
 	return nil
 }
 
-func (s *Service) loopSaveCache() {
+func (s *Service) loopSaveCache(ctx context.Context, saveTicker *time.Ticker) {
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return
-		case <-s.saveTicker.C:
+		case <-saveTicker.C:
 			err := s.saveCache()
 			if err != nil {
 				s.logger.ErrorEvent("service.cache.save.error", "save cache", log.Err(err))
 			}
 		}
 	}
-}
-
-func (s *Service) Close() error {
-	if s.cancel != nil {
-		s.cancel()
-	}
-	if s.saveTicker != nil {
-		s.saveTicker.Stop()
-	}
-	err := s.saveCache()
-	if err != nil {
-		s.logger.ErrorEvent("service.cache.save.error", "save cache", log.Err(err))
-	}
-	return common.Close(
-		common.PtrOrNil(s.httpServer),
-		common.PtrOrNil(s.listener),
-		s.tlsConfig,
-	)
 }

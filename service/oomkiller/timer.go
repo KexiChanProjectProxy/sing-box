@@ -40,7 +40,6 @@ type memorySample struct {
 type pressureThresholds struct {
 	trigger uint64
 	armed   uint64
-	resume  uint64
 }
 
 type timerConfig struct {
@@ -98,6 +97,15 @@ func buildTimerConfig(options option.OOMKillerServiceOptions, memoryLimit uint64
 	}, nil
 }
 
+type timerState struct {
+	state                   pressureState
+	currentInterval         time.Duration
+	forceMinInterval        bool
+	pendingPressureBaseline bool
+	pressureBaseline        memorySample
+	pressureBaselineTime    time.Time
+}
+
 type adaptiveTimer struct {
 	timerConfig
 	logger          log.StructuredLogger
@@ -106,14 +114,9 @@ type adaptiveTimer struct {
 	recorder        *Recorder
 	limitThresholds pressureThresholds
 
-	access                  sync.Mutex
-	timer                   *time.Timer
-	state                   pressureState
-	currentInterval         time.Duration
-	forceMinInterval        bool
-	pendingPressureBaseline bool
-	pressureBaseline        memorySample
-	pressureBaselineTime    time.Time
+	access sync.Mutex
+	timer  *time.Timer
+	timerState
 }
 
 func newAdaptiveTimer(logger log.StructuredLogger, network adapter.NetworkManager, connections adapter.ConnectionManager, recorder *Recorder, config timerConfig) *adaptiveTimer {
@@ -130,9 +133,17 @@ func newAdaptiveTimer(logger log.StructuredLogger, network adapter.NetworkManage
 	return t
 }
 
-func (t *adaptiveTimer) start() {
+func (t *adaptiveTimer) start(carriedState *timerState) {
 	t.access.Lock()
 	defer t.access.Unlock()
+	if t.timer != nil {
+		return
+	}
+	if carriedState != nil {
+		t.timerState = *carriedState
+		t.timer = time.AfterFunc(t.minInterval, t.poll)
+		return
+	}
 	t.startLocked()
 }
 
@@ -145,13 +156,14 @@ func (t *adaptiveTimer) startLocked() {
 	t.timer = time.AfterFunc(t.minInterval, t.poll)
 }
 
-func (t *adaptiveTimer) stop() {
+func (t *adaptiveTimer) stop() timerState {
 	t.access.Lock()
 	defer t.access.Unlock()
 	if t.timer != nil {
 		t.timer.Stop()
 		t.timer = nil
 	}
+	return t.timerState
 }
 
 func (t *adaptiveTimer) poll() {
@@ -230,8 +242,20 @@ func (t *adaptiveTimer) poll() {
 	badCleanup()
 	runtimeDebug.FreeOSMemory()
 	if t.recorder != nil {
-		t.recorder.recordReset(reason, sample, readMemorySample(t.policyMode), connections, t.killerDisabled)
-		t.recorder.snapshot(SnapshotReasonReset, sample, false)
+		after := readMemorySample(t.policyMode)
+		t.recorder.recordReset(reason, sample, after, connections, t.killerDisabled)
+		t.recorder.snapshot(SnapshotReasonReset, sample, t.belowTrigger(after), false)
+	}
+}
+
+func (t *adaptiveTimer) belowTrigger(sample memorySample) bool {
+	switch t.policyMode {
+	case policyModeMemoryLimit, policyModeNetworkExtension:
+		return sample.usage < t.limitThresholds.trigger
+	case policyModeAvailable:
+		return !sample.availableKnown || sample.available > t.availableThresholds(sample).trigger
+	default:
+		return true
 	}
 }
 
@@ -241,7 +265,6 @@ func (t *adaptiveTimer) nextState(sample memorySample) pressureState {
 		return nextPressureState(t.state,
 			sample.usage >= t.limitThresholds.trigger,
 			sample.usage >= t.limitThresholds.armed,
-			sample.usage >= t.limitThresholds.resume,
 		)
 	case policyModeAvailable:
 		if !sample.availableKnown {
@@ -251,7 +274,6 @@ func (t *adaptiveTimer) nextState(sample memorySample) pressureState {
 		return nextPressureState(t.state,
 			sample.available <= thresholds.trigger,
 			sample.available <= thresholds.armed,
-			sample.available <= thresholds.resume,
 		)
 	default:
 		return pressureStateNormal
@@ -261,11 +283,9 @@ func (t *adaptiveTimer) nextState(sample memorySample) pressureState {
 func computeLimitThresholds(memoryLimit uint64, safetyMargin uint64) pressureThresholds {
 	triggerMargin := min(safetyMargin, memoryLimit)
 	armedMargin := min(triggerMargin*2, memoryLimit)
-	resumeMargin := min(triggerMargin*4, memoryLimit)
 	return pressureThresholds{
 		trigger: memoryLimit - triggerMargin,
 		armed:   memoryLimit - armedMargin,
-		resume:  memoryLimit - resumeMargin,
 	}
 }
 
@@ -281,7 +301,6 @@ func (t *adaptiveTimer) availableThresholds(sample memorySample) pressureThresho
 	return pressureThresholds{
 		trigger: triggerMargin,
 		armed:   triggerMargin * 2,
-		resume:  triggerMargin * 4,
 	}
 }
 
@@ -317,9 +336,9 @@ func (t *adaptiveTimer) logDetails(sample memorySample) string {
 	return ""
 }
 
-func nextPressureState(current pressureState, shouldTrigger, shouldArm, shouldStayTriggered bool) pressureState {
+func nextPressureState(current pressureState, shouldTrigger, shouldArm bool) pressureState {
 	if current == pressureStateTriggered {
-		if shouldStayTriggered {
+		if shouldArm {
 			return pressureStateTriggered
 		}
 		return pressureStateNormal

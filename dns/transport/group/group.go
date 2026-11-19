@@ -90,7 +90,7 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 	}, nil
 }
 
-func (t *Transport) Start(stage adapter.StartStage) error {
+func (t *Transport) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
@@ -117,10 +117,6 @@ func (t *Transport) resolve(tags []string) ([]adapter.DNSTransport, error) {
 		transports = append(transports, transport)
 	}
 	return transports, nil
-}
-
-func (t *Transport) Close() error {
-	return nil
 }
 
 // Reset forgets the measured round-trip times. The members are reset on their

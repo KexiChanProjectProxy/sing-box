@@ -4,6 +4,7 @@ package netns
 
 import (
 	"bufio"
+	"context"
 	"os"
 	"strconv"
 	"strings"
@@ -39,11 +40,11 @@ func TestUnshareNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = manager.Start(adapter.StartStateInitialize)
+	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
+	err = manager.Start(adapter.StartStateInitialize, scope)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
 
 	pipeReader.SetReadDeadline(time.Now().Add(10 * time.Second))
 	pidLine, err := bufio.NewReader(pipeReader).ReadString('\n')
@@ -71,7 +72,7 @@ func TestUnshareNamespace(t *testing.T) {
 		t.Fatal("holder is in the current netns")
 	}
 
-	err = manager.Close()
+	err = scope.Close()
 	if err != nil {
 		t.Fatal(err)
 	}

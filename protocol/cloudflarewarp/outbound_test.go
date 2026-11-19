@@ -140,11 +140,19 @@ func startOutbound(t *testing.T, ctx context.Context, options option.CloudflareW
 	created, err := NewOutbound(ctx, nil, log.NewNOPFactory().Logger(), "warp", options)
 	require.NoError(t, err)
 	outbound := created.(*Outbound)
+	scope := newTestScope(t)
 	for _, stage := range adapter.ListStartStages {
-		require.NoError(t, outbound.Start(stage))
+		require.NoError(t, outbound.Start(stage, scope))
 	}
 	t.Cleanup(func() { outbound.Close() })
 	return outbound
+}
+
+func newTestScope(t *testing.T) *adapter.Scope {
+	t.Helper()
+	scope := adapter.NewScope(context.Background(), log.NewNOPFactory().Logger())
+	t.Cleanup(func() { scope.Close() })
+	return scope
 }
 
 func assertEcho(t *testing.T, outbound *Outbound) {
@@ -250,7 +258,7 @@ func TestOutboundAutoRegistration(t *testing.T) {
 	}
 	// Mirror box.New: outbounds are created before the cache file service is
 	// registered, and the cache file opens at the initialize stage.
-	start := func() (*Outbound, *cachefile.CacheFile) {
+	start := func() (*Outbound, *cachefile.CacheFile, *adapter.Scope) {
 		ctx := service.ContextWithDefaultRegistry(context.Background())
 		created, err := NewOutbound(ctx, nil, log.NewNOPFactory().Logger(), "warp", options)
 		require.NoError(t, err)
@@ -258,14 +266,16 @@ func TestOutboundAutoRegistration(t *testing.T) {
 		t.Cleanup(func() { outbound.Close() })
 		cacheFile := cachefile.New(ctx, log.NewNOPFactory().Logger(), option.CacheFileOptions{Path: cachePath})
 		service.MustRegister[adapter.CacheFile](ctx, cacheFile)
-		require.NoError(t, cacheFile.Start(adapter.StartStateInitialize))
+		cacheScope := newTestScope(t)
+		require.NoError(t, cacheFile.Start(adapter.StartStateInitialize, cacheScope))
+		scope := newTestScope(t)
 		for _, stage := range adapter.ListStartStages {
-			require.NoError(t, outbound.Start(stage))
+			require.NoError(t, outbound.Start(stage, scope))
 		}
-		return outbound, cacheFile
+		return outbound, cacheFile, cacheScope
 	}
 
-	outbound, cacheFile := start()
+	outbound, cacheFile, cacheScope := start()
 	assertEcho(t, outbound)
 	require.Equal(t, 1, registrations)
 	data, err := cacheFile.LoadCloudflareWARPRegistration("warp")
@@ -274,11 +284,10 @@ func TestOutboundAutoRegistration(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &registration))
 	require.Equal(t, "device-1", registration.DeviceID)
 	require.NoError(t, outbound.Close())
-	require.NoError(t, cacheFile.Close())
+	require.NoError(t, cacheScope.Close())
 
 	// A restart reuses the cached device instead of registering again.
-	outbound, cacheFile = start()
-	defer cacheFile.Close()
+	outbound, _, _ = start()
 	assertEcho(t, outbound)
 	require.Equal(t, 1, registrations)
 }
@@ -287,7 +296,7 @@ func TestOutboundRequiresCacheFileForAutoRegistration(t *testing.T) {
 	created, err := NewOutbound(context.Background(), nil, log.NewNOPFactory().Logger(), "warp", option.CloudflareWARPOutboundOptions{})
 	require.NoError(t, err)
 	defer created.(*Outbound).Close()
-	err = created.(*Outbound).Start(adapter.StartStateStart)
+	err = created.(*Outbound).Start(adapter.StartStateStart, newTestScope(t))
 	require.ErrorContains(t, err, "experimental.cache_file.enabled")
 }
 

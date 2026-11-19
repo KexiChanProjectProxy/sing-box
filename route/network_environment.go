@@ -87,10 +87,13 @@ func (r *NetworkManager) updateNetworkEnvironment() {
 	changed := environmentHash != r.networkEnvironment
 	r.networkEnvironment = environmentHash
 	r.stateAccess.Unlock()
-	if !changed || len(options) == 0 {
+	if !changed {
 		return
 	}
-	r.logger.InfoEvent("route.network.environment_updated", "updated network environment", log.String("options", strings.Join(options, ", ")))
+	if len(options) > 0 {
+		r.logger.InfoEvent("route.network.environment_updated", "updated network environment", log.String("options", strings.Join(options, ", ")))
+	}
+	r.FlushSystemDNSCache()
 }
 
 func formatEnvironmentValues(values []string) string {

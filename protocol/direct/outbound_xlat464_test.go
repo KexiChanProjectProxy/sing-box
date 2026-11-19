@@ -147,8 +147,10 @@ func xlat464OutboundTestContext(dnsRouter adapter.DNSRouter) context.Context {
 
 type xlat464OutboundTestDNSTransportManager struct{}
 
-func (*xlat464OutboundTestDNSTransportManager) Start(adapter.StartStage) error { return nil }
-func (*xlat464OutboundTestDNSTransportManager) Close() error                   { return nil }
+func (*xlat464OutboundTestDNSTransportManager) Start(adapter.StartStage, *adapter.Scope) error {
+	return nil
+}
+func (*xlat464OutboundTestDNSTransportManager) Close() error { return nil }
 func (*xlat464OutboundTestDNSTransportManager) Transports() []adapter.DNSTransport {
 	return nil
 }
@@ -169,8 +171,8 @@ type xlat464OutboundTestDNSRouter struct {
 	options   adapter.DNSQueryOptions
 }
 
-func (*xlat464OutboundTestDNSRouter) Start(adapter.StartStage) error { return nil }
-func (*xlat464OutboundTestDNSRouter) Close() error                   { return nil }
+func (*xlat464OutboundTestDNSRouter) Start(adapter.StartStage, *adapter.Scope) error { return nil }
+func (*xlat464OutboundTestDNSRouter) Close() error                                   { return nil }
 func (*xlat464OutboundTestDNSRouter) Exchange(context.Context, *dns.Msg, adapter.DNSQueryOptions) (*dns.Msg, error) {
 	return nil, errors.New("unused DNS exchange")
 }

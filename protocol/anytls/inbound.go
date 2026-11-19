@@ -117,7 +117,7 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	return inbound, nil
 }
 
-func (h *Inbound) Start(stage adapter.StartStage) error {
+func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage == adapter.StartStateInitialize && h.dnsServerTag != "" {
 		// DNS servers are all created by now, and no connection can arrive
 		// before the listeners start, so the field is set before any read.
@@ -135,12 +135,14 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 		if err != nil {
 			return err
 		}
+		scope.Add(h.tlsConfig.Close)
 	}
-	return h.listener.Start()
-}
-
-func (h *Inbound) Close() error {
-	return common.Close(h.listener, h.tlsConfig)
+	err := h.listener.Start()
+	if err != nil {
+		return err
+	}
+	scope.Add(h.listener.Close)
+	return nil
 }
 
 func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {

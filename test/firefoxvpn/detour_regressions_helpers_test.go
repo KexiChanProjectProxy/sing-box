@@ -24,12 +24,12 @@ import (
 
 type stubOutboundManager struct{}
 
-func (m *stubOutboundManager) Start(_ adapter.StartStage) error           { return nil }
-func (m *stubOutboundManager) Close() error                               { return nil }
-func (m *stubOutboundManager) Outbounds() []adapter.Outbound              { return nil }
-func (m *stubOutboundManager) Outbound(_ string) (adapter.Outbound, bool) { return nil, false }
-func (m *stubOutboundManager) Default() adapter.Outbound                  { return nil }
-func (m *stubOutboundManager) Remove(_ string) error                      { return nil }
+func (m *stubOutboundManager) Start(_ adapter.StartStage, _ *adapter.Scope) error { return nil }
+func (m *stubOutboundManager) Close() error                                       { return nil }
+func (m *stubOutboundManager) Outbounds() []adapter.Outbound                      { return nil }
+func (m *stubOutboundManager) Outbound(_ string) (adapter.Outbound, bool)         { return nil, false }
+func (m *stubOutboundManager) Default() adapter.Outbound                          { return nil }
+func (m *stubOutboundManager) Remove(_ string) error                              { return nil }
 func (m *stubOutboundManager) Create(_ context.Context, _ adapter.Router, _ log.StructuredLogger, _ string, _ string, _ any) error {
 	return nil
 }

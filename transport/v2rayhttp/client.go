@@ -25,7 +25,7 @@ import (
 	"golang.org/x/net/http2"
 )
 
-var _ adapter.V2RayClientTransport = (*Client)(nil)
+var _ adapter.V2RayMultiplexClientTransport = (*Client)(nil)
 
 type Client struct {
 	ctx        context.Context
@@ -37,6 +37,7 @@ type Client struct {
 	host       []string
 	method     string
 	headers    http.Header
+	closeIdle  atomic.Bool
 }
 
 func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, options option.V2RayHTTPOptions, tlsConfig tls.Config) (adapter.V2RayClientTransport, error) {
@@ -56,7 +57,7 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 			ReadIdleTimeout: time.Duration(options.IdleTimeout),
 			PingTimeout:     time.Duration(options.PingTimeout),
 			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.STDConfig) (net.Conn, error) {
-				return tlsDialer.DialTLSContext(ctx, M.ParseSocksaddr(addr))
+				return tlsDialer.DialTLSContext(adapter.ContextForMultiplexSession(ctx), M.ParseSocksaddr(addr))
 			},
 		}
 	}
@@ -113,7 +114,11 @@ func (c *Client) dialHTTP(ctx context.Context) (net.Conn, error) {
 	}
 	switch hostLen := len(c.host); hostLen {
 	case 0:
-		request.Host = c.serverAddr.AddrString()
+		if c.serverAddr.IsIPv6() {
+			request.Host = "[" + c.serverAddr.AddrString() + "]"
+		} else {
+			request.Host = c.serverAddr.AddrString()
+		}
 	case 1:
 		request.Host = c.host[0]
 	default:
@@ -143,6 +148,12 @@ func (c *Client) dialHTTP2(ctx context.Context) (net.Conn, error) {
 		request.Host = c.host[rand.Intn(hostLen)]
 	}
 	conn := NewLateHTTPConn(pipeInWriter, cancel)
+	keepSession := adapter.KeepSessionFromContext(ctx)
+	conn.onClose = func() {
+		if c.closeIdle.Load() && !keepSession {
+			CloseIdleConnections(c.transport.Load())
+		}
+	}
 	handshakeTimeout := C.TCPTimeout
 	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
 		handshakeTimeout = time.Until(deadline)
@@ -168,6 +179,21 @@ func (c *Client) dialHTTP2(ctx context.Context) (net.Conn, error) {
 		}
 	}()
 	return conn, nil
+}
+
+func (c *Client) MultiplexEnabled() bool {
+	return c.http2
+}
+
+func (c *Client) SetKeepIdleConnections(keep bool) {
+	c.closeIdle.Store(!keep)
+	if !keep {
+		c.CloseIdleConnections()
+	}
+}
+
+func (c *Client) CloseIdleConnections() {
+	CloseIdleConnections(c.transport.Load())
 }
 
 func (c *Client) Close() error {

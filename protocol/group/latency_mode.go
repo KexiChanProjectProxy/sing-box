@@ -5,6 +5,7 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/urltest"
+	N "github.com/sagernet/sing/common/network"
 )
 
 // Sources of a member's latency, as reported in selection events.
@@ -25,8 +26,8 @@ func realOutbound(manager adapter.OutboundManager, detour adapter.Outbound) adap
 		if !isGroup {
 			return detour
 		}
-		next, loaded := manager.Outbound(group.Now())
-		if !loaded {
+		next := group.Selected(N.NetworkTCP)
+		if next == nil {
 			return detour
 		}
 		detour = next

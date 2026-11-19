@@ -26,12 +26,12 @@ type cacheTestTransport struct {
 	queries atomic.Int32
 }
 
-func (t *cacheTestTransport) Start(stage adapter.StartStage) error { return nil }
-func (t *cacheTestTransport) Close() error                         { return nil }
-func (t *cacheTestTransport) Type() string                         { return "test" }
-func (t *cacheTestTransport) Tag() string                          { return "test" }
-func (t *cacheTestTransport) Dependencies() []string               { return nil }
-func (t *cacheTestTransport) Reset()                               {}
+func (t *cacheTestTransport) Start(stage adapter.StartStage, scope *adapter.Scope) error { return nil }
+func (t *cacheTestTransport) Close() error                                               { return nil }
+func (t *cacheTestTransport) Type() string                                               { return "test" }
+func (t *cacheTestTransport) Tag() string                                                { return "test" }
+func (t *cacheTestTransport) Dependencies() []string                                     { return nil }
+func (t *cacheTestTransport) Reset()                                                     {}
 
 func (t *cacheTestTransport) set(address netip.Addr, delay time.Duration, err error) {
 	t.access.Lock()

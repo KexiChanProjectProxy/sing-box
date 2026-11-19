@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"net"
 	"sort"
@@ -34,13 +35,13 @@ var (
 	_ adapter.OutboundGroup            = (*LoadBalance)(nil)
 	_ adapter.URLTestGroup             = (*LoadBalance)(nil)
 	_ adapter.OutboundWithPreferDomain = (*LoadBalance)(nil)
+	_ adapter.ConnectionSelectingGroup = (*LoadBalance)(nil)
 )
 
 type LoadBalance struct {
 	outbound.Adapter
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
-	connection                   adapter.ConnectionManager
 	logger                       log.StructuredLogger
 	tags                         []string
 	primaryTags                  []string
@@ -93,7 +94,6 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Struc
 		Adapter:                      outbound.NewAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, allTags),
 		ctx:                          ctx,
 		outbound:                     service.FromContext[adapter.OutboundManager](ctx),
-		connection:                   service.FromContext[adapter.ConnectionManager](ctx),
 		logger:                       logger,
 		tags:                         allTags,
 		primaryTags:                  options.PrimaryOutbounds,
@@ -164,7 +164,18 @@ func (l *LoadBalance) warnCoarseProbeInterval(logger log.StructuredLogger, tag s
 		log.Duration("window", window))
 }
 
-func (l *LoadBalance) Start() error {
+func (l *LoadBalance) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	switch stage {
+	case adapter.StartStateStart:
+		return l.start()
+	case adapter.StartStateStarted:
+		l.group.PostStart()
+		scope.Add(l.group.Close)
+	}
+	return nil
+}
+
+func (l *LoadBalance) start() error {
 	outbounds := make([]adapter.Outbound, 0, len(l.tags))
 	for i, tag := range l.primaryTags {
 		detour, loaded := l.outbound.Outbound(tag)
@@ -292,8 +303,8 @@ func (l *LoadBalance) resolveStatsMember(detour adapter.Outbound) adapter.Outbou
 		if !isGroup || l.outbound == nil {
 			return nil
 		}
-		next, loaded := l.outbound.Outbound(group.Now())
-		if !loaded || next == detour {
+		next := group.Selected(N.NetworkTCP)
+		if next == nil || next == detour {
 			return nil
 		}
 		detour = next
@@ -301,18 +312,9 @@ func (l *LoadBalance) resolveStatsMember(detour adapter.Outbound) adapter.Outbou
 	return nil
 }
 
-func (l *LoadBalance) PostStart() error {
-	l.group.PostStart()
-	return nil
-}
-
-func (l *LoadBalance) Close() error {
-	return common.Close(
-		common.PtrOrNil(l.group),
-	)
-}
-
-func (l *LoadBalance) Now() string {
+// now is the tag of the member a new connection would most likely use: the
+// best candidate, or the first configured member before any are scored.
+func (l *LoadBalance) now() string {
 	snapshot := l.snapshot.Load()
 	if snapshot != nil && len(snapshot.Candidates) > 0 {
 		return snapshot.Candidates[0].Tag
@@ -328,6 +330,29 @@ func (l *LoadBalance) Now() string {
 
 func (l *LoadBalance) All() []string {
 	return l.tags
+}
+
+// Selected reports the member a new connection would most likely use. The
+// group picks a member for each connection when it dials, so routing does
+// not resolve it to this member; see SelectsPerConnection.
+func (l *LoadBalance) Selected(network string) adapter.Outbound {
+	tag := l.now()
+	if detour, loaded := l.primaryOutbounds[tag]; loaded {
+		return detour
+	}
+	if detour, loaded := l.backupOutbounds[tag]; loaded {
+		return detour
+	}
+	return nil
+}
+
+func (l *LoadBalance) SelectsPerConnection() bool {
+	return true
+}
+
+func (l *LoadBalance) AttachConnection(closer io.Closer) func() {
+	l.group.Touch()
+	return l.interruptGroup.Add(closer, true)
 }
 
 func (l *LoadBalance) PreferDomain() bool {
@@ -487,39 +512,6 @@ func (l *LoadBalance) dialAttempts(ctx context.Context, attempts []Candidate, di
 		return Candidate{}, tried, ctxErr
 	}
 	return Candidate{}, tried, lastErr
-}
-
-func (l *LoadBalance) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
-	ctx = interrupt.ContextWithIsExternalConnection(ctx)
-	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
-		ctx = route.ApplyPreferDomain(ctx, &metadata, l)
-	}
-	var err error
-	ctx, err = applyGroupOverrideIP(ctx, &metadata, l, l.overrideIP, l.ctx)
-	if err != nil {
-		N.CloseOnHandshakeFailure(conn, onClose, err)
-		l.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
-		return
-	}
-	l.connection.NewConnection(ctx, l, conn, metadata, onClose)
-}
-
-func (l *LoadBalance) NewPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
-	ctx = interrupt.ContextWithIsExternalConnection(ctx)
-	if l.preferDomain || adapter.PreferDomainFromContext(ctx) {
-		ctx = route.ApplyPreferDomain(ctx, &metadata, l)
-	}
-	var err error
-	ctx, err = applyGroupOverrideIP(ctx, &metadata, l, l.overrideIP, l.ctx)
-	if err != nil {
-		_ = conn.Close()
-		if onClose != nil {
-			onClose(err)
-		}
-		l.logger.ErrorEventContext(ctx, "outbound.override_ip.error", "override_ip failed", log.Err(err))
-		return
-	}
-	l.connection.NewPacketConnection(ctx, l, conn, metadata, onClose)
 }
 
 func (l *LoadBalance) URLTest(ctx context.Context) (map[string]uint16, error) {
@@ -986,11 +978,14 @@ func (l *LoadBalance) memberProbe(detour adapter.Outbound) (uint16, probeAction)
 func (l *LoadBalance) realTag(detour adapter.Outbound) string {
 	if l.outbound == nil {
 		if group, isGroup := detour.(adapter.OutboundGroup); isGroup {
-			return group.Now()
+			if selected := group.Selected(N.NetworkTCP); selected != nil {
+				return selected.Tag()
+			}
+			return ""
 		}
 		return detour.Tag()
 	}
-	return RealTag(l.outbound, detour)
+	return RealTag(detour, N.NetworkTCP)
 }
 
 func nestedMinDelay(nested *LoadBalance, history *urltest.HistoryStorage) (uint16, bool) {

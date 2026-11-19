@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -33,13 +34,14 @@ var (
 
 type MultiInbound struct {
 	inbound.Adapter
-	ctx      context.Context
-	router   adapter.ConnectionRouterEx
-	logger   log.StructuredLogger
-	listener *listener.Listener
-	service  shadowsocks.MultiService[int]
-	users    []option.ShadowsocksUser
-	tracker  adapter.SSMTracker
+	ctx         context.Context
+	router      adapter.ConnectionRouterEx
+	logger      log.StructuredLogger
+	listener    *listener.Listener
+	service     shadowsocks.MultiService[int]
+	usersAccess sync.RWMutex
+	users       []option.ShadowsocksUser
+	tracker     adapter.SSMTracker
 }
 
 func newMultiInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.ShadowsocksInboundOptions) (*MultiInbound, error) {
@@ -105,15 +107,16 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Stru
 	return inbound, err
 }
 
-func (h *MultiInbound) Start(stage adapter.StartStage) error {
+func (h *MultiInbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
-	return h.listener.Start()
-}
-
-func (h *MultiInbound) Close() error {
-	return h.listener.Close()
+	err := h.listener.Start()
+	if err != nil {
+		return err
+	}
+	scope.Add(h.listener.Close)
+	return nil
 }
 
 func (h *MultiInbound) SetTracker(tracker adapter.SSMTracker) {
@@ -121,6 +124,8 @@ func (h *MultiInbound) SetTracker(tracker adapter.SSMTracker) {
 }
 
 func (h *MultiInbound) UpdateUsers(users []string, uPSKs []string) error {
+	h.usersAccess.Lock()
+	defer h.usersAccess.Unlock()
 	err := h.service.UpdateUsersWithPasswords(common.MapIndexed(users, func(index int, user string) int {
 		return index
 	}), uPSKs)
@@ -133,6 +138,15 @@ func (h *MultiInbound) UpdateUsers(users []string, uPSKs []string) error {
 		}
 	})
 	return nil
+}
+
+func (h *MultiInbound) userName(userIndex int) string {
+	h.usersAccess.RLock()
+	defer h.usersAccess.RUnlock()
+	if userIndex >= len(h.users) {
+		return ""
+	}
+	return h.users[userIndex].Name
 }
 
 //nolint:staticcheck
@@ -158,7 +172,7 @@ func (h *MultiInbound) newConnection(ctx context.Context, conn net.Conn, metadat
 	if !loaded {
 		return os.ErrInvalid
 	}
-	user := h.users[userIndex].Name
+	user := h.userName(userIndex)
 	if user != "" {
 		metadata.User = user
 	}
@@ -180,7 +194,7 @@ func (h *MultiInbound) newPacketConnection(ctx context.Context, conn N.PacketCon
 	if !loaded {
 		return os.ErrInvalid
 	}
-	user := h.users[userIndex].Name
+	user := h.userName(userIndex)
 	if user != "" {
 		metadata.User = user
 	}

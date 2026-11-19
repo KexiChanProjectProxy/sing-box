@@ -28,10 +28,10 @@ func RegisterInbound(registry *inbound.Registry) {
 }
 
 type replayFilter struct {
-	mu       sync.Mutex
-	entries  map[string]struct{}
-	order    []string
-	maxSize  int
+	mu      sync.Mutex
+	entries map[string]struct{}
+	order   []string
+	maxSize int
 }
 
 func newReplayFilter(maxSize int) *replayFilter {
@@ -179,10 +179,11 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	return inbound, nil
 }
 
-func (h *Inbound) Start(stage adapter.StartStage) error {
+func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		return nil
 	}
+	scope.Add(h.Close)
 	if err := h.tlsConfig.Start(); err != nil {
 		return E.Cause(err, "create TLS config")
 	}

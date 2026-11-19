@@ -41,10 +41,12 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 			return nil, err
 		}
 		return &ManagedTransport{
-			dialer:  rawDialer,
-			headers: headers,
-			host:    host,
-			tag:     tag,
+			dialer:          rawDialer,
+			headers:         headers,
+			host:            host,
+			tag:             tag,
+			detour:          options.Detour,
+			defaultOutbound: options.DefaultOutbound,
 			factory: func() (innerTransport, error) {
 				return newAppleTransport(ctx, logger, rawDialer, options)
 			},
@@ -70,11 +72,13 @@ func NewTransport(ctx context.Context, logger log.StructuredLogger, tag string, 
 		return nil, err
 	}
 	managedTransport := &ManagedTransport{
-		cheapRebuild: cheapRebuild,
-		dialer:       rawDialer,
-		headers:      headers,
-		host:         host,
-		tag:          tag,
+		cheapRebuild:    cheapRebuild,
+		dialer:          rawDialer,
+		headers:         headers,
+		host:            host,
+		tag:             tag,
+		detour:          options.Detour,
+		defaultOutbound: options.DefaultOutbound,
 		factory: func() (innerTransport, error) {
 			return newTransport(rawDialer, baseTLSConfig, options)
 		},

@@ -31,7 +31,7 @@ func TestXLAT464RouteUDP(t *testing.T) {
 	outbound := newXLAT464UDPTestOutbound(t, base, true)
 	application := newXLAT464RouteTestPacketConn()
 	t.Cleanup(func() { xlat464NoError(t, application.Close()) })
-	manager := route.NewConnectionManager(log.NewNOPFactory().Logger())
+	manager := route.NewConnectionManager(context.Background(), log.NewNOPFactory().Logger())
 
 	manager.NewPacketConnection(context.Background(), outbound, application, adapter.InboundContext{
 		Network:                  N.NetworkUDP,

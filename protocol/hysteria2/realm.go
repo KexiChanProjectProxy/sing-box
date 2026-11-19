@@ -123,7 +123,14 @@ func NewRealmService(ctx context.Context, logger log.StructuredLogger, tag strin
 	return s, nil
 }
 
-func (s *RealmService) Start(stage adapter.StartStage) error {
+func (s *RealmService) Start(stage adapter.StartStage, scope *adapter.Scope) error {
+	if stage == adapter.StartStateInitialize {
+		scope.Add(func() error {
+			s.cancel()
+			return nil
+		})
+		return nil
+	}
 	if stage != adapter.StartStateStart {
 		return nil
 	}
@@ -132,11 +139,17 @@ func (s *RealmService) Start(stage adapter.StartStage) error {
 		if err != nil {
 			return E.Cause(err, "create TLS config")
 		}
+		scope.Add(s.tlsConfig.Close)
 	}
 	tcpListener, err := s.listener.ListenTCP()
 	if err != nil {
 		return err
 	}
+	scope.Add(s.listener.Close)
+	scope.Add(func() error {
+		s.server.closeAll()
+		return nil
+	})
 	if s.tlsConfig != nil {
 		if !common.Contains(s.tlsConfig.NextProtos(), http2.NextProtoTLS) {
 			s.tlsConfig.SetNextProtos(append([]string{"h2"}, s.tlsConfig.NextProtos()...))
@@ -150,15 +163,6 @@ func (s *RealmService) Start(stage adapter.StartStage) error {
 
 		}
 	}()
+	scope.Add(s.httpServer.Close)
 	return nil
-}
-
-func (s *RealmService) Close() error {
-	s.cancel()
-	err := common.Close(common.PtrOrNil(s.httpServer))
-	s.server.closeAll()
-	return E.Errors(err, common.Close(
-		common.PtrOrNil(s.listener),
-		s.tlsConfig,
-	))
 }

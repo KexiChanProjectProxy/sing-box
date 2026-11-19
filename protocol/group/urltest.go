@@ -161,6 +161,12 @@ func (s *URLTest) References() []string {
 	if group == nil {
 		return nil
 	}
+	// In session latency mode every connection may pick any member.
+	if s.sessionLatency {
+		return s.tags
+	}
+	group.updateAccess.Lock()
+	defer group.updateAccess.Unlock()
 	var references []string
 	if group.selectedOutboundTCP != nil {
 		references = append(references, group.selectedOutboundTCP.Tag())

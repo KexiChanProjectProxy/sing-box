@@ -44,6 +44,11 @@ func NewDNSTransport(ctx context.Context, logger log.StructuredLogger, tag strin
 	}, nil
 }
 
+// References names the AnyTLS outbound whose sessions carry the queries.
+func (t *DNSTransport) References() []string {
+	return []string{t.outboundTag}
+}
+
 func (t *DNSTransport) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateInitialize {
 		return nil

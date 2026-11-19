@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"reflect"
 	"slices"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -37,9 +38,17 @@ func NewReferenceManager(ctx context.Context, logger log.ContextLogger, options 
 	}
 	for _, outboundOptions := range options.Outbounds {
 		staticTransports = appendDomainResolver(staticTransports, outboundOptions.Options)
+		staticTransports = appendOverrideIPServer(staticTransports, outboundOptions.Options)
 	}
 	for _, endpointOptions := range options.Endpoints {
 		staticTransports = appendDomainResolver(staticTransports, endpointOptions.Options)
+		staticTransports = appendOverrideIPServer(staticTransports, endpointOptions.Options)
+	}
+	for _, inboundOptions := range options.Inbounds {
+		anytlsOptions, isAnyTLS := inboundOptions.Options.(*option.AnyTLSInboundOptions)
+		if isAnyTLS && anytlsOptions.DNS != nil && anytlsOptions.DNS.Enabled {
+			staticTransports = append(staticTransports, anytlsOptions.DNS.Server)
+		}
 	}
 	var (
 		rules    []option.Rule
@@ -71,6 +80,32 @@ func appendDomainResolver(transports []string, rawOptions any) []string {
 		return transports
 	}
 	return append(transports, dialerOptions.DomainResolver.Server)
+}
+
+var overrideIPOptionsType = reflect.TypeFor[*option.OverrideIPOptions]()
+
+// appendOverrideIPServer adds the DNS server an outbound's override_ip
+// queries. Dialer and group options all name the field OverrideIP, directly
+// or through an embedded DialerOptions.
+func appendOverrideIPServer(transports []string, rawOptions any) []string {
+	value := reflect.ValueOf(rawOptions)
+	for value.Kind() == reflect.Pointer || value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return transports
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return transports
+	}
+	field := value.FieldByName("OverrideIP")
+	if !field.IsValid() || field.Type() != overrideIPOptionsType || field.IsNil() {
+		return transports
+	}
+	if server := field.Interface().(*option.OverrideIPOptions).Server; server != "" {
+		transports = append(transports, server)
+	}
+	return transports
 }
 
 func (m *ReferenceManager) Name() string {

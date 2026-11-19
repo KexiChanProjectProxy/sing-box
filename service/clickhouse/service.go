@@ -113,6 +113,14 @@ func NewService(ctx context.Context, logger log.StructuredLogger, tag string, op
 	return s, nil
 }
 
+// References names the outbound that carries the connection to ClickHouse.
+func (s *Service) References() []string {
+	if s.options.Detour == "" {
+		return nil
+	}
+	return []string{s.options.Detour}
+}
+
 func (s *Service) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage != adapter.StartStateStart {
 		return nil

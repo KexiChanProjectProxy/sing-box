@@ -239,9 +239,21 @@ func rejectCloseReason(rule adapter.Rule) string {
 	return closeReject
 }
 
-func resolveChain(outboundManager adapter.OutboundManager, outbound adapter.Outbound) (tag string, outboundType string, chain []string) {
+// resolveChain names the outbound a session went through and the chain to it,
+// leaf first. Routed sessions use the chain the router resolved, so the log
+// agrees with the connection that was dialed; others walk the groups.
+func resolveChain(outboundManager adapter.OutboundManager, metadata adapter.InboundContext, outbound adapter.Outbound) (tag string, outboundType string, chain []string) {
+	if len(metadata.OutboundChain) > 0 {
+		leaf := metadata.OutboundChain[len(metadata.OutboundChain)-1]
+		chain = common.Map(metadata.OutboundChain, adapter.Outbound.Tag)
+		return leaf.Tag(), leaf.Type(), common.Reverse(chain)
+	}
 	if outbound == nil {
 		return
+	}
+	network := metadata.Network
+	if network == "" {
+		network = N.NetworkTCP
 	}
 	next := outbound.Tag()
 	for range 8 {
@@ -256,7 +268,10 @@ func resolveChain(outboundManager adapter.OutboundManager, outbound adapter.Outb
 		if !isGroup {
 			break
 		}
-		selected := group.Selected(N.NetworkTCP)
+		if selecting, isSelecting := group.(adapter.ConnectionSelectingGroup); isSelecting && selecting.SelectsPerConnection() {
+			break
+		}
+		selected := group.Selected(network)
 		if selected == nil {
 			break
 		}

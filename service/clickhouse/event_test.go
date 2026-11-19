@@ -1,6 +1,7 @@
 package clickhouse
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"testing"
@@ -185,4 +186,36 @@ func TestParseServerAndInsertQuery(t *testing.T) {
 
 	_, err = buildInsertQuery("logs", "sessions;drop")
 	require.Error(t, err)
+}
+
+type chainTestOutbound struct {
+	tag          string
+	outboundType string
+}
+
+func (o *chainTestOutbound) Type() string           { return o.outboundType }
+func (o *chainTestOutbound) Tag() string            { return o.tag }
+func (o *chainTestOutbound) Network() []string      { return []string{N.NetworkTCP, N.NetworkUDP} }
+func (o *chainTestOutbound) Dependencies() []string { return nil }
+func (o *chainTestOutbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	return nil, nil
+}
+
+func (o *chainTestOutbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	return nil, nil
+}
+
+// A routed session is logged with the chain the router resolved, which for
+// UDP may differ from the group's TCP selection.
+func TestResolveChainUsesRoutedChain(t *testing.T) {
+	t.Parallel()
+	group := &chainTestOutbound{tag: "auto", outboundType: C.TypeURLTest}
+	member := &chainTestOutbound{tag: "udp-member", outboundType: C.TypeShadowsocks}
+	tag, outboundType, chain := resolveChain(nil, adapter.InboundContext{
+		Network:       N.NetworkUDP,
+		OutboundChain: []adapter.Outbound{group, member},
+	}, group)
+	require.Equal(t, "udp-member", tag)
+	require.Equal(t, C.TypeShadowsocks, outboundType)
+	require.Equal(t, []string{"udp-member", "auto"}, chain)
 }

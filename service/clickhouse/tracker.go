@@ -75,7 +75,7 @@ func (s *Service) RejectedConnection(ctx context.Context, metadata adapter.Inbou
 }
 
 func (s *Service) newSnapshot(metadata adapter.InboundContext, matchedRule adapter.Rule, outbound adapter.Outbound, action string, closeReason string) sessionSnapshot {
-	tag, outboundType, chain := resolveChain(s.outbound, outbound)
+	tag, outboundType, chain := resolveChain(s.outbound, metadata, outbound)
 	return sessionSnapshot{
 		metadata:     metadata,
 		rule:         matchedRule,

@@ -36,7 +36,8 @@
   "interrupt_exist_connections": false,
   "prefer_domain": false,
   "override_ip": "",
-  "latency_mode": "url_test"
+  "latency_mode": "url_test",
+  "latency_offset": {}
 }
 ```
 
@@ -122,7 +123,10 @@ Scores are millisecond equivalent (see [sorter](#sorter)), so this value keeps i
 
 ==Optional==
 
-Ranking weights, as a map of metric keyword to weight. Ranking (`top_n`, sort order, `now`, `tolerance`) uses the resulting score, lowest first. Health checking and the timeout still use the raw measured delay, and so does connection fail-over.
+Ranking weights, as a map of metric keyword to weight.
+Ranking (`top_n`, sort order, `now`, `tolerance`) uses the resulting score, lowest first.
+Health checking and the timeout still use the raw measured delay.
+Connection fail-over uses the raw delay plus [`latency_offset`](#latency_offset).
 
 `{"latency": 1}` will be used if omitted, which ranks on the last measured delay alone. An empty object is a configuration error.
 
@@ -206,7 +210,7 @@ An unknown keyword or a negative weight is a configuration error, as is a set of
 
     Members that are not in the current candidate set carry no user traffic, so their transport metrics are often missing. A member that is itself a group is measured through the outbound it currently selects; for a nested `loadbalance` that is its best-ranked member, which stands in for its whole pool.
 
-    Members with equal scores are ordered by raw delay, then by tag. This matters whenever a sorter cannot tell members apart — for example when no member reports its keywords, or when several members report none of them and all take the same pool average — so latency still decides rather than tag names. The `loadbalance.sorter.unsupported` warning is logged once at startup, and only when no member implements the reporting interface at all.
+    Members with equal scores are ordered by raw delay plus [`latency_offset`](#latency_offset), then by tag. This matters whenever a sorter cannot tell members apart — for example when no member reports its keywords, or when several members report none of them and all take the same pool average — so latency still decides rather than tag names. The `loadbalance.sorter.unsupported` warning is logged once at startup, and only when no member implements the reporting interface at all.
 
 !!! note "Reading the scores"
 
@@ -313,6 +317,41 @@ The ranking decides which primaries enter the pool only when [`top_n.primary`](#
 
 A session latency covers only the hop to the proxy server, while a health check covers the whole path to `url`, so a group that mixes both compares different measures. Set [`heartbeat`](/configuration/outbound/anytls/#heartbeat) on `anytls` members to keep their latency current.
 
+#### latency_offset
+
+==Optional==
+
+A manual latency adjustment per member, as a map of member tag to milliseconds.
+A positive value makes the member less preferred, as if its latency were that much higher; a negative value makes it more preferred.
+
+```json
+{
+  "primary_outbounds": ["hk-1", "jp-1", "sub-lb"],
+  "latency_offset": {
+    "hk-1": 30,
+    "jp-1": -20,
+    "sub-lb": 15
+  }
+}
+```
+
+The offset is added to the member's [sorter](#sorter) score, so it shifts `top_n`, the sort order, `now` and the [`tolerance`](#tolerance) comparison by the same number of milliseconds whatever the sorter ranks on.
+It also orders [connection fail-over](#connection-fail-over).
+It applies in both [`latency_mode`](#latency_mode)s.
+
+It changes only how members are ranked.
+Health checking and `timeout` read the measured delay, so a negative offset never keeps an unhealthy member in the pool; stored results, the delays shown in the Clash API, and the delay a parent group sees for this group are all unshifted.
+A shifted value below zero is fine and does not wrap.
+
+With [`top_n.primary`](#top_nprimary) at `0` every healthy primary is in the pool and `strategy` picks among them without looking at latency, so the offset then only affects fail-over order.
+Use `top_n.primary` to make it decide which members carry traffic.
+
+Keys must be tags from `primary_outbounds` or `backup_outbounds`; any other key is a configuration error.
+Members without a key have no offset.
+To adjust a nested group as a whole, give it an offset in the parent group under its own tag; offsets configured inside the nested group only shift the ranking inside it.
+
+When an offset is configured, the `loadbalance.score` debug event is logged even with the default sorter, and lists the offset as `latency_offset`.
+
 #### interrupt_exist_connections
 
 ==Optional==
@@ -359,7 +398,11 @@ Attempt order is fixed when the connection starts:
 2. Every other configured `primary_outbounds` member.
 3. Every other configured `backup_outbounds` member, only after all primaries have failed.
 
-Within steps 2 and 3, members are ordered by their last measured raw latency, lowest first, with ties broken by tag. With [`latency_mode`](#latency_mode) `session`, a member that measures its connections is ordered on its live session latency instead. Members without a measurement come last, ordered by tag. `sorter`, `top_n`, `tolerance`, and health filtering do not apply here: a dial that is already failing falls back on the simplest signal available, and unhealthy members are still tried as long as they are configured. A backup is never tried before an untried primary, even when it is faster.
+Within steps 2 and 3, members are ordered by their last measured raw latency plus their [`latency_offset`](#latency_offset), lowest first, with ties broken by tag.
+With [`latency_mode`](#latency_mode) `session`, a member that measures its connections is ordered on its live session latency instead.
+Members without a measurement come last, ordered by their offset, then by tag.
+`sorter`, `top_n`, `tolerance`, and health filtering do not apply here: a dial that is already failing falls back on the simplest signal available, and unhealthy members are still tried as long as they are configured.
+A backup is never tried before an untried primary, even when it is faster.
 
 Each member is tried at most once per connection. Members that do not support the connection's network are skipped. A nested `loadbalance`, `urltest`, or `selector` counts as one member and handles its own members. When every member fails, the error of the last attempt is returned.
 

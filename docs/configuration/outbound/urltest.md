@@ -17,7 +17,8 @@
   "interrupt_exist_connections": false,
   "prefer_domain": false,
   "override_ip": "",
-  "latency_mode": ""
+  "latency_mode": "",
+  "latency_offset": {}
 }
 ```
 
@@ -67,6 +68,31 @@ In `session` mode a member with no measured idle session, or one that does not m
 A session latency covers only the hop to the proxy server, while a URL test covers the whole path to `url`, so a group that mixes both compares different measures. Set [`heartbeat`](/configuration/outbound/anytls/#heartbeat) on `anytls` members to keep their latency current.
 
 At `debug` level each connection logs a `urltest.select` event with the chosen `tag`, its `latency_ms`, and its `source`, `session` or `url_test`.
+
+#### latency_offset
+
+==Optional==
+
+A manual latency adjustment per member, as a map of member tag to milliseconds.
+A positive value makes the member less preferred, as if its latency were that much higher; a negative value makes it more preferred.
+
+```json
+{
+  "outbounds": ["hk-1", "jp-1"],
+  "latency_offset": {
+    "hk-1": 30,
+    "jp-1": -20
+  }
+}
+```
+
+Members are compared on their latency plus their offset, in both `latency_mode`s, and `tolerance` applies to the shifted values.
+Only the choice of member changes: stored URL test results and the delays shown in the Clash API are unshifted.
+A shifted value below zero is fine and does not wrap.
+
+Keys must be tags from `outbounds`; any other key is a configuration error.
+Members without a key have no offset.
+When the chosen member has an offset, the `urltest.select` debug event also carries it as `latency_offset_ms`.
 
 #### prefer_domain
 

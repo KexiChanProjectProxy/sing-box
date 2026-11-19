@@ -36,7 +36,8 @@
   "interrupt_exist_connections": false,
   "prefer_domain": false,
   "override_ip": "",
-  "latency_mode": "url_test"
+  "latency_mode": "url_test",
+  "latency_offset": {}
 }
 ```
 
@@ -122,7 +123,10 @@ Top N 候选选择选项。仅使用 `primary`。
 
 ==可选==
 
-排序权重，格式为「指标关键词 → 权重」的映射。排序（`top_n`、排序顺序、`now`、`tolerance`）使用由此得到的评分，评分越低越优先。健康检查、超时判断以及连接级故障转移仍使用原始实测延迟。
+排序权重，格式为「指标关键词 → 权重」的映射。
+排序（`top_n`、排序顺序、`now`、`tolerance`）使用由此得到的评分，评分越低越优先。
+健康检查和超时判断仍使用原始实测延迟。
+连接级故障转移使用原始延迟加上 [`latency_offset`](#latency_offset)。
 
 省略时默认使用 `{"latency": 1}`，即仅按最近一次实测延迟排序。配置为空对象会报错。
 
@@ -206,7 +210,7 @@ score = Σ 权重 × 指标
 
     不在当前候选集合中的成员没有用户流量，其传输层指标经常是缺失的。成员本身是分组时，按其当前选中的出站来测量；对于嵌套的 `loadbalance`，即其排序最优的成员，以它代表整个候选池。
 
-    评分相同的成员先按原始延迟、再按 tag 排序。当 sorter 无法区分成员时这一点很重要——例如没有成员上报相应关键词，或多个成员都未上报而取得相同的池内平均值——此时仍由延迟而不是 tag 名称决定顺序。`loadbalance.sorter.unsupported` 警告只在启动时记录一次，且仅当没有任何成员实现上报接口时才会出现。
+    评分相同的成员先按原始延迟加 [`latency_offset`](#latency_offset)、再按 tag 排序。当 sorter 无法区分成员时这一点很重要——例如没有成员上报相应关键词，或多个成员都未上报而取得相同的池内平均值——此时仍由延迟而不是 tag 名称决定顺序。`loadbalance.sorter.unsupported` 警告只在启动时记录一次，且仅当没有任何成员实现上报接口时才会出现。
 
 !!! note "查看评分"
 
@@ -313,6 +317,41 @@ score = Σ 权重 × 指标
 
 会话延迟只覆盖到代理服务器这一段，健康检查覆盖到 `url` 的完整路径，因此混合两种成员的组比较的是不同的量。建议为 `anytls` 成员设置 [`heartbeat`](/zh/configuration/outbound/anytls/#heartbeat)，使其延迟保持最新。
 
+#### latency_offset
+
+==可选==
+
+为每个成员人工调整延迟，格式为「成员 tag → 毫秒数」的映射。
+正数让该成员更不优先，相当于它的延迟高了这么多；负数让它更优先。
+
+```json
+{
+  "primary_outbounds": ["hk-1", "jp-1", "sub-lb"],
+  "latency_offset": {
+    "hk-1": 30,
+    "jp-1": -20,
+    "sub-lb": 15
+  }
+}
+```
+
+偏移量加在成员的 [sorter](#sorter) 评分上，因此无论 sorter 按什么排序，`top_n`、排序顺序、`now` 以及 [`tolerance`](#tolerance) 的比较都会平移相同的毫秒数。
+它同样决定[连接级故障转移](#连接级故障转移)的顺序。
+两种 [`latency_mode`](#latency_mode) 下都生效。
+
+它只改变成员的排序。
+健康检查和 `timeout` 读取实测延迟，因此负的偏移量不会让不健康的成员留在候选池中；已存储的结果、Clash API 显示的延迟，以及父分组看到的本分组延迟都不受偏移影响。
+平移后的值小于零没有问题，不会回绕。
+
+[`top_n.primary`](#top_nprimary) 为 `0` 时，所有健康主出站都在候选池中，`strategy` 在其中选择时不看延迟，此时偏移量只影响故障转移顺序。
+需要它决定由哪些成员承载流量时，请配置 `top_n.primary`。
+
+键必须是 `primary_outbounds` 或 `backup_outbounds` 中的 tag，其他键视为配置错误。
+没有配置键的成员偏移量为 0。
+要整体调整一个嵌套分组，在父分组中以该分组的 tag 为它配置偏移量；嵌套分组内部配置的偏移量只影响它自己内部的排序。
+
+配置了偏移量时，即使使用默认 sorter 也会记录 `loadbalance.score` 调试事件，并以 `latency_offset` 列出偏移量。
+
 #### interrupt_exist_connections
 
 ==可选==
@@ -359,7 +398,10 @@ score = Σ 权重 × 指标
 2. 其余全部已配置的 `primary_outbounds` 成员。
 3. 其余全部已配置的 `backup_outbounds` 成员，仅在所有主出站都失败之后。
 
-第 2、3 步内部按最近一次测得的原始延迟升序排列，延迟相同按 tag 排序；没有测量值的成员排在最后，按 tag 排序。[`latency_mode`](#latency_mode) 为 `session` 时，能测量自身连接的成员改按其实时会话延迟排序。这里不使用 `sorter`、`top_n`、`tolerance` 和健康过滤：拨号本身已经在失败，因此回退到最简单的信号；只要仍在配置中，不健康的成员也会被尝试。即使备用出站更快，只要还有未尝试的主出站，就不会先试备用出站。
+第 2、3 步内部按最近一次测得的原始延迟加 [`latency_offset`](#latency_offset) 升序排列，相同时按 tag 排序；没有测量值的成员排在最后，按偏移量、再按 tag 排序。
+[`latency_mode`](#latency_mode) 为 `session` 时，能测量自身连接的成员改按其实时会话延迟排序。
+这里不使用 `sorter`、`top_n`、`tolerance` 和健康过滤：拨号本身已经在失败，因此回退到最简单的信号；只要仍在配置中，不健康的成员也会被尝试。
+即使备用出站更快，只要还有未尝试的主出站，就不会先试备用出站。
 
 每个成员在一条连接上最多尝试一次。不支持当前网络的成员会被跳过。嵌套的 `loadbalance`、`urltest` 或 `selector` 算作一个成员，由其自身处理内部成员。全部失败时返回最后一次尝试的错误。
 

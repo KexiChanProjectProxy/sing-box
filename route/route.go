@@ -244,16 +244,20 @@ func registerInterrupt(chain []adapter.Outbound, closer io.Closer, onClose N.Clo
 
 func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
 	done := make(chan any)
-	err := r.routePacketConnection(ctx, conn, metadata, N.OnceClose(func(it error) {
+	onClose := N.OnceClose(func(it error) {
 		close(done)
-	}))
+	})
+	err := r.routePacketConnection(ctx, conn, metadata, onClose)
 	if err != nil {
-		conn.Close()
+		// routePacketConnection leaves the connection to its caller when it
+		// fails, so nothing else will call onClose and done stays open.
+		N.CloseOnHandshakeFailure(conn, onClose, err)
 		if E.IsClosedOrCanceled(err) || R.IsRejected(err) {
 			r.logger.DebugEventContext(ctx, "route.connection.closed", "connection closed", log.Err(err))
 		} else {
 			r.logger.ErrorEventContext(ctx, "route.error", "route error", log.Err(err))
 		}
+		return nil
 	}
 	select {
 	case <-done:

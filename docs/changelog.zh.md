@@ -8,6 +8,7 @@ icon: material/alert-decagram
 * 合并上游 sing-quic 修复：Hysteria2 与 TUIC 的空闲连接保持、协议输入校验、TUIC UDP 分片重组，以及 Hysteria2 端口跳跃接收循环对 EMSGSIZE 的处理
 * 路由现在像上游一样把 `selector` 和 `urltest` 组解析为连接实际使用的成员；[`prefer_domain`](/zh/configuration/outbound/selector/#prefer_domain) 与 [`override_ip`](/zh/configuration/outbound/selector/#override_ip) 仍在途经的每个组上生效。[`loadbalance`](/zh/configuration/outbound/loadbalance/) 以及 `latency_mode: "session"` 的 `urltest` 仍在拨号时为每个连接选择成员
 * **不兼容变更：**`selector` 与 `urltest` 跟随上游拒绝重复的成员标签
+* 修复 shadowsocks 入站、多路复用与 UDP over TCP 上每个路由失败的 UDP 流（例如被 `reject` 规则匹配）都会占用一个 goroutine 直到退出的问题。该问题来自上游
 
 #### 1.14.2.11
 

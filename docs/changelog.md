@@ -8,6 +8,7 @@ icon: material/alert-decagram
 * Merge upstream sing-quic fixes: idle connection keeping for Hysteria2 and TUIC, protocol input validation, TUIC UDP defragmentation, and EMSGSIZE in the Hysteria2 port hopping receive loop
 * Routing now resolves `selector` and `urltest` groups to the member a connection uses, as upstream does; [`prefer_domain`](/configuration/outbound/selector/#prefer_domain) and [`override_ip`](/configuration/outbound/selector/#override_ip) still apply at every group on the way. [`loadbalance`](/configuration/outbound/loadbalance/) and `urltest` with `latency_mode: "session"` keep choosing a member for each connection when it dials
 * **Breaking:** `selector` and `urltest` reject duplicate member tags, following upstream
+* Fix a goroutine held until shutdown for every UDP flow that failed to route on the shadowsocks inbounds, multiplex and UDP over TCP, such as one matched by a `reject` rule. The bug comes from upstream
 
 #### 1.14.2.11
 

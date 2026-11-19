@@ -28,7 +28,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.26.6
+          go-version: 1.26.10
+
+      # Same backport as build.yml: Go before 1.27 never detects ARM64 CPU
+      # features on windows/arm64.
+      - name: Patch Go for Windows ARM64
+        if: matrix.os == 'windows' && matrix.arch == 'arm64'
+        shell: bash
+        run: .github/patch_go_for_windows_arm64.sh
 
       - name: Set version
         run: |

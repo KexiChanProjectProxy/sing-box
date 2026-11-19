@@ -402,6 +402,7 @@ func (c *Client) beginExchange(ctx context.Context, transport adapter.DNSTranspo
 			hit, cached := c.loadResponse(cacheKey, optimisticWindow)
 			if cached {
 				response := hit.response
+				servedStale := hit.stale
 				if hit.stale {
 					if optimisticClientTimeout > 0 && !allowWait {
 						operation.release()
@@ -410,20 +411,26 @@ func (c *Client) beginExchange(ctx context.Context, transport adapter.DNSTranspo
 					task := c.backgroundRefreshDNS(transport, cacheKey, message.Copy(), options, responseChecker)
 					operation.release()
 					if optimisticClientTimeout > 0 {
-						response = c.waitRefresh(ctx, task, response, optimisticClientTimeout)
-					} else {
-						logOptimisticResponse(c.logger, ctx, response)
+						var refreshed bool
+						response, refreshed = c.waitRefresh(ctx, task, response, optimisticClientTimeout)
+						servedStale = !refreshed
 					}
 				} else {
+					operation.release()
+				}
+				// Check the address filter first, so a rejected entry is
+				// neither logged as served nor prefetched.
+				if responseChecker != nil && !responseChecker(response) {
+					logRejectedResponse(c.logger, ctx, response)
+					return nil, nil, exchangeDone, ErrResponseRejectedCached
+				}
+				if servedStale {
+					logOptimisticResponse(c.logger, ctx, response)
+				} else if !hit.stale {
 					if hit.prefetch && c.effectivePrefetch(options) {
 						c.backgroundRefreshDNS(transport, cacheKey, message.Copy(), options, responseChecker)
 					}
 					logCachedResponse(c.logger, ctx, response, hit.ttl)
-					operation.release()
-				}
-				if responseChecker != nil && !responseChecker(response) {
-					logRejectedResponse(c.logger, ctx, response)
-					return nil, nil, exchangeDone, ErrResponseRejectedCached
 				}
 				response.Id = message.Id
 				return nil, response, exchangeDone, nil
@@ -682,19 +689,25 @@ func (c *Client) questionCache(ctx context.Context, transport adapter.DNSTranspo
 		return nil, ErrNotCached
 	}
 	response := hit.response
+	servedStale := hit.stale
 	if hit.stale {
 		task := c.backgroundRefreshDNS(transport, cacheKey, c.prepareExchangeMessage(message.Copy(), options), options, responseChecker)
 		if optimisticClientTimeout > 0 {
-			response = c.waitRefresh(ctx, task, response, optimisticClientTimeout)
-		} else {
-			logOptimisticResponse(c.logger, ctx, response)
+			var refreshed bool
+			response, refreshed = c.waitRefresh(ctx, task, response, optimisticClientTimeout)
+			servedStale = !refreshed
 		}
-	} else if hit.prefetch && c.effectivePrefetch(options) {
-		c.backgroundRefreshDNS(transport, cacheKey, c.prepareExchangeMessage(message.Copy(), options), options, responseChecker)
 	}
+	// Check the address filter first, so a rejected entry is neither logged
+	// as served nor prefetched.
 	if responseChecker != nil && !responseChecker(response) {
 		logRejectedResponse(c.logger, ctx, response)
 		return nil, ErrResponseRejectedCached
+	}
+	if servedStale {
+		logOptimisticResponse(c.logger, ctx, response)
+	} else if !hit.stale && hit.prefetch && c.effectivePrefetch(options) {
+		c.backgroundRefreshDNS(transport, cacheKey, c.prepareExchangeMessage(message.Copy(), options), options, responseChecker)
 	}
 	if response.Rcode != dns.RcodeSuccess {
 		return nil, RcodeError(response.Rcode)
@@ -795,20 +808,20 @@ func messageTTL(response *dns.Msg) (uint32, bool) {
 }
 
 // waitRefresh waits up to clientTimeout for a refresh of an expired entry and
-// returns the refreshed response, or the stale one if the refresh is late or fails.
-func (c *Client) waitRefresh(ctx context.Context, task *refreshTask, stale *dns.Msg, clientTimeout time.Duration) *dns.Msg {
+// returns the refreshed response, or the stale one if the refresh is late or
+// fails. refreshed reports which; the caller logs a stale answer.
+func (c *Client) waitRefresh(ctx context.Context, task *refreshTask, stale *dns.Msg, clientTimeout time.Duration) (response *dns.Msg, refreshed bool) {
 	timer := time.NewTimer(clientTimeout)
 	defer timer.Stop()
 	select {
 	case <-task.done:
 		if task.err == nil {
-			return task.response.Copy()
+			return task.response.Copy(), true
 		}
 	case <-timer.C:
 	case <-ctx.Done():
 	}
-	logOptimisticResponse(c.logger, ctx, stale)
-	return stale
+	return stale, false
 }
 
 func (c *Client) applyResponseOptions(question dns.Question, response *dns.Msg, options adapter.DNSQueryOptions) uint32 {

@@ -328,3 +328,18 @@ func TestClientPrefetch(t *testing.T) {
 func boolPointer(value bool) *bool {
 	return &value
 }
+
+// A cached entry the address filter rejects is not served, so it must not
+// start a prefetch either.
+func TestClientRejectedCacheHitSkipsPrefetch(t *testing.T) {
+	t.Parallel()
+	client := newCacheTestClient(ClientOptions{Prefetch: true})
+	transport := &cacheTestTransport{ttl: 100, address: cacheTestAddressNew}
+	seedCache(client, transport, cacheTestAddressOld, 100, 5*time.Second)
+	_, err := client.Exchange(context.Background(), transport, cacheTestQuery(), adapter.DNSQueryOptions{}, func(response *mDNS.Msg) bool {
+		return false
+	})
+	require.ErrorIs(t, err, ErrResponseRejectedCached)
+	time.Sleep(50 * time.Millisecond)
+	require.Zero(t, transport.queries.Load())
+}

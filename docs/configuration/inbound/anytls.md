@@ -115,12 +115,15 @@ Before the TLS handshake, the inbound looks at up to the first 6 bytes of each c
 A connection is handed over as soon as one byte rules that out, so a Shadowsocks client is usually recognised by its first byte.
 Random bytes such as a Shadowsocks salt look like a ClientHello about once in 3 × 10⁹ connections.
 
-A connection that has not sent enough bytes to decide within 2 seconds is also handed over, so that a slow prober sees what the Shadowsocks inbound shows.
+A connection that has not sent enough bytes to decide within 2 seconds is also handed over, so that a slow prober sees what the Shadowsocks inbound shows, 2 seconds late: bytes that still look like the start of a ClientHello, such as a lone `16`, are answered after 2 seconds, where a Shadowsocks inbound alone would answer at once and a TLS server alone would keep waiting.
 
 A prober can still tell the port apart from a TLS server alone: bytes a TLS server would answer with an alert, such as a handshake record that is not a ClientHello, a record version above 3.4 or a record longer than the server accepts, reach the Shadowsocks inbound instead.
 
 The connection is passed straight to the Shadowsocks inbound, not through the router, and is logged, routed and counted as that inbound's, as if it had accepted it.
-Only the `inbound accepted` log line, written before the first bytes arrive, names this inbound.
+Log lines written before the hand-off name this inbound: `inbound accepted`, a connection closed before its first bytes decided, and the debug line recording the hand-off.
+The connection also stays registered with this inbound's listener, so closing this inbound closes it.
+
+`non_tls_handler` cannot be used with [Reality](/configuration/shared/tls/#reality-fields), which answers what is not its ClientHello as the server it borrows from.
 On Linux the inbound peeks at the socket with `MSG_PEEK` and hands over the socket itself, so the Shadowsocks inbound reads it with no extra layer.
 
 The Shadowsocks inbound still serves UDP. Give it the same port with `"network": "udp"`, since this inbound already listens on TCP there:

@@ -362,6 +362,10 @@ func TestAnyTLSNonTLSHandlerOptions(t *testing.T) {
 	}{
 		{"tls disabled", []option.Inbound{anyTLS(nil, "mixed-in"), mixed}, "TLS is not enabled"},
 		{"itself", []option.Inbound{anyTLS(tlsOptions, "anytls-in")}, "must not be the inbound itself"},
+		{"reality", []option.Inbound{anyTLS(&option.InboundTLSOptions{
+			Enabled: true,
+			Reality: &option.InboundRealityOptions{Enabled: true},
+		}, "mixed-in"), mixed}, "not supported with reality"},
 		{"missing", []option.Inbound{anyTLS(tlsOptions, "ss-in")}, "inbound not found: ss-in"},
 		{"not shadowsocks", []option.Inbound{anyTLS(tlsOptions, "mixed-in"), mixed}, "is mixed, not shadowsocks"},
 		{"method none", []option.Inbound{anyTLS(tlsOptions, "ss-in"), {

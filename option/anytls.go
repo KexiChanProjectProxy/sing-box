@@ -12,7 +12,7 @@ type AnyTLSInboundOptions struct {
 	Probe         *AnyTLSInboundProbeOptions `json:"probe,omitempty"`
 	// NonTLSHandler is the tag of a shadowsocks inbound that takes the
 	// connections whose first bytes are not a TLS ClientHello.
-	NonTLSHandler string `json:"non_tls_handler,omitempty"`
+	NonTLSHandler string `json:"non_tls_handler,omitempty" reference:"inbound"`
 }
 
 // AnyTLSInboundProbeOptions bounds the throughput probes clients may ask for.

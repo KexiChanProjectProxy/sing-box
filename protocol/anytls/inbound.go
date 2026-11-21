@@ -71,6 +71,11 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	}
 	inbound.trackingRouter, _ = router.(adapter.ConnectionTrackingRouter)
 
+	if options.NonTLSHandler != "" && options.TLS != nil && options.TLS.Reality != nil && options.TLS.Reality.Enabled {
+		// Reality answers what is not its ClientHello as the server it
+		// borrows from; handing such bytes over would give that away.
+		return nil, E.New("non_tls_handler: not supported with reality")
+	}
 	if options.TLS != nil && options.TLS.Enabled {
 		tlsConfig, err := tls.NewServer(ctx, logger, common.PtrValueOrDefault(options.TLS))
 		if err != nil {

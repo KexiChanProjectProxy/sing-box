@@ -4,6 +4,7 @@
 package peek
 
 import (
+	"errors"
 	"io"
 	"net"
 	"time"
@@ -90,6 +91,11 @@ func ClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 	return clientHello(conn, timeout)
 }
 
+// fallbackBufferSize bounds what readClientHello holds per connection. It
+// is far more than a Shadowsocks request header, which is what the first read
+// after it has to return in full.
+const fallbackBufferSize = 4096
+
 // readClientHello is the portable ClientHello: it reads what the connection
 // has and puts it back with a CachedConn.
 //
@@ -105,7 +111,7 @@ func readClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, erro
 		}
 	}
 	var (
-		buffer = buf.New()
+		buffer = buf.NewSize(fallbackBufferSize)
 		result Result
 		err    error
 	)
@@ -121,7 +127,7 @@ func readClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, erro
 	}
 	if timeout > 0 {
 		deadlineErr := conn.SetReadDeadline(time.Time{})
-		if err == nil && deadlineErr != nil {
+		if deadlineErr != nil && (err == nil || E.IsTimeout(err)) {
 			err = deadlineErr
 			result = Undecided
 		}
@@ -133,7 +139,7 @@ func readClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, erro
 			// Too slow to tell: not TLS.
 			result = NonTLS
 			err = nil
-		case err == io.EOF && !buffer.IsEmpty():
+		case errors.Is(err, io.EOF) && !buffer.IsEmpty():
 			err = io.ErrUnexpectedEOF
 		}
 		if err != nil {

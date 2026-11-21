@@ -7,6 +7,7 @@ import (
 	"net"
 	"syscall"
 	"time"
+	"unsafe"
 
 	E "github.com/sagernet/sing/common/exceptions"
 
@@ -43,12 +44,7 @@ func clientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 	)
 	err = rawConn.Read(func(fd uintptr) bool {
 		var n int
-		for {
-			n, _, peekErr = unix.Recvfrom(int(fd), prefix[:], unix.MSG_PEEK)
-			if peekErr != unix.EINTR {
-				break
-			}
-		}
+		n, peekErr = peekBytes(fd, prefix[:])
 		switch {
 		case peekErr == unix.EAGAIN:
 			// Nothing yet: wait for the netpoller.
@@ -69,15 +65,24 @@ func clientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 		// consumed. The edge-triggered netpoller would not wake us again,
 		// so check for it before waiting. Only an incomplete prefix that
 		// still looks like a ClientHello gets here.
-		if peerClosed(fd) {
-			peekErr = io.ErrUnexpectedEOF
+		if !peerClosed(fd) {
+			return false
+		}
+		// The rest of the prefix may have arrived just before the close:
+		// look once more now that nothing else can.
+		n, peekErr = peekBytes(fd, prefix[:])
+		if peekErr != nil {
 			return true
 		}
-		return false
+		result = ClassifyClientHello(prefix[:n])
+		if result == Undecided {
+			peekErr = io.ErrUnexpectedEOF
+		}
+		return true
 	})
 	if timeout > 0 {
 		deadlineErr := conn.SetReadDeadline(time.Time{})
-		if err == nil && peekErr == nil && deadlineErr != nil {
+		if deadlineErr != nil && peekErr == nil {
 			return conn, false, deadlineErr
 		}
 	}
@@ -94,10 +99,32 @@ func clientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 	return conn, result == TLS, nil
 }
 
+// peekBytes reads what the socket holds into p without consuming it. It
+// calls recvfrom without asking for the source address, which a connected
+// socket does not need.
+func peekBytes(fd uintptr, p []byte) (int, error) {
+	for {
+		n, _, errno := unix.Syscall6(unix.SYS_RECVFROM, fd, uintptr(unsafe.Pointer(&p[0])), uintptr(len(p)), unix.MSG_PEEK, 0, 0)
+		switch errno {
+		case 0:
+			return int(n), nil
+		case unix.EINTR:
+			continue
+		default:
+			return 0, errno
+		}
+	}
+}
+
 // peerClosed reports whether the peer has shut down its side of the
 // connection, or the socket has failed.
 func peerClosed(fd uintptr) bool {
 	fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLRDHUP}}
-	n, err := unix.Poll(fds, 0)
-	return err == nil && n > 0 && fds[0].Revents&(unix.POLLRDHUP|unix.POLLHUP|unix.POLLERR) != 0
+	for {
+		n, err := unix.Poll(fds, 0)
+		if err == unix.EINTR {
+			continue
+		}
+		return err == nil && n > 0 && fds[0].Revents&(unix.POLLRDHUP|unix.POLLHUP|unix.POLLERR) != 0
+	}
 }

@@ -70,20 +70,33 @@ func TestClassifyRandom(t *testing.T) {
 	// A million random prefixes of 1 to 6 bytes, like the start of a
 	// Shadowsocks salt, are non-TLS, or undecided while they still start
 	// like a ClientHello. All six bytes match by chance about 3e-10 of the
-	// time, so none of them is TLS.
-	// A fixed seed keeps the test deterministic.
-	sample := make([]byte, ClientHelloPrefixLength*1_000_000)
-	_, err := rand.NewChaCha8([32]byte{'p', 'e', 'e', 'k'}).Read(sample)
+	// time, so none of them is TLS. A fixed seed keeps the test
+	// deterministic.
+	const samples = 1_000_000
+	random := rand.NewChaCha8([32]byte{'p', 'e', 'e', 'k'})
+	sample := make([]byte, ClientHelloPrefixLength*samples)
+	_, err := random.Read(sample)
 	require.NoError(t, err)
-	for i := 0; i < 1_000_000; i++ {
+	var undecided, nonTLS int
+	for i := 0; i < samples; i++ {
 		b := sample[i*ClientHelloPrefixLength : (i+1)*ClientHelloPrefixLength]
-		n := 1 + int(b[1])%ClientHelloPrefixLength
-		result := ClassifyClientHello(b[:n])
-		require.NotEqual(t, TLS, result, "%x", b[:n])
-		if b[0] != 0x16 {
-			require.Equal(t, NonTLS, result, "%x", b[:n])
+		n := 1 + i%ClientHelloPrefixLength
+		switch ClassifyClientHello(b[:n]) {
+		case TLS:
+			t.Fatalf("random prefix %x taken for TLS", b[:n])
+		case Undecided:
+			if b[0] != 0x16 {
+				t.Fatalf("prefix %x undecided", b[:n])
+			}
+			undecided++
+		case NonTLS:
+			nonTLS++
 		}
 	}
+	require.Equal(t, samples, undecided+nonTLS)
+	// The classifier itself does accept a matching prefix of the same
+	// shape, so the loop above could have failed.
+	require.Equal(t, TLS, ClassifyClientHello([]byte{0x16, 0x03, 0x03, 0x01, 0x00, 0x01}))
 }
 
 func BenchmarkClassifyClientHello(b *testing.B) {
@@ -266,6 +279,53 @@ func TestClientHelloPartialThenHalfClose(t *testing.T) {
 		require.ErrorIs(t, result.err, io.ErrUnexpectedEOF)
 	case <-time.After(3 * time.Second):
 		t.Fatal("peer close was not noticed")
+	}
+}
+
+func TestClientHelloUnixSocket(t *testing.T) {
+	t.Parallel()
+	path := t.TempDir() + "/peek.sock"
+	listener, err := net.Listen("unix", path)
+	require.NoError(t, err)
+	defer listener.Close()
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, _ := listener.Accept()
+		accepted <- conn
+	}()
+	client, err := net.Dial("unix", path)
+	require.NoError(t, err)
+	defer client.Close()
+	server := <-accepted
+	require.NotNil(t, server)
+	defer server.Close()
+	payload := []byte{0x16, 0x03, 0x01, 0x02, 0x00, 0x01, 0xAA}
+	_, err = client.Write(payload[:2])
+	require.NoError(t, err)
+	done := peekAsync(server, 5*time.Second)
+	time.Sleep(100 * time.Millisecond)
+	_, err = client.Write(payload[2:])
+	require.NoError(t, err)
+	result := <-done
+	require.NoError(t, result.err)
+	require.True(t, result.isTLS)
+	require.Equal(t, payload, readAll(t, result.conn, len(payload)))
+}
+
+func TestClientHelloTimeoutWithoutBytes(t *testing.T) {
+	t.Parallel()
+	for _, wrap := range []bool{false, true} {
+		client, server := tcpPair(t)
+		var conn net.Conn = server
+		if wrap {
+			conn = wrappedConn{server}
+		}
+		result := <-peekAsync(conn, 200*time.Millisecond)
+		require.NoError(t, result.err)
+		require.False(t, result.isTLS)
+		_, err := client.Write([]byte{0x01})
+		require.NoError(t, err)
+		require.Equal(t, []byte{0x01}, readAll(t, result.conn, 1))
 	}
 }
 

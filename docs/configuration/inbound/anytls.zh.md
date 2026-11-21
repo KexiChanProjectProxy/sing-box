@@ -115,12 +115,15 @@ TLS 握手失败的连接不会被转发。
 只要有一个字节不符合，连接就立即交出，所以 Shadowsocks 客户端通常凭第一个字节就能识别。
 Shadowsocks salt 这样的随机字节被看成 ClientHello 的概率约为 30 亿分之一。
 
-2 秒内没有发来足以判断的字节的连接也会交出，使慢速探测看到的是 Shadowsocks 入站的行为。
+2 秒内没有发来足以判断的字节的连接也会交出，使慢速探测看到的是 Shadowsocks 入站的行为，只是晚 2 秒：仍像 ClientHello 开头的字节（例如单独一个 `16`）在 2 秒后才得到回应，而单独的 Shadowsocks 入站会立即回应，单独的 TLS 服务器会继续等待。
 
 探测方仍能把这个端口与单独的 TLS 服务器区分开：TLS 服务器会以告警回应的字节，例如不是 ClientHello 的握手记录、高于 3.4 的记录版本或超过服务器接受长度的记录，会交给 Shadowsocks 入站。
 
 连接直接交给 Shadowsocks 入站，不经过路由，日志、路由与统计都把它记为该入站的连接，与它自己接受的连接相同。
-只有在首部字节到达之前写下的 `inbound accepted` 日志记为本入站。
+交出之前写下的日志记为本入站：`inbound accepted`、首部字节判定之前就关闭的连接，以及记录交出的调试日志。
+连接仍登记在本入站的监听器上，关闭本入站时它也会被关闭。
+
+`non_tls_handler` 不能与 [Reality](/zh/configuration/shared/tls/#reality-字段) 同时使用，因为 Reality 会以它借用的服务器的身份回应不是其 ClientHello 的数据。
 在 Linux 上，入站用 `MSG_PEEK` 查看套接字，交出的就是套接字本身，Shadowsocks 入站读取时没有额外的包装层。
 
 Shadowsocks 入站仍然负责 UDP。由于本入站已在该端口监听 TCP，为它配置同一端口并设置 `"network": "udp"`：

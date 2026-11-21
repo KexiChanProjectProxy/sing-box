@@ -175,7 +175,12 @@ func (t *DBusResolvedResolver) Start() error {
 	if err != nil {
 		return E.Cause(err, "configure resolved properties listener")
 	}
-	go t.loopUpdateStatus()
+	// Register the channel before Start returns: a Close that comes first
+	// terminates the signal handler, which then ignores a later
+	// registration and never closes its channel.
+	signalChan := make(chan *dbus.Signal, 1)
+	t.systemBus.Signal(signalChan)
+	go t.loopUpdateStatus(signalChan)
 	return nil
 }
 
@@ -361,9 +366,7 @@ func (s *resolvedScope) match(name string) int {
 	return resolvedScopeMaybe
 }
 
-func (t *DBusResolvedResolver) loopUpdateStatus() {
-	signalChan := make(chan *dbus.Signal, 1)
-	t.systemBus.Signal(signalChan)
+func (t *DBusResolvedResolver) loopUpdateStatus(signalChan <-chan *dbus.Signal) {
 	for signal := range signalChan {
 		switch signal.Name {
 		case "org.freedesktop.DBus.NameOwnerChanged":

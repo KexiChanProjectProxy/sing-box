@@ -109,7 +109,8 @@ Connections that do not start with a TLS ClientHello go to [non_tls_handler](#no
 
 The tag of a [Shadowsocks inbound](/configuration/inbound/shadowsocks/) that takes the connections whose first bytes are not a TLS ClientHello, so that AnyTLS and Shadowsocks share one port.
 
-Requires `tls`. Only Shadowsocks inbounds with an encrypting method are accepted, not `none`, since a plaintext protocol would show itself on the port.
+Requires `tls`.
+Only Shadowsocks inbounds with an encrypting method are accepted, not `none`, since a plaintext protocol would show itself on the port.
 
 Before the TLS handshake, the inbound looks at up to the first 6 bytes of each connection without consuming them: a TLS handshake record header (`16 03 00`–`16 03 04`, with a record length the TLS server accepts) followed by the ClientHello type `01`.
 A connection is handed over as soon as one byte rules that out, so a Shadowsocks client is usually recognised by its first byte.
@@ -126,7 +127,8 @@ The connection also stays registered with this inbound's listener, so closing th
 `non_tls_handler` cannot be used with [Reality](/configuration/shared/tls/#reality-fields), which answers what is not its ClientHello as the server it borrows from.
 On Linux the inbound peeks at the socket with `MSG_PEEK` and hands over the socket itself, so the Shadowsocks inbound reads it with no extra layer.
 
-The Shadowsocks inbound still serves UDP. Give it the same port with `"network": "udp"`, since this inbound already listens on TCP there:
+The Shadowsocks inbound still serves UDP.
+Give it the same port with `"network": "udp"`, since this inbound already listens on TCP there:
 
 ```json
 {

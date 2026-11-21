@@ -107,9 +107,11 @@ TLS 握手失败的连接不会被转发。
 
 !!! question "自 sing-box 1.14.4.3 起"
 
-一个 [Shadowsocks 入站](/zh/configuration/inbound/shadowsocks/) 的标签。首部不是 TLS ClientHello 的连接交给这个入站处理，使 AnyTLS 与 Shadowsocks 共用一个端口。
+一个 [Shadowsocks 入站](/zh/configuration/inbound/shadowsocks/) 的标签。
+首部不是 TLS ClientHello 的连接交给这个入站处理，使 AnyTLS 与 Shadowsocks 共用一个端口。
 
-需要启用 `tls`。只接受使用加密方法的 Shadowsocks 入站，不接受 `none`，因为明文协议会在这个端口上暴露自己。
+需要启用 `tls`。
+只接受使用加密方法的 Shadowsocks 入站，不接受 `none`，因为明文协议会在这个端口上暴露自己。
 
 在 TLS 握手之前，入站查看每条连接最多前 6 个字节，但不消耗它们：TLS 握手记录头（`16 03 00` 至 `16 03 04`，记录长度在 TLS 服务器接受的范围内），后接 ClientHello 类型 `01`。
 只要有一个字节不符合，连接就立即交出，所以 Shadowsocks 客户端通常凭第一个字节就能识别。
@@ -126,7 +128,8 @@ Shadowsocks salt 这样的随机字节被看成 ClientHello 的概率约为 30 �
 `non_tls_handler` 不能与 [Reality](/zh/configuration/shared/tls/#reality-字段) 同时使用，因为 Reality 会以它借用的服务器的身份回应不是其 ClientHello 的数据。
 在 Linux 上，入站用 `MSG_PEEK` 查看套接字，交出的就是套接字本身，Shadowsocks 入站读取时没有额外的包装层。
 
-Shadowsocks 入站仍然负责 UDP。由于本入站已在该端口监听 TCP，为它配置同一端口并设置 `"network": "udp"`：
+Shadowsocks 入站仍然负责 UDP。
+由于本入站已在该端口监听 TCP，为它配置同一端口并设置 `"network": "udp"`：
 
 ```json
 {

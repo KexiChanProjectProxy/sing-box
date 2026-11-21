@@ -2,6 +2,10 @@
 icon: material/new-box
 ---
 
+!!! quote "sing-box 1.14.4.3 中的更改"
+
+    :material-plus: [non_tls_handler](#non_tls_handler)
+
 !!! quote "sing-box 1.14.2.11 中的更改"
 
     :material-plus: [dns](#dns)  
@@ -44,7 +48,8 @@ icon: material/new-box
     "max_duration": "5s",
     "cooldown": "60s",
     "max_concurrent": 4
-  }
+  },
+  "non_tls_handler": ""
 }
 ```
 
@@ -95,6 +100,61 @@ TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#入站)。
 AnyTLS 认证失败的连接（包括未知密码或首包格式错误）将携带原始数据转发到此服务器。启用 `tls` 时，服务器收到解密后的数据流。
 
 TLS 握手失败的连接不会被转发。
+
+设置了 [non_tls_handler](#non_tls_handler) 时，不以 TLS ClientHello 开头的连接交给它处理，不会转发到这里。
+
+#### non_tls_handler
+
+!!! question "自 sing-box 1.14.4.3 起"
+
+一个 [Shadowsocks 入站](/zh/configuration/inbound/shadowsocks/) 的标签。首部不是 TLS ClientHello 的连接交给这个入站处理，使 AnyTLS 与 Shadowsocks 共用一个端口。
+
+需要启用 `tls`。只接受 Shadowsocks 入站，因为明文协议会在这个端口上暴露自己。
+
+在 TLS 握手之前，入站查看每条连接最多前 6 个字节，但不消耗它们：TLS 握手记录头（`16 03 00` 至 `16 03 04`，记录长度在 TLS 服务器接受的范围内），后接 ClientHello 类型 `01`。
+只要有一个字节不符合，连接就立即交出，所以 Shadowsocks 客户端通常凭第一个字节就能识别。
+Shadowsocks salt 这样的随机字节被看成 ClientHello 的概率约为 30 亿分之一。
+
+2 秒内没有发来足以判断的字节的连接也会交出，使慢速探测看到的是 Shadowsocks 入站的行为。
+
+连接直接交给 Shadowsocks 入站，不经过路由，日志、路由与统计都把它记为该入站的连接，与它自己接受的连接相同。
+在 Linux 上，入站用 `MSG_PEEK` 查看套接字，交出的就是套接字本身，Shadowsocks 入站读取时没有额外的包装层。
+
+Shadowsocks 入站仍然负责 UDP。由于本入站已在该端口监听 TCP，为它配置同一端口并设置 `"network": "udp"`：
+
+```json
+{
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-in",
+      "listen": "::",
+      "listen_port": 443,
+      "users": [
+        {
+          "name": "sekai",
+          "password": "8JCsPssfgS8tiRwiMlhARg=="
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "certificate_path": "/path/to/cert.pem",
+        "key_path": "/path/to/key.pem"
+      },
+      "non_tls_handler": "ss-in"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "ss-in",
+      "listen": "::",
+      "listen_port": 443,
+      "network": "udp",
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "8JCsPssfgS8tiRwiMlhARg=="
+    }
+  ]
+}
+```
 
 #### dns
 

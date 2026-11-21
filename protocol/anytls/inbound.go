@@ -4,10 +4,12 @@ import (
 	"context"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/common/listener"
+	"github.com/sagernet/sing-box/common/peek"
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing-box/common/uot"
 	C "github.com/sagernet/sing-box/constant"
@@ -48,7 +50,18 @@ type Inbound struct {
 	// trackingRouter accounts probe traffic, and is nil when the router
 	// cannot.
 	trackingRouter adapter.ConnectionTrackingRouter
+
+	// nonTLSHandler takes the connections that do not start with a TLS
+	// ClientHello, and is nil unless non_tls_handler is set.
+	inboundManager   adapter.InboundManager
+	nonTLSHandlerTag string
+	nonTLSHandler    adapter.TCPInjectableInbound
 }
+
+// nonTLSPeekTimeout is how long a new connection has to send enough bytes
+// to tell whether it starts with a TLS ClientHello. A slower one goes to the
+// non-TLS handler, so that a slow prober sees what that inbound would show.
+const nonTLSPeekTimeout = 2 * time.Second
 
 func NewInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.AnyTLSInboundOptions) (adapter.Inbound, error) {
 	inbound := &Inbound{
@@ -64,6 +77,20 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.Structure
 			return nil, err
 		}
 		inbound.tlsConfig = tlsConfig
+	}
+
+	if options.NonTLSHandler != "" {
+		if inbound.tlsConfig == nil {
+			return nil, E.New("non_tls_handler: TLS is not enabled")
+		}
+		if options.NonTLSHandler == tag {
+			return nil, E.New("non_tls_handler: must not be the inbound itself")
+		}
+		inbound.inboundManager = service.FromContext[adapter.InboundManager](ctx)
+		if inbound.inboundManager == nil {
+			return nil, E.New("non_tls_handler: missing inbound manager")
+		}
+		inbound.nonTLSHandlerTag = options.NonTLSHandler
 	}
 
 	paddingScheme := padding.DefaultPaddingScheme
@@ -127,6 +154,24 @@ func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}
 		h.dnsServer = transport
 	}
+	if stage == adapter.StartStateInitialize && h.nonTLSHandlerTag != "" {
+		// Every inbound is created by now, and no connection arrives before
+		// the listeners start.
+		handler, loaded := h.inboundManager.Get(h.nonTLSHandlerTag)
+		if !loaded {
+			return E.New("non_tls_handler: inbound not found: ", h.nonTLSHandlerTag)
+		}
+		// Only Shadowsocks: its server shows nothing to a prober, where a
+		// plaintext protocol on this port would show itself.
+		if handler.Type() != C.TypeShadowsocks {
+			return E.New("non_tls_handler: inbound ", h.nonTLSHandlerTag, " is ", handler.Type(), ", not shadowsocks")
+		}
+		injectable, isInjectable := handler.(adapter.TCPInjectableInbound)
+		if !isInjectable {
+			return E.New("non_tls_handler: inbound ", h.nonTLSHandlerTag, " does not accept TCP connections")
+		}
+		h.nonTLSHandler = injectable
+	}
 	if stage != adapter.StartStateStart {
 		return nil
 	}
@@ -146,6 +191,25 @@ func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 }
 
 func (h *Inbound) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+	if h.nonTLSHandler != nil {
+		var (
+			isTLS bool
+			err   error
+		)
+		conn, isTLS, err = peek.ClientHello(conn, nonTLSPeekTimeout)
+		if err != nil {
+			N.CloseOnHandshakeFailure(conn, onClose, err)
+			adapter.LogConnectionError(h.logger, ctx, err, metadata.Source)
+			return
+		}
+		if !isTLS {
+			// The shadowsocks inbound sets the inbound tag and type on the
+			// metadata itself, as for connections it accepts.
+			h.logger.DebugEventContext(ctx, "anytls.non_tls", "non-TLS connection handed over", log.String("inbound", h.nonTLSHandlerTag))
+			h.nonTLSHandler.NewConnection(ctx, conn, metadata, onClose)
+			return
+		}
+	}
 	if h.tlsConfig != nil {
 		tlsConn, err := tls.ServerHandshake(ctx, conn, h.tlsConfig)
 		if err != nil {

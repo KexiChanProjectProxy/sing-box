@@ -2,6 +2,12 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.3
+
+* AnyTLS 入站新增 [`non_tls_handler`](/zh/configuration/inbound/anytls/#non_tls_handler)：不以 TLS ClientHello 开头的连接交给一个 Shadowsocks 入站，使 AnyTLS 与 Shadowsocks（TCP 和 UDP）共用一个端口。
+  在 TLS 握手之前查看首部字节，Linux 上使用 `MSG_PEEK`，交出的就是原始套接字
+* 使用 systemd-resolved 的 `local` DNS 服务器在 sing-box 启动后立即关闭时，不再遗留 goroutine
+
 #### 1.14.4.2
 
 * `strategy: "consistent_hash"` 的 `loadbalance` 只构建一次哈希环，在成员、`virtual_nodes` 或 `key_salt` 变化前一直复用，不再为每条连接重建。每个 key 选中的成员与之前相同

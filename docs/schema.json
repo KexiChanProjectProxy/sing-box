@@ -6211,6 +6211,10 @@
             },
             "probe": {
               "$ref": "#/$defs/AnyTLSInboundProbeOptions"
+            },
+            "non_tls_handler": {
+              "type": "string",
+              "x-tag-reference": "inbound"
             }
           },
           "required": [

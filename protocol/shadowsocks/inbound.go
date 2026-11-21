@@ -47,11 +47,12 @@ var _ adapter.TCPInjectableInbound = (*Inbound)(nil)
 
 type Inbound struct {
 	inbound.Adapter
-	ctx      context.Context
-	router   adapter.ConnectionRouterEx
-	logger   log.StructuredLogger
-	listener *listener.Listener
-	service  shadowsocks.Service
+	ctx       context.Context
+	router    adapter.ConnectionRouterEx
+	logger    log.StructuredLogger
+	listener  *listener.Listener
+	service   shadowsocks.Service
+	plaintext bool
 }
 
 func newInbound(ctx context.Context, router adapter.Router, logger log.StructuredLogger, tag string, options option.ShadowsocksInboundOptions) (*Inbound, error) {
@@ -74,6 +75,7 @@ func newInbound(ctx context.Context, router adapter.Router, logger log.Structure
 	}
 	switch {
 	case options.Method == shadowsocks.MethodNone:
+		inbound.plaintext = true
 		inbound.service = shadowsocks.NewNoneService(int64(udpTimeout.Seconds()), adapter.NewLegacyUpstreamHandler(adapter.InboundContext{}, inbound.newConnection, inbound.newPacketConnection, inbound))
 	case common.Contains(shadowaead.List, options.Method):
 		inbound.service, err = shadowaead.NewService(options.Method, nil, options.Password, int64(udpTimeout.Seconds()), adapter.NewLegacyUpstreamHandler(adapter.InboundContext{}, inbound.newConnection, inbound.newPacketConnection, inbound))
@@ -92,6 +94,12 @@ func newInbound(ctx context.Context, router adapter.Router, logger log.Structure
 		ThreadUnsafePacketWriter: true,
 	})
 	return inbound, err
+}
+
+// Plaintext reports whether the inbound uses the method none, which neither
+// encrypts nor authenticates.
+func (h *Inbound) Plaintext() bool {
+	return h.plaintext
 }
 
 func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {

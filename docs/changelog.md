@@ -2,6 +2,12 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.3
+
+* Add [`non_tls_handler`](/configuration/inbound/anytls/#non_tls_handler) to the AnyTLS inbound: connections that do not start with a TLS ClientHello are handed to a Shadowsocks inbound, so that AnyTLS and Shadowsocks (TCP and UDP) share one port.
+  The first bytes are inspected before the TLS handshake, with `MSG_PEEK` on Linux, and the socket is handed over as it is
+* A `local` DNS server using systemd-resolved no longer leaves a goroutine behind when sing-box closes right after starting
+
 #### 1.14.4.2
 
 * A `loadbalance` with `strategy: "consistent_hash"` builds its hash ring once and reuses it until the members, `virtual_nodes` or `key_salt` change, instead of building it for every connection. Every key keeps the member it had before

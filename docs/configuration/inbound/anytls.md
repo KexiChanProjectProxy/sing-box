@@ -2,6 +2,10 @@
 icon: material/new-box
 ---
 
+!!! quote "Changes in sing-box 1.14.4.3"
+
+    :material-plus: [non_tls_handler](#non_tls_handler)
+
 !!! quote "Changes in sing-box 1.14.2.11"
 
     :material-plus: [dns](#dns)  
@@ -44,7 +48,8 @@ icon: material/new-box
     "max_duration": "5s",
     "cooldown": "60s",
     "max_concurrent": 4
-  }
+  },
+  "non_tls_handler": ""
 }
 ```
 
@@ -95,6 +100,69 @@ Fallback server configuration. Disabled if empty.
 Connections that fail AnyTLS authentication, including those with an unknown password or a malformed first packet, are forwarded to this server with their original bytes. With `tls` enabled, the server receives the decrypted stream.
 
 TLS handshake failures are not forwarded.
+
+Connections that do not start with a TLS ClientHello go to [non_tls_handler](#non_tls_handler) when it is set, not here.
+
+#### non_tls_handler
+
+!!! question "Since sing-box 1.14.4.3"
+
+The tag of a [Shadowsocks inbound](/configuration/inbound/shadowsocks/) that takes the connections whose first bytes are not a TLS ClientHello, so that AnyTLS and Shadowsocks share one port.
+
+Requires `tls`.
+Only Shadowsocks inbounds with an encrypting method are accepted, not `none`, since a plaintext protocol would show itself on the port.
+
+Before the TLS handshake, the inbound looks at up to the first 6 bytes of each connection without consuming them: a TLS handshake record header (`16 03 00`–`16 03 04`, with a record length the TLS server accepts) followed by the ClientHello type `01`.
+A connection is handed over as soon as one byte rules that out, so a Shadowsocks client is usually recognised by its first byte.
+Random bytes such as a Shadowsocks salt look like a ClientHello about once in 3 × 10⁹ connections.
+
+A connection that has not sent enough bytes to decide within 2 seconds is also handed over, so that a slow prober sees what the Shadowsocks inbound shows, 2 seconds late: bytes that still look like the start of a ClientHello, such as a lone `16`, are answered after 2 seconds, where a Shadowsocks inbound alone would answer at once and a TLS server alone would keep waiting.
+
+A prober can still tell the port apart from a TLS server alone: bytes a TLS server would answer with an alert, such as a handshake record that is not a ClientHello, a record version above 3.4 or a record longer than the server accepts, reach the Shadowsocks inbound instead.
+
+The connection is passed straight to the Shadowsocks inbound, not through the router, and is logged, routed and counted as that inbound's, as if it had accepted it.
+Log lines written before the hand-off name this inbound: `inbound accepted`, a connection closed before its first bytes decided, and the debug line recording the hand-off.
+The connection also stays registered with this inbound's listener, so closing this inbound closes it.
+
+`non_tls_handler` cannot be used with [Reality](/configuration/shared/tls/#reality-fields), which answers what is not its ClientHello as the server it borrows from.
+On Linux the inbound peeks at the socket with `MSG_PEEK` and hands over the socket itself, so the Shadowsocks inbound reads it with no extra layer.
+
+The Shadowsocks inbound still serves UDP.
+Give it the same port with `"network": "udp"`, since this inbound already listens on TCP there:
+
+```json
+{
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-in",
+      "listen": "::",
+      "listen_port": 443,
+      "users": [
+        {
+          "name": "sekai",
+          "password": "8JCsPssfgS8tiRwiMlhARg=="
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "certificate_path": "/path/to/cert.pem",
+        "key_path": "/path/to/key.pem"
+      },
+      "non_tls_handler": "ss-in"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "ss-in",
+      "listen": "::",
+      "listen_port": 443,
+      "network": "udp",
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "8JCsPssfgS8tiRwiMlhARg=="
+    }
+  ]
+}
+```
 
 #### dns
 

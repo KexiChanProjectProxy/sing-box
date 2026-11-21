@@ -364,6 +364,18 @@ func TestAnyTLSNonTLSHandlerOptions(t *testing.T) {
 		{"itself", []option.Inbound{anyTLS(tlsOptions, "anytls-in")}, "must not be the inbound itself"},
 		{"missing", []option.Inbound{anyTLS(tlsOptions, "ss-in")}, "inbound not found: ss-in"},
 		{"not shadowsocks", []option.Inbound{anyTLS(tlsOptions, "mixed-in"), mixed}, "is mixed, not shadowsocks"},
+		{"method none", []option.Inbound{anyTLS(tlsOptions, "ss-in"), {
+			Type: C.TypeShadowsocks,
+			Tag:  "ss-in",
+			Options: &option.ShadowsocksInboundOptions{
+				ListenOptions: option.ListenOptions{
+					Listen:     common.Ptr(badoption.Addr(netip.IPv4Unspecified())),
+					ListenPort: serverPort,
+				},
+				Network: N.NetworkUDP,
+				Method:  "none",
+			},
+		}}, "uses the method none"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := startBoxForError(t, option.Options{Inbounds: tc.inbounds})

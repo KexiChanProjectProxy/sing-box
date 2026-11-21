@@ -90,8 +90,13 @@ func ClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 	return clientHello(conn, timeout)
 }
 
-// readClientHello is the portable ClientHello: it reads the bytes it needs
-// and puts them back with a CachedConn.
+// readClientHello is the portable ClientHello: it reads what the connection
+// has and puts it back with a CachedConn.
+//
+// Each read takes everything the socket holds, not just the prefix, so that
+// the first read from the returned connection gives the next handler what a
+// read from the socket would have: a Shadowsocks 2022 server takes its whole
+// request header in one read and refuses a shorter one.
 func readClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 	if timeout > 0 {
 		err := conn.SetReadDeadline(time.Now().Add(timeout))
@@ -100,19 +105,17 @@ func readClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, erro
 		}
 	}
 	var (
-		prefix [ClientHelloPrefixLength]byte
-		n      int
+		buffer = buf.New()
 		result Result
 		err    error
 	)
-	for result == Undecided {
-		var m int
-		m, err = conn.Read(prefix[n:])
-		n += m
-		if m > 0 {
-			result = ClassifyClientHello(prefix[:n])
+	for result == Undecided && !buffer.IsFull() {
+		var n int
+		n, err = buffer.ReadOnceFrom(conn)
+		if n > 0 {
+			result = ClassifyClientHello(buffer.To(min(buffer.Len(), ClientHelloPrefixLength)))
 		}
-		if result != Undecided || err != nil {
+		if err != nil {
 			break
 		}
 	}
@@ -130,17 +133,17 @@ func readClientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, erro
 			// Too slow to tell: not TLS.
 			result = NonTLS
 			err = nil
-		case err == io.EOF && n > 0:
+		case err == io.EOF && !buffer.IsEmpty():
 			err = io.ErrUnexpectedEOF
 		}
 		if err != nil {
+			buffer.Release()
 			return conn, false, err
 		}
 	}
-	if n > 0 {
-		buffer := buf.NewSize(n)
-		copy(buffer.Extend(n), prefix[:n])
-		conn = bufio.NewCachedConn(conn, buffer)
+	if buffer.IsEmpty() {
+		buffer.Release()
+		return conn, result == TLS, nil
 	}
-	return conn, result == TLS, nil
+	return bufio.NewCachedConn(conn, buffer), result == TLS, nil
 }

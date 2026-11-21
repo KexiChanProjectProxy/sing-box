@@ -38,7 +38,6 @@ func clientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 	}
 	var (
 		prefix  [ClientHelloPrefixLength]byte
-		lastN   = -1
 		result  Result
 		peekErr error
 	)
@@ -65,15 +64,15 @@ func clientHello(conn net.Conn, timeout time.Duration) (net.Conn, bool, error) {
 		if result != Undecided {
 			return true
 		}
-		// The bytes stay in the socket, so the edge-triggered netpoller
-		// wakes us again only on a new event: more data or the peer
-		// closing. A wake-up that brought no new byte may be the close,
-		// which MSG_PEEK cannot see while bytes are queued.
-		if n == lastN && peerClosed(fd) {
+		// MSG_PEEK cannot see a close while bytes are queued, and the
+		// close may have arrived with them, in the event Read already
+		// consumed. The edge-triggered netpoller would not wake us again,
+		// so check for it before waiting. Only an incomplete prefix that
+		// still looks like a ClientHello gets here.
+		if peerClosed(fd) {
 			peekErr = io.ErrUnexpectedEOF
 			return true
 		}
-		lastN = n
 		return false
 	})
 	if timeout > 0 {

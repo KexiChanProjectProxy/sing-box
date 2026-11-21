@@ -367,7 +367,20 @@ func (s *resolvedScope) match(name string) int {
 }
 
 func (t *DBusResolvedResolver) loopUpdateStatus(signalChan <-chan *dbus.Signal) {
-	for signal := range signalChan {
+	// The bus closes the channel when it closes, unless it closed before
+	// the channel was registered; its context is cancelled either way.
+	busDone := t.systemBus.Context().Done()
+	for {
+		var signal *dbus.Signal
+		select {
+		case <-busDone:
+			return
+		case received, loaded := <-signalChan:
+			if !loaded {
+				return
+			}
+			signal = received
+		}
 		switch signal.Name {
 		case "org.freedesktop.DBus.NameOwnerChanged":
 			if len(signal.Body) != 3 {

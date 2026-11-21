@@ -109,7 +109,7 @@ TLS 握手失败的连接不会被转发。
 
 一个 [Shadowsocks 入站](/zh/configuration/inbound/shadowsocks/) 的标签。首部不是 TLS ClientHello 的连接交给这个入站处理，使 AnyTLS 与 Shadowsocks 共用一个端口。
 
-需要启用 `tls`。只接受 Shadowsocks 入站，因为明文协议会在这个端口上暴露自己。
+需要启用 `tls`。只接受使用加密方法的 Shadowsocks 入站，不接受 `none`，因为明文协议会在这个端口上暴露自己。
 
 在 TLS 握手之前，入站查看每条连接最多前 6 个字节，但不消耗它们：TLS 握手记录头（`16 03 00` 至 `16 03 04`，记录长度在 TLS 服务器接受的范围内），后接 ClientHello 类型 `01`。
 只要有一个字节不符合，连接就立即交出，所以 Shadowsocks 客户端通常凭第一个字节就能识别。
@@ -117,7 +117,10 @@ Shadowsocks salt 这样的随机字节被看成 ClientHello 的概率约为 30 �
 
 2 秒内没有发来足以判断的字节的连接也会交出，使慢速探测看到的是 Shadowsocks 入站的行为。
 
+探测方仍能把这个端口与单独的 TLS 服务器区分开：TLS 服务器会以告警回应的字节，例如不是 ClientHello 的握手记录、高于 3.4 的记录版本或超过服务器接受长度的记录，会交给 Shadowsocks 入站。
+
 连接直接交给 Shadowsocks 入站，不经过路由，日志、路由与统计都把它记为该入站的连接，与它自己接受的连接相同。
+只有在首部字节到达之前写下的 `inbound accepted` 日志记为本入站。
 在 Linux 上，入站用 `MSG_PEEK` 查看套接字，交出的就是套接字本身，Shadowsocks 入站读取时没有额外的包装层。
 
 Shadowsocks 入站仍然负责 UDP。由于本入站已在该端口监听 TCP，为它配置同一端口并设置 `"network": "udp"`：

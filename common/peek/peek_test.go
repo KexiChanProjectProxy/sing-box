@@ -237,6 +237,23 @@ func TestClientHelloPartialThenClose(t *testing.T) {
 	}
 }
 
+func TestClientHelloPartialAndCloseBeforePeek(t *testing.T) {
+	t.Parallel()
+	client, server := tcpPair(t)
+	_, err := client.Write([]byte{0x16, 0x03, 0x01})
+	require.NoError(t, err)
+	require.NoError(t, client.Close())
+	// Let the bytes and the FIN reach the socket before the peek starts.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case result := <-peekAsync(server, 5*time.Second):
+		require.ErrorIs(t, result.err, io.ErrUnexpectedEOF)
+		require.Less(t, result.took, time.Second)
+	case <-time.After(3 * time.Second):
+		t.Fatal("peer close was not noticed")
+	}
+}
+
 func TestClientHelloPartialThenHalfClose(t *testing.T) {
 	t.Parallel()
 	client, server := tcpPair(t)

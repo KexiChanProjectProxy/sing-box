@@ -161,10 +161,13 @@ func (h *Inbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		if !loaded {
 			return E.New("non_tls_handler: inbound not found: ", h.nonTLSHandlerTag)
 		}
-		// Only Shadowsocks: its server shows nothing to a prober, where a
-		// plaintext protocol on this port would show itself.
+		// Only encrypted Shadowsocks: its server shows nothing to a prober,
+		// where a plaintext protocol on this port would show itself.
 		if handler.Type() != C.TypeShadowsocks {
 			return E.New("non_tls_handler: inbound ", h.nonTLSHandlerTag, " is ", handler.Type(), ", not shadowsocks")
+		}
+		if plaintextInbound, isPlaintext := handler.(interface{ Plaintext() bool }); isPlaintext && plaintextInbound.Plaintext() {
+			return E.New("non_tls_handler: inbound ", h.nonTLSHandlerTag, " uses the method none")
 		}
 		injectable, isInjectable := handler.(adapter.TCPInjectableInbound)
 		if !isInjectable {

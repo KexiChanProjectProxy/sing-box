@@ -109,7 +109,7 @@ Connections that do not start with a TLS ClientHello go to [non_tls_handler](#no
 
 The tag of a [Shadowsocks inbound](/configuration/inbound/shadowsocks/) that takes the connections whose first bytes are not a TLS ClientHello, so that AnyTLS and Shadowsocks share one port.
 
-Requires `tls`. Only Shadowsocks inbounds are accepted, since a plaintext protocol would show itself on the port.
+Requires `tls`. Only Shadowsocks inbounds with an encrypting method are accepted, not `none`, since a plaintext protocol would show itself on the port.
 
 Before the TLS handshake, the inbound looks at up to the first 6 bytes of each connection without consuming them: a TLS handshake record header (`16 03 00`–`16 03 04`, with a record length the TLS server accepts) followed by the ClientHello type `01`.
 A connection is handed over as soon as one byte rules that out, so a Shadowsocks client is usually recognised by its first byte.
@@ -117,7 +117,10 @@ Random bytes such as a Shadowsocks salt look like a ClientHello about once in 3 
 
 A connection that has not sent enough bytes to decide within 2 seconds is also handed over, so that a slow prober sees what the Shadowsocks inbound shows.
 
+A prober can still tell the port apart from a TLS server alone: bytes a TLS server would answer with an alert, such as a handshake record that is not a ClientHello, a record version above 3.4 or a record longer than the server accepts, reach the Shadowsocks inbound instead.
+
 The connection is passed straight to the Shadowsocks inbound, not through the router, and is logged, routed and counted as that inbound's, as if it had accepted it.
+Only the `inbound accepted` log line, written before the first bytes arrive, names this inbound.
 On Linux the inbound peeks at the socket with `MSG_PEEK` and hands over the socket itself, so the Shadowsocks inbound reads it with no extra layer.
 
 The Shadowsocks inbound still serves UDP. Give it the same port with `"network": "udp"`, since this inbound already listens on TCP there:

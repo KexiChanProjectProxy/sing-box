@@ -64,6 +64,8 @@ type LoadBalance struct {
 	history                      *urltest.HistoryStorage
 	group                        *URLTestGroup
 	snapshot                     atomic.Pointer[CandidateSnapshot]
+	// hashRing keeps the consistent hash ring between connections.
+	hashRing hashRingCache
 	// rebuildMu serialises snapshot rebuilds, which read the current snapshot
 	// and store a successor derived from it.
 	rebuildMu      sync.Mutex
@@ -599,7 +601,7 @@ func (l *LoadBalance) pickCandidate(metadata adapter.InboundContext) (Candidate,
 		virtualNodes = l.hash.VirtualNodes
 		keySalt = l.hash.KeySalt
 	}
-	candidate, err := SelectFromSnapshot(snapshot, key, onEmptyKey, virtualNodes, keySalt)
+	candidate, err := selectFromSnapshot(&l.hashRing, snapshot, key, onEmptyKey, virtualNodes, keySalt)
 	if err != nil {
 		return Candidate{}, false, E.Cause(err, "loadbalance")
 	}

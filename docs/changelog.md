@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.2
+
+* A `loadbalance` with `strategy: "consistent_hash"` builds its hash ring once and reuses it until the members, `virtual_nodes` or `key_salt` change, instead of building it for every connection. Every key keeps the member it had before
+
 #### 1.14.4.1
 
 * Add `latency_offset` to [`loadbalance`](/configuration/outbound/loadbalance/#latency_offset) and [`urltest`](/configuration/outbound/urltest/#latency_offset): a per-member number of milliseconds added to the member's latency only when the group ranks its members.

@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.2
+
+* `strategy: "consistent_hash"` 的 `loadbalance` 只构建一次哈希环，在成员、`virtual_nodes` 或 `key_salt` 变化前一直复用，不再为每条连接重建。每个 key 选中的成员与之前相同
+
 #### 1.14.4.1
 
 * [`loadbalance`](/zh/configuration/outbound/loadbalance/#latency_offset) 与 [`urltest`](/zh/configuration/outbound/urltest/#latency_offset) 新增 `latency_offset`：为每个成员设置毫秒数，仅在组对成员排序时加到该成员的延迟上。

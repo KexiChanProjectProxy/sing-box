@@ -981,26 +981,28 @@ func (l *LoadBalance) probeInterval() time.Duration {
 	return C.DefaultURLTestInterval
 }
 
-func (l *LoadBalance) memberProbe(detour adapter.Outbound) (uint16, probeAction) {
+// memberProbe decides how a health check measures a member. A zero time
+// with probeUseCache means the delay is derived now, from a nested group.
+func (l *LoadBalance) memberProbe(detour adapter.Outbound) (uint16, time.Time, probeAction) {
 	switch member := detour.(type) {
 	case *LoadBalance:
 		delay, ok := nestedMinDelay(member, l.history)
 		if ok {
-			return delay, probeUseCache
+			return delay, time.Time{}, probeUseCache
 		}
-		return 0, probeSkip
+		return 0, time.Time{}, probeSkip
 	case *URLTest:
 		history := l.history.LoadURLTestHistory(l.realTag(member))
 		if history != nil && history.Delay != 0 {
-			return history.Delay, probeUseCache
+			return history.Delay, time.Time{}, probeUseCache
 		}
-		return 0, probeSkip
+		return 0, time.Time{}, probeSkip
 	default:
 		history := l.history.LoadURLTestHistory(l.realTag(detour))
-		if history != nil && history.Delay != 0 && time.Since(history.Time) < l.probeInterval() {
-			return history.Delay, probeUseCache
+		if history != nil && history.Delay != 0 && urlTestHistoryFresh(history, l.probeInterval()) {
+			return history.Delay, history.Time, probeUseCache
 		}
-		return 0, probeHTTP
+		return 0, time.Time{}, probeHTTP
 	}
 }
 

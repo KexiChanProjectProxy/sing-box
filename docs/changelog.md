@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.4
+
+* `urltest` and `loadbalance` probe each member at every `interval` again.
+  At the next check a member's stored result was a little younger than one `interval`, so every other check skipped it and members were probed only every two intervals, or later in `loadbalance`, which also renewed the time of a result it reused.
+  A result now counts as recent for half an `interval`, and reusing it keeps the time it was measured.
+  The bug comes from upstream
+
 #### 1.14.4.3
 
 * Add [`non_tls_handler`](/configuration/inbound/anytls/#non_tls_handler) to the AnyTLS inbound: connections that do not start with a TLS ClientHello are handed to a Shadowsocks inbound, so that AnyTLS and Shadowsocks (TCP and UDP) share one port.

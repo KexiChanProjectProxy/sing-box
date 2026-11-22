@@ -298,6 +298,19 @@ const (
 	probeSkip
 )
 
+// urlTestHistoryFresh reports whether a stored result is recent enough to be
+// reused instead of probing the member again.
+//
+// Periodic checks run once per interval, and a result is stored when its
+// probe finishes, so at the next tick it is slightly younger than one
+// interval. Comparing against the whole interval therefore skipped every
+// other tick and re-probed each member only every two intervals. Half an
+// interval still lets checks that run close together, such as groups sharing
+// members, reuse each other's results.
+func urlTestHistoryFresh(history *adapter.URLTestHistory, interval time.Duration) bool {
+	return history != nil && time.Since(history.Time) < interval/2
+}
+
 type URLTestGroup struct {
 	ctx                          context.Context
 	outbound                     adapter.OutboundManager
@@ -323,7 +336,7 @@ type URLTestGroup struct {
 	latencyOffset   map[string]int32
 	updateCallback  func()
 	dataPathLatency bool
-	memberProbe     func(detour adapter.Outbound) (uint16, probeAction)
+	memberProbe     func(detour adapter.Outbound) (uint16, time.Time, probeAction)
 	afterProbe      func(memberTag string, delay uint16, ok bool)
 	access          sync.Mutex
 	updateAccess    sync.Mutex
@@ -548,7 +561,7 @@ type urlTestResult struct {
 // to probe, reuse a cached delay or skip it, and observe each probe outcome.
 type urlTestHooks struct {
 	dataPathLatency bool
-	memberProbe     func(detour adapter.Outbound) (uint16, probeAction)
+	memberProbe     func(detour adapter.Outbound) (uint16, time.Time, probeAction)
 	afterProbe      func(memberTag string, delay uint16, ok bool)
 }
 
@@ -600,11 +613,17 @@ func (b *urlTestBatch) test(outbounds []adapter.Outbound, link string, interval 
 			continue
 		}
 		if b.hooks.memberProbe != nil {
-			delay, action := b.hooks.memberProbe(detour)
+			delay, measuredAt, action := b.hooks.memberProbe(detour)
 			switch action {
 			case probeUseCache:
+				// Keep the time the reused result was measured, so that
+				// reusing it does not make it look fresh for another
+				// interval.
+				if measuredAt.IsZero() {
+					measuredAt = now
+				}
 				b.history.StoreURLTestHistory(tag, &adapter.URLTestHistory{
-					Time:  now,
+					Time:  measuredAt,
 					Delay: delay,
 				})
 				b.logger.DebugEvent("urltest.result", "urltest result", log.String("tag", tag), log.Int64("latency_ms", int64(delay)))
@@ -673,7 +692,7 @@ func (b *urlTestBatch) testOutbound(tag string, target adapter.Outbound, link st
 		return
 	}
 	history := b.history.LoadURLTestHistory(targetTag)
-	if !force && history != nil && time.Since(history.Time) < interval {
+	if !force && urlTestHistoryFresh(history, interval) {
 		return
 	}
 	b.checked[tag] = true

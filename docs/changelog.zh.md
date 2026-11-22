@@ -2,6 +2,13 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.4.4
+
+* `urltest` 与 `loadbalance` 重新在每个 `interval` 都探测各成员。
+  下一次检查时，成员已存储的结果比一个 `interval` 略新，于是每隔一次检查就被跳过，成员实际每两个间隔才探测一次；`loadbalance` 复用结果时还会刷新其时间，间隔可能更长。
+  现在结果在半个 `interval` 内视为新鲜，复用时保留其测量时间。
+  该问题来自上游
+
 #### 1.14.4.3
 
 * AnyTLS 入站新增 [`non_tls_handler`](/zh/configuration/inbound/anytls/#non_tls_handler)：不以 TLS ClientHello 开头的连接交给一个 Shadowsocks 入站，使 AnyTLS 与 Shadowsocks（TCP 和 UDP）共用一个端口。

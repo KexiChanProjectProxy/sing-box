@@ -22,7 +22,7 @@ func TestMemberProbeUsesNestedSnapshotMin(t *testing.T) {
 		},
 	})
 	parent := &LoadBalance{history: urltest.NewHistoryStorage()}
-	delay, action := parent.memberProbe(child)
+	delay, _, action := parent.memberProbe(child)
 	if action != probeUseCache {
 		t.Fatalf("action %d want probeUseCache", action)
 	}
@@ -43,7 +43,7 @@ func TestMemberProbeSkipsNestedSeed(t *testing.T) {
 	}
 	child.seedInitialSnapshot()
 	parent := &LoadBalance{history: urltest.NewHistoryStorage()}
-	delay, action := parent.memberProbe(child)
+	delay, _, action := parent.memberProbe(child)
 	if action != probeSkip {
 		t.Fatalf("action %d delay %d want probeSkip", action, delay)
 	}

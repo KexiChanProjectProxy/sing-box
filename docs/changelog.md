@@ -4,6 +4,9 @@ icon: material/alert-decagram
 
 #### 1.14.4.4
 
+* AnyTLS writes stream data without copying it into a new frame buffer: the copy loop leaves room for the frame header in front of each read, and the header is written there.
+  On a loopback benchmark TCP throughput through AnyTLS rose by about 12 % on one core and 20 to 25 % on eight cores.
+  UDP over AnyTLS is unchanged
 * `urltest` and `loadbalance` probe each member at every `interval` again.
   At the next check a member's stored result was a little younger than one `interval`, so every other check skipped it and members were probed only every two intervals, or later in `loadbalance`, which also renewed the time of a result it reused.
   A result now counts as recent for half an `interval`, and reusing it keeps the time it was measured.
